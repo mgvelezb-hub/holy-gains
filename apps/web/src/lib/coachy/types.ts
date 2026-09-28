@@ -5,6 +5,7 @@
  * solo los redacta y hace preguntas. Nada de aquí puede cambiar kcal ni macros.
  */
 
+import type { BloqueMensual } from "@/lib/coachy/mensual";
 import type { EngineDecision, Phase } from "@/lib/engine-types";
 
 /** Zonas que compara la visión. Coinciden con la spec 03 §2.2.2. */
@@ -48,6 +49,14 @@ export interface CoachyReply {
   decision_texto: string;
   meta: string;
   cierre: string;
+  /**
+   * El mensual (`mensual.ts`): si este check-in lo es, sus deltas contra el
+   * mes anterior y el inicio, la lectura de fotos contra la referencia y qué
+   * va bien / qué ajustar. Viaja en `replyJson` porque no hay columna para
+   * él — es parte de la respuesta de esa semana, no un dato nuevo del motor.
+   * Opcional: las respuestas de antes de que existiera no lo traen.
+   */
+  mensual?: BloqueMensual;
 }
 
 export interface FewShotExample {

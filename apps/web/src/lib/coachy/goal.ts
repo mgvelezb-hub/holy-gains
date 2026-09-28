@@ -715,10 +715,21 @@ async function recentPhotoSeries(userId: string): Promise<{
  * Se llama desde el render de `/app/historial`, así que nunca lanza: cualquier
  * problema degrada a un estado que la tarjeta sabe dibujar.
  */
+export interface GoalStatusOptions {
+  /**
+   * Ignora la cadencia de 14 días: si la huella cambió, se paga la lectura
+   * ya. La usa el check-in mensual — el mes es justo el momento de comparar
+   * contra la referencia, no "cuando toque la quincena". Con la misma huella
+   * se reusa lo guardado igual: mismas fotos, misma respuesta.
+   */
+  force?: boolean;
+}
+
 export async function goalStatusFor(
   userId: string,
   profile: Profile,
   nowISO: string = new Date().toISOString(),
+  options: GoalStatusOptions = {},
 ): Promise<GoalStatus> {
   const references = await listGoalReferences(userId);
   if (references.length === 0) return { state: "sin_referencia" };
@@ -747,8 +758,12 @@ export async function goalStatusFor(
 
   const cached = stored.map((row) => cachedGoal(row.contextJson)).find(Boolean) ?? null;
 
-  // Nada cambió, o cambió pero no toca todavía: se reusa lo guardado.
-  if (cached && (cached.fingerprint === fingerprint || !isBiweeklyDue(cached.analyzedAt, nowISO))) {
+  // Nada cambió, o cambió pero no toca todavía (salvo `force`): se reusa lo guardado.
+  const reusable =
+    cached !== null &&
+    (cached.fingerprint === fingerprint ||
+      (!options.force && !isBiweeklyDue(cached.analyzedAt, nowISO)));
+  if (cached && reusable) {
     return {
       state: "listo",
       references: references.length,
