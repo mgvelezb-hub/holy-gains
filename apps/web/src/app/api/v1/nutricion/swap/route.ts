@@ -1,8 +1,10 @@
 import type { Prisma } from "@prisma/client";
+import { catalogoCon } from "engine";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { apiUser, unauthorized } from "@/lib/api/auth";
+import { alimentosPropiosDe } from "@/lib/coachy/alimentos-propios-db";
 import { toMenuView } from "@/lib/coachy/menu-view";
 import { SwapError, applySwap } from "@/lib/coachy/swap";
 import { prisma } from "@/lib/prisma";
@@ -20,6 +22,9 @@ import { prisma } from "@/lib/prisma";
  * REVERSIBLE: la opción elegida se reemplaza en la equivalencia por el
  * alimento que salió, con sus gramos originales, así que volver a tocar
  * "cambiar" y elegir el original regresa exactamente a donde estaba.
+ *
+ * Si el alimento elegido ya estaba en esa comida, no se repite: se suma a su
+ * renglón (topado a su porción máxima) y la respuesta trae `aviso`.
  *
  * `groceryListJson` NO se toca aquí a propósito: un intercambio puntual —
  * "hoy cambio la avena por amaranto"— no rehace la lista de compra de la
@@ -80,7 +85,15 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   let result;
   try {
-    result = applySwap(mealPlan.mealsJson, mealPlan.equivalencesJson, { slot, forName, toName });
+    // El catálogo de la persona: el tope de porción de un alimento propio
+    // también cuenta cuando el cambio se suma a un renglón que ya estaba.
+    const catalogo = catalogoCon(await alimentosPropiosDe(user.id));
+    result = applySwap(
+      mealPlan.mealsJson,
+      mealPlan.equivalencesJson,
+      { slot, forName, toName },
+      catalogo,
+    );
   } catch (error) {
     if (error instanceof SwapError) {
       return NextResponse.json({ error: error.message }, { status: 422 });
@@ -96,5 +109,10 @@ export async function POST(request: Request): Promise<NextResponse> {
     },
   });
 
-  return NextResponse.json({ menu: toMenuView(updated.menuNumber, updated.mealsJson) });
+  // `aviso`: el cambio se sumó a un renglón que ya estaba (y si se recortó
+  // al tope). Ausente cuando fue un cambio normal.
+  return NextResponse.json({
+    menu: toMenuView(updated.menuNumber, updated.mealsJson),
+    ...(result.aviso ? { aviso: result.aviso } : {}),
+  });
 }

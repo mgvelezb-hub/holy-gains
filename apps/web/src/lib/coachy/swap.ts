@@ -1,4 +1,6 @@
 import type { Prisma } from "@prisma/client";
+import { FOODS, maxGrams, normalize } from "engine";
+import type { Food } from "engine";
 
 /**
  * Transformación pura de un intercambio de equivalencia sobre el JSON del
@@ -34,6 +36,12 @@ export interface SwapInput {
 export interface SwapResult {
   mealsJson: Prisma.JsonValue;
   equivalencesJson: Prisma.JsonValue;
+  /**
+   * Si el alimento elegido ya estaba en la comida, el cambio se SUMA a ese
+   * renglón en vez de repetirlo, y aquí se dice: "Ya había aguacate: se sumó
+   * (95 g)" o, si pasó del tope, que se recortó.
+   */
+  aviso?: string;
 }
 
 type JsonRecord = Record<string, unknown>;
@@ -52,6 +60,8 @@ export function applySwap(
   mealsJson: Prisma.JsonValue,
   equivalencesJson: Prisma.JsonValue,
   input: SwapInput,
+  /** El catálogo de la persona (con sus alimentos propios), para el tope de porción. */
+  catalogo: Food[] = FOODS,
 ): SwapResult {
   const meals = asRecordArray(mealsJson);
   const meal = meals.find((entry) => entry.slot === input.slot);
@@ -98,6 +108,27 @@ export function applySwap(
     grams: option.grams,
     free: item.free === true,
   };
+  // ¿El alimento elegido ya está en esta comida? Entonces no es un renglón
+  // nuevo: es más de lo mismo. Se suma a ese renglón —respetando el tope de
+  // su porción— y el renglón que se cambió desaparece.
+  const repetidoIndex = items.findIndex(
+    (entry, index) => index !== itemIndex && mismoAlimento(entry, option),
+  );
+  if (repetidoIndex !== -1) {
+    return fusionar({
+      meals,
+      meal,
+      items,
+      equivalences,
+      equivalencesJson,
+      input,
+      itemIndex,
+      repetidoIndex,
+      gramosQueLlegan: Number(option.grams ?? 0),
+      catalogo,
+    });
+  }
+
   const newItems = items.map((entry, index) => (index === itemIndex ? newItem : entry));
 
   // La equivalencia de ese hueco ahora se busca desde la elección, y la
@@ -137,5 +168,106 @@ export function applySwap(
   return {
     mealsJson: newMeals as unknown as Prisma.JsonValue,
     equivalencesJson: newFlat as unknown as Prisma.JsonValue,
+  };
+}
+
+/** El mismo alimento: por id si los dos lo traen, si no por nombre. */
+function mismoAlimento(a: JsonRecord, b: JsonRecord): boolean {
+  if (typeof a.foodId === "string" && typeof b.foodId === "string") return a.foodId === b.foodId;
+  return normalize(String(a.name ?? "")) === normalize(String(b.name ?? ""));
+}
+
+function alimentoDelCatalogo(item: JsonRecord, catalogo: Food[]): Food | undefined {
+  const nombre = normalize(String(item.name ?? ""));
+  return (
+    catalogo.find((food) => food.id === item.foodId) ??
+    catalogo.find((food) => normalize(food.name) === nombre)
+  );
+}
+
+function redondea1(valor: number): number {
+  return Math.round(valor * 10) / 10;
+}
+
+/**
+ * Suma el alimento elegido al renglón donde ya estaba. Los gramos se topan al
+ * máximo de su porción (el catálogo manda); los macros del renglón se
+ * recalculan, y las opciones de su equivalencia se escalan a los gramos
+ * nuevos para que "cambiar" siga ofreciendo lo equivalente a lo que hay.
+ */
+function fusionar(args: {
+  meals: JsonRecord[];
+  meal: JsonRecord;
+  items: JsonRecord[];
+  equivalences: JsonRecord[];
+  equivalencesJson: Prisma.JsonValue;
+  input: SwapInput;
+  itemIndex: number;
+  repetidoIndex: number;
+  gramosQueLlegan: number;
+  catalogo: Food[];
+}): SwapResult {
+  const { meals, meal, items, equivalences, input, itemIndex, repetidoIndex, catalogo } = args;
+  const repetido = items[repetidoIndex]!;
+  const antes = Number(repetido.grams ?? 0);
+  const food = alimentoDelCatalogo(repetido, catalogo);
+  const tope = food ? maxGrams(food) : Number.POSITIVE_INFINITY;
+  const suma = antes + args.gramosQueLlegan;
+  const gramos = Math.round(Math.min(suma, tope));
+  const recortado = suma > tope;
+
+  const fusionado: JsonRecord = {
+    ...(repetido.foodId !== undefined ? { foodId: repetido.foodId } : {}),
+    name: repetido.name,
+    grams: gramos,
+    free: repetido.free === true,
+    ...(repetido.preparacion !== undefined ? { preparacion: repetido.preparacion } : {}),
+    ...(food
+      ? {
+          proteinG: redondea1((food.proteinPer100 * gramos) / 100),
+          carbG: redondea1((food.carbPer100 * gramos) / 100),
+          fatG: redondea1((food.fatPer100 * gramos) / 100),
+          fiberG: redondea1((food.fiberPer100 * gramos) / 100),
+          kcal: Math.round((food.kcalPer100 * gramos) / 100),
+        }
+      : {}),
+  };
+
+  const newItems = items
+    .map((entry, index) => (index === repetidoIndex ? fusionado : entry))
+    .filter((_, index) => index !== itemIndex);
+
+  const factor = antes > 0 ? gramos / antes : 1;
+  const escalar = (entry: JsonRecord): JsonRecord =>
+    entry.forName === repetido.name
+      ? {
+          ...entry,
+          options: asRecordArray(entry.options).map((option) => ({
+            ...option,
+            grams: Math.round(Number(option.grams ?? 0) * factor),
+          })),
+        }
+      : entry;
+  const newEquivalences = equivalences
+    .filter((entry) => entry.forName !== input.forName)
+    .map(escalar);
+
+  const newMeal: JsonRecord = { ...meal, items: newItems, equivalences: newEquivalences };
+  const newMeals = meals.map((entry) => (entry === meal ? newMeal : entry));
+
+  const flat = asRecordArray(args.equivalencesJson);
+  const newFlat = flat
+    .filter((entry) => !(entry.slot === input.slot && entry.forName === input.forName))
+    .map((entry) => (entry.slot === input.slot ? escalar(entry) : entry));
+
+  const nombre = String(repetido.name ?? "");
+  const aviso = recortado
+    ? `Ya había ${nombre.toLowerCase()} en esta comida: se sumó hasta el tope de la porción (${gramos} g).`
+    : `Ya había ${nombre.toLowerCase()} en esta comida: se sumó (${gramos} g).`;
+
+  return {
+    mealsJson: newMeals as unknown as Prisma.JsonValue,
+    equivalencesJson: newFlat as unknown as Prisma.JsonValue,
+    aviso,
   };
 }

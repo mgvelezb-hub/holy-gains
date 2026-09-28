@@ -199,4 +199,74 @@ describe("applySwap", () => {
       }),
     ).toThrow(SwapError);
   });
+
+  // Menú 1 de Mau: la comida ya traía 100 g de aguacate y cambiar la crema de
+  // cacahuate por su equivalencia metió "aguacate 45 g" en otro renglón.
+  describe("si el alimento elegido ya está en la comida, se suma", () => {
+    function comidaConAguacate(gramosAguacate: number) {
+      return [
+        {
+          slot: "COMIDA",
+          label: "Comida",
+          timeHint: "14:00",
+          items: [
+            { foodId: "atun_agua", name: "Atun en agua drenado", grams: 200, free: false },
+            { foodId: "aguacate", name: "Aguacate", grams: gramosAguacate, free: false },
+            { foodId: "crema_cacahuate", name: "Crema de cacahuate", grams: 16, free: false },
+          ],
+          equivalences: [
+            {
+              forName: "Crema de cacahuate",
+              options: [{ foodId: "aguacate", name: "Aguacate", grams: 45 }],
+            },
+            {
+              forName: "Aguacate",
+              options: [{ foodId: "almendra", name: "Almendra", grams: 20 }],
+            },
+          ],
+        },
+      ];
+    }
+
+    it("fusiona en un renglón y suma gramos", () => {
+      const r = applySwap(comidaConAguacate(50), [], {
+        slot: "COMIDA",
+        forName: "Crema de cacahuate",
+        toName: "Aguacate",
+      });
+      const comida = (r.mealsJson as any[])[0];
+      const aguacates = comida.items.filter((i: any) => i.name === "Aguacate");
+      expect(aguacates).toHaveLength(1);
+      expect(aguacates[0].grams).toBe(95);
+      expect(comida.items.map((i: any) => i.name)).toEqual(["Atun en agua drenado", "Aguacate"]);
+      // La equivalencia del renglón que se fue ya no existe.
+      expect(comida.equivalences.map((e: any) => e.forName)).toEqual(["Aguacate"]);
+      // Las opciones del aguacate se escalan a los gramos nuevos.
+      expect(comida.equivalences[0].options[0].grams).toBe(38);
+      expect(r.aviso).toMatch(/se sumó/i);
+    });
+
+    it("respeta el tope de la porción y lo dice", () => {
+      const r = applySwap(comidaConAguacate(100), [], {
+        slot: "COMIDA",
+        forName: "Crema de cacahuate",
+        toName: "Aguacate",
+      });
+      const comida = (r.mealsJson as any[])[0];
+      const aguacates = comida.items.filter((i: any) => i.name === "Aguacate");
+      expect(aguacates).toHaveLength(1);
+      // El tope del aguacate en el catálogo son 100 g.
+      expect(aguacates[0].grams).toBe(100);
+      expect(r.aviso).toMatch(/tope/i);
+    });
+
+    it("sin repetido no hay aviso", () => {
+      const r = applySwap(mealsJsonDeAvena(), equivalencesJsonDeAvena(), {
+        slot: "desayuno",
+        forName: "Avena",
+        toName: "Amaranto",
+      });
+      expect(r.aviso).toBeUndefined();
+    });
+  });
 });
