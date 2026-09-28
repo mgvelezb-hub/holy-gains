@@ -1,4 +1,4 @@
-import { primeraPendiente, type EstadoSesion } from "@/lib/sesion-viva";
+import { descansoPara, primeraPendiente, type EstadoSesion } from "@/lib/sesion-viva";
 
 /**
  * Traducción entre la sesión del teléfono y la del reloj — lógica PURA.
@@ -24,7 +24,19 @@ export type SerieParaReloj = {
 
 export type EjercicioParaReloj = {
   nombre: string;
+  /**
+   * El descanso que toca, ya calculado (`descansoPara`): el de la serie
+   * recién cerrada con su esfuerzo (y lo que el pulso o "+30 s" le movieron),
+   * o la base por reglas si todavía no se cierra ninguna. Antes era el fijo
+   * del plan, y el reloj contaba 60 s donde el teléfono contaba 150.
+   */
   descansoSeg: number;
+  /**
+   * Índices de las series que se dejaron sin hacer ("Terminar este
+   * ejercicio"). Opcional en el contrato: un reloj viejo lo ignora. El reloj
+   * no debe esperarlas ni ofrecer cerrarlas.
+   */
+  omitidas?: number[];
   series: SerieParaReloj[];
 };
 
@@ -62,9 +74,12 @@ export function paraElReloj(
   return {
     workoutId,
     titulo,
-    ejercicios: estado.ejercicios.map((ejercicio) => ({
+    ejercicios: estado.ejercicios.map((ejercicio, e) => ({
       nombre: ejercicio.nombre,
-      descansoSeg: ejercicio.descansoSeg,
+      descansoSeg: descansoParaElReloj(estado, e),
+      omitidas: ejercicio.series.flatMap((serie, indice) =>
+        serie.omitida === true && serie.hechas === null ? [indice] : [],
+      ),
       series: ejercicio.series.map((serie, indice) => ({
         indice,
         objetivo: serie.objetivo,
@@ -74,6 +89,30 @@ export function paraElReloj(
       })),
     })),
   };
+}
+
+/**
+ * El descanso del ejercicio `e` para el reloj, en segundos.
+ *
+ * 1. Si el descanso en curso es de ese ejercicio: el que de verdad corre
+ *    (término − inicio), que ya trae esfuerzo, pulso y ajustes a mano.
+ * 2. Si no, el de la última serie cerrada, con su esfuerzo.
+ * 3. Sin nada cerrado, la base por reglas (una serie que sale como se pidió).
+ */
+function descansoParaElReloj(estado: EstadoSesion, e: number): number {
+  const ejercicio = estado.ejercicios[e]!;
+  const enCurso = estado.descanso;
+  if (enCurso && enCurso.ejercicio === e && estado.descansoHasta !== null) {
+    return Math.max(0, Math.round((estado.descansoHasta - enCurso.desde) / 1000));
+  }
+
+  const cerradas = ejercicio.series.filter((serie) => serie.hechas !== null && !serie.calentamiento);
+  const ultima = cerradas[cerradas.length - 1];
+  if (ultima) return descansoPara(ultima, ejercicio).segundos;
+
+  const modelo = ejercicio.series.find((serie) => !serie.calentamiento) ?? ejercicio.series[0];
+  if (!modelo) return ejercicio.descansoSeg;
+  return descansoPara({ ...modelo, hechas: modelo.objetivo }, ejercicio).segundos;
 }
 
 /**
@@ -103,6 +142,9 @@ export function aplicarDelReloj(
 
     // Ya cerrada en el teléfono: el reloj llega tarde y no manda.
     if (serie.hechas !== null) continue;
+    // La persona dio el ejercicio por terminado en el teléfono: esa serie ya
+    // no se espera, y un reloj que no se enteró no la revive.
+    if (serie.omitida === true) continue;
     if (!Number.isInteger(cerrada.reps) || cerrada.reps < 0) continue;
 
     ejercicios = ejercicios.map((actual, e) =>

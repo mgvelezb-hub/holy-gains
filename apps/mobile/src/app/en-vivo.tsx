@@ -63,6 +63,7 @@ import {
   cerrarDescanso,
   cerrarSerie,
   conFrecuencia,
+  conRpe,
   descansoTermino,
   editarSerie,
   estadoInicial,
@@ -650,7 +651,9 @@ export default function EnVivoScreen() {
   useEffect(() => {
     if (!conReloj || !sesion || !estado) return;
     enviarSesionAlReloj(paraElReloj(sesion.workoutId, sesion.muscleGroup, estado));
-  }, [conReloj, sesion?.workoutId, estado?.ejercicios]);
+    // También cuando se mueve el término del descanso (esfuerzo, RPE, pulso,
+    // "+30 s"): el reloj cuenta el descanso que de verdad toca.
+  }, [conReloj, sesion?.workoutId, estado?.ejercicios, estado?.descansoHasta]);
 
   /**
    * Recoge las series que se cerraron desde la muñeca.
@@ -902,6 +905,25 @@ export default function EnVivoScreen() {
   }
 
   /**
+   * "¿Qué tan dura?" — el RPE de la serie que se acaba de cerrar, opcional.
+   * Mueve el descanso en curso (`conRpe`) y viaja en `WorkoutSet.rpe`, que es
+   * lo que la progresión lee para decidir si la semana que viene sube.
+   */
+  function marcarRpe(rpe: number) {
+    if (!estado || !draft || !sesion || !estado.descanso) return;
+    const { ejercicio: ejercicioIndice, serie: serieIndice } = estado.descanso;
+    void Haptics.selectionAsync();
+    setEstado(conRpe(estado, ejercicioIndice, serieIndice, rpe, Date.now()));
+
+    const clientId = clientIdFor(sesion.workoutId, ejercicioIndice, serieIndice);
+    if (!draft.sets.some((set) => set.clientId === clientId)) return;
+    void persistir({
+      ...draft,
+      sets: draft.sets.map((set) => (set.clientId === clientId ? { ...set, rpe } : set)),
+    });
+  }
+
+  /**
    * "Terminar este ejercicio": pasa al siguiente y deja las series que
    * faltan SIN registrar — no se inventan ceros. En el último ejercicio es
    * terminar la sesión, y el reloj se entera.
@@ -952,7 +974,7 @@ export default function EnVivoScreen() {
           targetReps: serie.objetivo,
           reps: valores.reps,
           weightKg: valores.pesoKg,
-          rpe: null,
+          rpe: serie.rpe ?? previa?.rpe ?? null,
           warmup: serie.calentamiento,
           // La hora en que se hizo es la original: corregir el peso no mueve
           // cuándo se levantó.
@@ -1405,6 +1427,35 @@ export default function EnVivoScreen() {
                     ? `Recuperada · ${fcVigente.bpm} lpm`
                     : `Recuperándote · ${fcVigente.bpm} → ${fcVigente.objetivo} lpm`}
                 </Text>
+              )}
+
+              {/* El RPE, opcional y en una línea: tocar uno ajusta el descanso
+                  y le dice a la progresión cuánto sobró. */}
+              {estado.descanso && (
+                <View style={styles.rpeFila}>
+                  <Text style={styles.rpeTexto}>¿Qué tan dura?</Text>
+                  {[6, 7, 8, 9, 10].map((valor) => {
+                    const marcado =
+                      estado.ejercicios[estado.descanso!.ejercicio]?.series[estado.descanso!.serie]?.rpe ===
+                      valor;
+                    return (
+                      <Pressable
+                        key={valor}
+                        onPress={() => marcarRpe(valor)}
+                        hitSlop={4}
+                        style={[styles.ajusteChip, marcado && styles.ajusteChipOn]}
+                      >
+                        <Text style={[styles.ajusteTexto, marcado && styles.ajusteTextoOn]}>{valor}</Text>
+                      </Pressable>
+                    );
+                  })}
+                  <InfoTip titulo="Qué tan dura">
+                    <TextoInfo>
+                      Del 6 al 10: 10 es que no salía otra, 8 es que te sobraban dos. Es opcional; si lo
+                      marcas, el descanso se ajusta y la semana que viene el plan sabe si subir el peso.
+                    </TextoInfo>
+                  </InfoTip>
+                </View>
               )}
 
               {/* El peso de la que sigue, a la mano: salir del descanso ya
@@ -2024,6 +2075,8 @@ const makeStyles = (colors: Palette) =>
     siguienteCaja: { flexShrink: 1, paddingHorizontal: spacing.sm },
     siguienteTexto: { fontFamily: fonts.sansSemiBold, ...typeScale.body, color: colors.marfil },
     terminarEjercicio: { alignItems: "center", paddingVertical: spacing.xs },
+    rpeFila: { flexDirection: "row", alignItems: "center", gap: spacing.xs, marginTop: spacing.sm },
+    rpeTexto: { fontFamily: fonts.sansMedium, ...typeScale.bodySm, color: colors.paloRosa },
     tituloFin: { fontFamily: fonts.sansBold, ...typeScale.title, color: colors.marfil },
     subtituloFin: { fontFamily: fonts.sans, ...typeScale.body, color: colors.paloRosa },
   });

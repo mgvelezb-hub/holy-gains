@@ -835,3 +835,48 @@ export function sustituirEnSesion(
     cambios,
   };
 }
+
+// ---------------------------------------------------------------------------
+// RPE opcional (I2b)
+// ---------------------------------------------------------------------------
+
+/**
+ * Guarda el RPE (1–10) de una serie ya cerrada. Nunca es obligatorio: se
+ * ofrece durante el descanso y quien no lo toca no pierde nada.
+ *
+ * Si el descanso en curso es el de esa serie y nadie lo movió a mano, se
+ * recalcula con el esfuerzo declarado (`descansoPara`). La hora de término no
+ * se lleva al pasado: si el nuevo descanso ya se cumplió, termina ahora.
+ */
+export function conRpe(
+  estado: EstadoSesion,
+  ejercicioIndice: number,
+  serieIndice: number,
+  rpe: number,
+  ahora: number = Date.now(),
+): EstadoSesion {
+  if (!Number.isFinite(rpe) || rpe < 1 || rpe > 10) return estado;
+  const ejercicio = estado.ejercicios[ejercicioIndice];
+  const serie = ejercicio?.series[serieIndice];
+  if (!ejercicio || !serie) return estado;
+
+  const nuevaSerie = { ...serie, rpe: Math.round(rpe) };
+  const nuevoEjercicio = {
+    ...ejercicio,
+    series: ejercicio.series.map((otra, s) => (s === serieIndice ? nuevaSerie : otra)),
+  };
+  const ejercicios = estado.ejercicios.map((otro, e) => (e === ejercicioIndice ? nuevoEjercicio : otro));
+
+  const enCurso = estado.descanso;
+  const esSuDescanso =
+    enCurso &&
+    !enCurso.manual &&
+    estado.descansoHasta !== null &&
+    enCurso.ejercicio === ejercicioIndice &&
+    enCurso.serie === serieIndice;
+  if (!esSuDescanso) return { ...estado, ejercicios };
+
+  const segundos = descansoPara(nuevaSerie, nuevoEjercicio).segundos;
+  const hasta = Math.max(ahora, enCurso.desde + segundos * 1000);
+  return { ...estado, ejercicios, descansoHasta: hasta };
+}
