@@ -266,6 +266,105 @@ export function ajustarSplitAlPresupuesto(
 }
 
 /**
+ * Intercala inferior y superior después de recortar un split propio.
+ *
+ * El recorte quita un día de la mitad sobrada y deja el resto en su orden;
+ * mapeado por orden a L–V eso podía dejar dos días de torso seguidos (I/S/S/I/S).
+ * Aquí se alternan empezando por la mitad más grande —3 + 2 queda I/S/I/S/I—,
+ * conservando el orden relativo dentro de cada mitad (cuádriceps antes que
+ * femoral, como lo escribió ella).
+ */
+export function intercalarMitades(kinds: DayKind[]): DayKind[] {
+  const inferior = kinds.filter((kind) => esInferior(kind));
+  const superior = kinds.filter((kind) => !esInferior(kind));
+  if (inferior.length === 0 || superior.length === 0) return [...kinds];
+
+  const primeraEsInferior =
+    inferior.length === superior.length ? esInferior(kinds[0]!) : inferior.length > superior.length;
+  const [a, b] = primeraEsInferior ? [inferior, superior] : [superior, inferior];
+
+  const salida: DayKind[] = [];
+  for (let i = 0; i < Math.max(a.length, b.length); i += 1) {
+    if (a[i]) salida.push(a[i]!);
+    if (b[i]) salida.push(b[i]!);
+  }
+  return salida;
+}
+
+/**
+ * El split propio sobre los días de gimnasio de verdad (I1).
+ *
+ * El split propio dice QUÉ se entrena y en qué orden; los días declarados
+ * dicen CUÁNDO. Si cabe tal cual —sus días son justo los de gimnasio— se
+ * respeta como lo escribió. Si trae más días, se recorta (rotando, según el
+ * objetivo) y se intercala. Y lo que queda se mapea por orden a los días con
+ * tiempo: un día con 0 min nunca recibe gimnasio por venir en el preset.
+ */
+export function mapearSplitPropio(
+  kinds: DayKind[],
+  escritos: WeekDay[],
+  dias: WeekDay[],
+  semana = 0,
+  objetivo?: string,
+): { kinds: DayKind[]; days: WeekDay[] } {
+  const cabe = ajustarSplitAlPresupuesto(kinds, escritos, dias.length, semana, objetivo);
+  const recortado = cabe.kinds.length < kinds.length;
+  const orden = recortado ? intercalarMitades(cabe.kinds) : cabe.kinds;
+
+  // Menos días escritos que días de gimnasio: si todos los que escribió caen
+  // en días con tiempo, son SUS días (lo demás, descanso — como siempre).
+  if (!recortado && orden.length < dias.length && cabe.days.every((day) => dias.includes(day))) {
+    return { kinds: orden, days: cabe.days };
+  }
+
+  return { kinds: orden, days: dias.slice(0, orden.length) };
+}
+
+/**
+ * Los días que la persona declaró para entrenar (I1).
+ *
+ * Tres fuentes, que antes se leían por separado: el horario
+ * (`trainingSchedule`), los minutos por día (`timePerDay`) y, sin ninguno de
+ * los dos, los primeros `liftingDays` días. La regla nueva es la que faltaba:
+ * **un día con 0 min declarados no es un día de entrenar**, diga lo que diga
+ * el horario o el preset.
+ */
+export function diasDeclarados(
+  profile: Pick<TrainingProfile, "liftingDays" | "trainingSchedule"> &
+    Partial<Pick<TrainingProfile, "timePerDay">>,
+): WeekDay[] {
+  const tiempo = profile.timePerDay ?? null;
+  const conTiempo = (day: WeekDay): boolean => tiempo?.[day] === undefined || tiempo[day]! > 0;
+
+  const schedule = profile.trainingSchedule;
+  if (schedule) {
+    const scheduled = WEEK_DAYS.filter((day) => {
+      const slot = schedule[day];
+      return typeof slot === "string" && slot !== "DESCANSO";
+    });
+    if (scheduled.length > 0) return scheduled.filter(conTiempo);
+  }
+
+  if (tiempo && WEEK_DAYS.some((day) => (tiempo[day] ?? 0) > 0)) {
+    return WEEK_DAYS.filter((day) => (tiempo[day] ?? 0) > 0);
+  }
+
+  const days = Math.max(0, Math.min(7, Math.trunc(profile.liftingDays)));
+  return WEEK_DAYS.slice(0, days).filter(conTiempo);
+}
+
+/**
+ * Los días de gimnasio de la semana: los declarados, hasta donde alcance el
+ * presupuesto de pesas (`liftingDaysWithinBudget`).
+ */
+export function diasDeGimnasio(
+  profile: Pick<TrainingProfile, "liftingDays" | "trainingSchedule" | "primaryDiscipline" | "otherDisciplines"> &
+    Partial<Pick<TrainingProfile, "timePerDay">>,
+): WeekDay[] {
+  return diasDeclarados(profile).slice(0, liftingDaysWithinBudget(profile));
+}
+
+/**
  * Split de la semana según días disponibles, lesiones y lo que se pidió no
  * repetir.
  *
@@ -289,7 +388,18 @@ export function buildSplit(
    * pierna o torso). Ambos opcionales: sin ellos el recorte sigue siendo
    * determinista, solo deja de rotar.
    */
-  opciones?: { semana?: number; objetivo?: string },
+  opciones?: {
+    semana?: number;
+    objetivo?: string;
+    /**
+     * I1 — los días de gimnasio YA decididos (`diasDeGimnasio`). Con ellos, un
+     * split propio se mapea POR ORDEN a estos días en vez de caer en los días
+     * fijos del preset: el preset 3/3 es un mapa LUN–SÁB, y quien entrena
+     * L–V acababa con gimnasio el sábado (0 min declarados) y sin el día que
+     * se cayó. Sin `dias`, el comportamiento de siempre.
+     */
+    dias?: WeekDay[];
+  },
 ): {
   kinds: DayKind[];
   /**
@@ -327,6 +437,24 @@ export function buildSplit(
     );
     days = cabe.days;
     base = cabe.kinds;
+
+    if (opciones?.dias) {
+      const mapeado = mapearSplitPropio(
+        escritos.map((day) => custom[day] as DayKind),
+        escritos,
+        opciones.dias,
+        opciones.semana ?? 0,
+        opciones.objetivo,
+      );
+      days = mapeado.days;
+      base = mapeado.kinds;
+    }
+  } else if (opciones?.dias) {
+    const avoidRepeat = profile.avoidRepeatGroups ?? [];
+    base = reordenarPorVecindad(
+      collapseRepeats([...(SPLIT_BY_DAYS[opciones.dias.length] ?? [])], avoidRepeat),
+    );
+    days = [...opciones.dias];
   } else {
     const count = Math.max(0, Math.min(7, Math.trunc(profile.liftingDays)));
     const avoidRepeat = profile.avoidRepeatGroups ?? [];

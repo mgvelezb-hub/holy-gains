@@ -4,21 +4,20 @@ import type { Phase, Prisma, Profile, Workout } from "@prisma/client";
 
 import { fromISODate, isoFromDateColumn, shiftISODate, toISODate } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
-import { aplicaCambios, parseCambiosDeBloque } from "@/lib/training/bloques";
+import { parseCambiosDeBloque } from "@/lib/training/bloques";
 import { parsePreferenciasCardio } from "@/lib/training/cargas-schema";
-import { parseDayBlocks, sesionesDeBloquesDelDia } from "@/lib/training/bloques-dia";
+import { parseDayBlocks } from "@/lib/training/bloques-dia";
 import { emphasisFor } from "@/lib/training/emphasis";
-import { planDisciplines, sesionesDeDiaOverride, type OtherSession } from "@/lib/training/disciplines";
-import { generateWeek, mondayOf, sundayEndOf } from "@/lib/training/generate";
+import type { OtherSession } from "@/lib/training/disciplines";
+import { esqueletoDeSemana } from "@/lib/training/esqueleto";
+import { mondayOf, sundayEndOf } from "@/lib/training/generate";
 import { esUnilateral } from "@/lib/training/coach";
-import { isoWeekNumber, SCHEME_PREFERENCES } from "@/lib/training/schemes";
+import { SCHEME_PREFERENCES } from "@/lib/training/schemes";
+import { armarPlanSemana, completarSesiones, firmaDelPlan, type PlanDeSemana } from "@/lib/training/semana";
 import {
   DAY_KIND_VALUES,
   WEEK_DAYS,
-  buildSplit,
-  liftingDaysWithinBudget,
   normalizeCustomSplit,
-  trainingDaysOf,
   type WeekDay,
 } from "@/lib/training/split";
 import { lastPerformance, type LastPerformance } from "@/lib/training/progression";
@@ -350,6 +349,11 @@ export type StoredPlan = {
    */
   warmup: Warmup | null;
   exercises: PlannedExercise[];
+  /**
+   * La huella de las preferencias con que se armó (`firmaDelPlan`, I1).
+   * `null` en filas de antes: se rearman una vez si nadie las ha tocado.
+   */
+  firma: string | null;
 };
 
 /**
@@ -396,6 +400,7 @@ export function parseStoredPlan(json: Prisma.JsonValue): StoredPlan {
       estimatedMin: null,
       warmup: null,
       exercises: parsePlan(json),
+      firma: null,
     };
   }
   if (json === null || typeof json !== "object") {
@@ -406,6 +411,7 @@ export function parseStoredPlan(json: Prisma.JsonValue): StoredPlan {
       estimatedMin: null,
       warmup: null,
       exercises: [],
+      firma: null,
     };
   }
 
@@ -417,6 +423,7 @@ export function parseStoredPlan(json: Prisma.JsonValue): StoredPlan {
     estimatedMin: typeof row.estimatedMin === "number" ? row.estimatedMin : null,
     warmup: parseWarmup(row.warmup),
     exercises: parsePlan((row.exercises ?? []) as Prisma.JsonValue),
+    firma: typeof row.firma === "string" ? row.firma : null,
   };
 }
 
@@ -469,26 +476,17 @@ export function parsePlan(json: Prisma.JsonValue): PlannedExercise[] {
  * activas, los días que se llevan NO son días de pesas. Sin esto, la
  * reconciliación dejaría vivos los días que el presupuesto ya no paga.
  */
-function plannedDatesOf(profile: Profile, monday: Date): string[] {
+export function plannedDatesOf(profile: Profile, monday: Date): string[] {
   const mondayISO = toISODate(monday);
-  const training = toTrainingProfile(profile);
-  const porHorario = trainingDaysOf(training).slice(0, liftingDaysWithinBudget(training));
-  // Con split propio los días de gimnasio son los que ella escribió. Si aquí
-  // se siguieran calculando por horario, la reconciliación borraría justo las
-  // sesiones que el generador acaba de materializar.
-  const split = buildSplit(
-    {
-      liftingDays: porHorario.length,
-      conditions: training.conditions,
-      avoidRepeatGroups: training.avoidRepeatGroups,
-      customSplit: training.customSplit,
-    },
-    // Misma semana ISO y mismo objetivo que `generateWeek`: si el recorte del
-    // split propio se calculara distinto aquí, la reconciliación borraría las
-    // sesiones que el generador acaba de materializar.
-    { semana: isoWeekNumber(monday), objetivo: training.goal },
-  );
-  return (split.days ?? porHorario).map((day) => shiftISODate(mondayISO, WEEK_DAYS.indexOf(day)));
+  // El mismo esqueleto que usa el generador (I1): antes aquí se repetía
+  // "horario → presupuesto → split" a mano, y bastaba un detalle distinto
+  // para que la reconciliación borrara lo que el generador acababa de crear.
+  const { days } = esqueletoDeSemana(toTrainingProfile(profile), monday);
+  const cambios = parseCambiosDeBloque(profile.blockOverrides);
+  return days
+    .map((day) => shiftISODate(mondayISO, WEEK_DAYS.indexOf(day)))
+    // "Hoy solo squash / natación, sin gym" (Fase 11): ese día no es de pesas.
+    .filter((date) => !Array.isArray(cambios[date]));
 }
 
 /**
@@ -499,18 +497,12 @@ function plannedDatesOf(profile: Profile, monday: Date): string[] {
  * editar. Lo que sí queda registrado es lo que se hizo, y eso vive en
  * `ActivitySession`.
  *
- * **Por qué esto no diverge de lo que ya se generó.** `planDisciplines` es
- * pura: misma entrada, misma salida — incluidos `gymMinutesPorFecha` y el
- * `orden` de cada bloque (Fase 9). `generateWeek` (en `ensureWeekMaterialized`)
- * y esta función arman `gymByDay` por caminos distintos —una desde el split
- * recién calculado, esta desde el `dayKind` ya guardado en cada `Workout`—
- * pero para la MISMA semana ya materializada ambos caminos producen el mismo
- * mapa, y `otherDisciplines`/`niveles`/`objetivo`/`isoWeek` salen del mismo
- * `toTrainingProfile(profile)` en los dos lados. Si algún día uno de los dos
- * empieza a construir `gymByDay` o el `isoWeek` distinto (p. ej. leyendo un
- * `profile` desactualizado), la semana materializada y la vista se separan en
- * silencio — por eso los dos siguen llamando a `planDisciplines` con el mismo
- * criterio en vez de cachear el resultado de uno para el otro.
+ * **Por qué esto no diverge de lo que ya se generó.** Desde I1 no hay dos
+ * caminos: el generador (`ensureWeekMaterialized`) y esta función leen el
+ * MISMO `esqueletoDeSemana(toTrainingProfile(profile), monday)` —días, split
+ * y disciplinas con los minutos que el gym cede—. Antes esta leía el `dayKind`
+ * ya guardado y bastaba una fila vieja para que la vista y la semana
+ * materializada contaran semanas distintas.
  */
 export type OtherPlan = {
   sessions: OtherSession[];
@@ -528,72 +520,33 @@ export function otherPlanFor(
   workouts: Array<{ date: Date; exercisesJson: Prisma.JsonValue }>,
 ): OtherPlan {
   const mondayISO = toISODate(monday);
-  const gymByDay = new Map<WeekDay, DayKind>();
+  const training = toTrainingProfile(profile);
 
+  // I1: las disciplinas salen del MISMO esqueleto que el generador —no de los
+  // `dayKind` guardados—, así que los minutos que el gym le cede al cardio
+  // aquí son los mismos con los que se materializó la sesión.
+  const esqueleto = esqueletoDeSemana(training, monday);
+
+  // Días con gimnasio para los bloques agregados el día: los del plan más los
+  // que se materializaron por un cambio de bloque a pesas.
+  const conGimnasio = new Set<WeekDay>(esqueleto.days);
   for (const workout of workouts) {
     const iso = isoFromDateColumn(workout.date);
     const index = WEEK_DAYS.findIndex((_, position) => shiftISODate(mondayISO, position) === iso);
-    const day = WEEK_DAYS[index];
-    const kind = parseStoredPlan(workout.exercisesJson).dayKind;
-    if (day && kind) gymByDay.set(day, kind as DayKind);
+    if (index !== -1) conGimnasio.add(WEEK_DAYS[index]!);
   }
 
-  const training = toTrainingProfile(profile);
-  const isoWeek = isoWeekNumber(monday);
-  const { sessions: planeadas, avisos } = planDisciplines({
-    weekStart: monday,
-    otherDisciplines: training.otherDisciplines,
-    gymByDay,
-    niveles: training.disciplineLevels,
-    objetivo: training.goal as never,
-    isoWeek,
-    timePerDay: training.timePerDay,
-    // Mismo `compactDays` que `generateWeek`: si difieren, la vista de
-    // "Tu semana" y la semana que de verdad se materializó divergen.
-    compactos: training.compactDays,
+  const sessions = completarSesiones({
+    planeadas: esqueleto.disciplines.sessions,
+    cambios: parseCambiosDeBloque(profile.blockOverrides),
+    bloquesDelDia: parseDayBlocks(profile.dayBlocks),
+    monday,
+    training,
+    isoWeek: esqueleto.isoWeek,
+    diasConGimnasio: WEEK_DAYS.filter((day) => conGimnasio.has(day)),
   });
 
-  const cambios = parseCambiosDeBloque(profile.blockOverrides);
-
-  // Los bloques que se cambiaron ese día concreto ("hoy no pude ir a squash"):
-  // el que se cambió a pesas sale de aquí porque ya es una sesión de gimnasio
-  // materializada, y el que se cambió a otra disciplina conserva su bloque.
-  const sessions = aplicaCambios(planeadas, cambios);
-
-  // Los overrides de día completo ("hoy solo squash y natación, sin gym",
-  // Fase 11) no vienen del reparto normal: `aplicaCambios` ya sacó lo que
-  // había ese día, aquí se reconstruye con `sesionesDeDiaOverride`.
-  for (const [fecha, cambio] of Object.entries(cambios)) {
-    if (!Array.isArray(cambio)) continue;
-    const index = WEEK_DAYS.findIndex((_, position) => shiftISODate(mondayISO, position) === fecha);
-    if (index === -1) continue; // el override no cae en esta semana
-    const weekday = WEEK_DAYS[index]!;
-    sessions.push(
-      ...sesionesDeDiaOverride({
-        date: fecha,
-        weekday,
-        disciplinas: cambio,
-        niveles: training.disciplineLevels,
-        objetivo: training.goal as never,
-        isoWeek,
-        minutos: training.timePerDay?.[weekday] ?? null,
-      }),
-    );
-  }
-
-  // Y encima de todo, los bloques que se agregaron EL DÍA (Fase 12): no salen
-  // del reparto semanal porque no se planearon — se decidieron con el tiempo
-  // que sobró. Por eso van al final y con `orden: 2`.
-  sessions.push(
-    ...sesionesDeBloquesDelDia(parseDayBlocks(profile.dayBlocks), monday, {
-      niveles: training.disciplineLevels,
-      objetivo: training.goal,
-      isoWeek,
-      diasConGimnasio: [...gymByDay.keys()],
-    }),
-  );
-
-  return { sessions: sessions.sort((a, b) => a.date.localeCompare(b.date) || a.orden - b.orden), avisos };
+  return { sessions, avisos: esqueleto.avisos };
 }
 
 /** Las sesiones de las otras disciplinas de la semana, sin los avisos.
@@ -603,18 +556,8 @@ export function otherPlanFor(
  * editar. Lo que sí queda registrado es lo que se hizo, y eso vive en
  * `ActivitySession`.
  *
- * **Por qué esto no diverge de lo que ya se generó.** `planDisciplines` es
- * pura: misma entrada, misma salida — incluidos `gymMinutesPorFecha` y el
- * `orden` de cada bloque (Fase 9). `generateWeek` (en `ensureWeekMaterialized`)
- * y `otherPlanFor` arman `gymByDay` por caminos distintos —una desde el split
- * recién calculado, esta desde el `dayKind` ya guardado en cada `Workout`—
- * pero para la MISMA semana ya materializada ambos caminos producen el mismo
- * mapa, y `otherDisciplines`/`niveles`/`objetivo`/`isoWeek` salen del mismo
- * `toTrainingProfile(profile)` en los dos lados. Si algún día uno de los dos
- * empieza a construir `gymByDay` o el `isoWeek` distinto (p. ej. leyendo un
- * `profile` desactualizado), la semana materializada y la vista se separan en
- * silencio — por eso los dos siguen llamando a `planDisciplines` con el mismo
- * criterio en vez de cachear el resultado de uno para el otro.
+ * **Por qué esto no diverge de lo que ya se generó.** Sale de `otherPlanFor`,
+ * que lee el mismo esqueleto que el generador (I1).
  */
 export function otherSessionsFor(
   profile: Profile,
@@ -648,6 +591,41 @@ export interface EnsureWeekOptions {
    * borra nunca, con o sin `force`.
    */
   force?: boolean;
+  /**
+   * La semana ya planeada por `planDeSemana` (I1): quien ya la tiene —el
+   * rearmado tras el check-in— la pasa y no se vuelve a calcular. Tiene que
+   * ser de la misma semana y del mismo perfil; si no, se ignora.
+   */
+  plan?: PlanDeSemana;
+}
+
+/**
+ * ¿Esta fila se rearma? La misma regla para la materialización y para la
+ * vista previa del replanteo (que tiene que prometer lo que después queda).
+ *
+ * Solo se rearma lo que nadie ha tocado: de hoy en adelante, sin series y sin
+ * cerrar. Y dentro de eso, lo que ya no corresponde al plan: un día que el
+ * plan ya no pide, un plan de antes del calentamiento o —I1— uno armado con
+ * otras preferencias (`firma`). Lo que la persona decidió para ESE día
+ * (recortarlo, cambiarlo a pesas) no se pisa por un cambio de preferencias.
+ */
+export function seRearma(
+  workout: { date: Date; completedAt: Date | null; trimmedMinutes: number | null; exercisesJson: Prisma.JsonValue; sets: number },
+  contexto: { todayISO: string; planned: Set<string>; firma: string; cambios: ReturnType<typeof parseCambiosDeBloque>; force?: boolean },
+): boolean {
+  const date = isoFromDateColumn(workout.date);
+  const intocado = date >= contexto.todayISO && workout.completedAt === null && workout.sets === 0;
+  if (!intocado) return false;
+  if (contexto.force) return true;
+
+  const aPesas = contexto.cambios[date] === "PESAS";
+  if (!contexto.planned.has(date)) return !aPesas;
+
+  // Decisión del día: se respeta hasta que cambie el plan de fechas.
+  if (workout.trimmedMinutes !== null || aPesas) return false;
+
+  const guardado = parseStoredPlan(workout.exercisesJson);
+  return guardado.warmup === null || guardado.firma !== contexto.firma;
 }
 
 export async function ensureWeekMaterialized(
@@ -665,26 +643,17 @@ export async function ensureWeekMaterialized(
     include: { _count: { select: { sets: true } } },
   });
 
+  const training = toTrainingProfile(profile);
   const planned = plannedDatesOf(profile, monday);
+  const contexto = {
+    todayISO: toISODate(reference),
+    planned: new Set(planned),
+    firma: firmaDelPlan(training),
+    cambios: parseCambiosDeBloque(profile.blockOverrides),
+    force: options.force,
+  };
 
-  const todayISO = toISODate(reference);
-  const plannedSet = new Set(planned);
-  const stale = existing.filter((workout) => {
-    const date = isoFromDateColumn(workout.date);
-    // Un día futuro sin nada capturado se puede rearmar sin perder nada.
-    const intocado = date >= todayISO && workout.completedAt === null && workout._count.sets === 0;
-    if (!intocado) return false;
-    if (options.force) return true;
-
-    if (!plannedSet.has(date)) return true;
-
-    // El plan guardado es de ANTES de que existiera el bloque de
-    // calentamiento: se generó con las series de 20-50 reps que se
-    // reemplazaron. Sin esto, quien ya tenía su semana materializada seguía
-    // viendo el formato viejo hasta la próxima semana — que fue exactamente
-    // lo que pasó en la primera prueba real.
-    return parseStoredPlan(workout.exercisesJson).warmup === null;
-  });
+  const stale = existing.filter((workout) => seRearma({ ...workout, sets: workout._count.sets }, contexto));
 
   const staleDates = new Set(stale.map((workout) => isoFromDateColumn(workout.date)));
   const existingDates = new Set(
@@ -704,24 +673,36 @@ export async function ensureWeekMaterialized(
     await prisma.workout.deleteMany({ where: { id: { in: stale.map((workout) => workout.id) } } });
   }
 
-  const [catalog, history, emphasis] = await Promise.all([
-    loadCatalog(),
-    loadHistory(userId, monday),
-    // Lo que salió de comparar sus fotos contra su referencia: qué grupo
-    // lleva prioridad. Sin análisis todavía, llega vacío.
-    emphasisFor(userId).catch(() => []),
-  ]);
+  const conPlan = options.plan?.weekStart === toISODate(monday) && options.plan?.firma === contexto.firma;
+  const [catalog, history, emphasis] = conPlan
+    ? [[], [], []]
+    : await Promise.all([
+        loadCatalog(),
+        loadHistory(userId, monday),
+        // Lo que salió de comparar sus fotos contra su referencia: qué grupo
+        // lleva prioridad. Sin análisis todavía, llega vacío.
+        emphasisFor(userId).catch(() => []),
+      ]);
 
-  const week = generateWeek(toTrainingProfile(profile), history, {
-    weekStart: monday,
-    catalog,
-    emphasis,
-  });
+  // La semana canónica (I1): la misma función que la vista previa del
+  // replanteo y `planDeSemana`.
+  const semana =
+    conPlan && options.plan
+      ? options.plan
+      : armarPlanSemana({
+          training,
+          cambios: contexto.cambios,
+          bloquesDelDia: parseDayBlocks(profile.dayBlocks),
+          weekStart: monday,
+          catalog,
+          history,
+          emphasis,
+        });
 
   // Solo se escriben los días que faltaban: `update: {}` protegería la fila
   // existente de todos modos, pero ni siquiera se toca.
   const missingSet = new Set(missing);
-  for (const workout of week.workouts) {
+  for (const workout of semana.workouts) {
     if (!missingSet.has(workout.date)) continue;
 
     const date = fromISODate(workout.date);
@@ -732,14 +713,7 @@ export async function ensureWeekMaterialized(
         date,
         muscleGroup: workout.muscleGroup,
         scheme: workout.scheme,
-        exercisesJson: {
-          dayKind: workout.dayKind,
-          schemeLabel: workout.schemeLabel,
-          cardioMinutes: workout.cardioMinutes,
-          estimatedMin: workout.estimatedMin,
-          warmup: workout.warmup,
-          exercises: workout.exercises,
-        } as unknown as Prisma.InputJsonValue,
+        exercisesJson: planGuardable(workout, semana.firma),
       },
       update: {},
     });
@@ -750,6 +724,39 @@ export async function ensureWeekMaterialized(
     orderBy: { date: "asc" },
   });
 }
+
+/**
+ * El `exercises_json` de una sesión, completo. Todas las escrituras pasan por
+ * aquí: el recorte y el cambio a pesas escribían el objeto sin `warmup` y la
+ * siguiente reconciliación lo leía como "plan viejo" y lo rearmaba — por eso
+ * "hoy tengo menos tiempo" parecía no hacer nada.
+ */
+export function planGuardable(
+  workout: Pick<
+    PlannedWorkoutLike,
+    "dayKind" | "schemeLabel" | "cardioMinutes" | "estimatedMin" | "warmup" | "exercises"
+  >,
+  firma: string,
+): Prisma.InputJsonValue {
+  return {
+    dayKind: workout.dayKind,
+    schemeLabel: workout.schemeLabel,
+    cardioMinutes: workout.cardioMinutes,
+    estimatedMin: workout.estimatedMin ?? null,
+    warmup: workout.warmup,
+    exercises: workout.exercises,
+    firma,
+  } as unknown as Prisma.InputJsonValue;
+}
+
+type PlannedWorkoutLike = {
+  dayKind: string;
+  schemeLabel: string;
+  cardioMinutes: number | null;
+  estimatedMin?: number | null;
+  warmup: Warmup | null;
+  exercises: PlannedExercise[];
+};
 
 /** El mejor peso levantado por ejercicio: la vara contra la que se mide un PR. */
 export async function personalBests(

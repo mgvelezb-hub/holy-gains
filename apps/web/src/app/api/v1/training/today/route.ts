@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { apiUser, unauthorized } from "@/lib/api/auth";
-import { todayCard, todayOtherSession } from "@/lib/training/view";
+import { todayCard, todayOtherSession, todayPlan } from "@/lib/training/view";
 
 /**
  * `GET /api/v1/training/today` — lo que toca hoy: la tarjeta del gimnasio y,
@@ -22,11 +22,14 @@ export async function GET(request: Request): Promise<NextResponse> {
   const today = new Date();
   today.setHours(12, 0, 0, 0);
 
-  const [card, other] = await Promise.all([
-    todayCard(user.id, user.profile, today),
-    // Un día sin pesas puede tener alberca: sin esto la app diría "descanso".
-    todayOtherSession(user.id, user.profile, today),
-  ]);
+  // En serie: las tres materializan la semana si hace falta, y en paralelo
+  // competirían por crear las mismas filas.
+  const card = await todayCard(user.id, user.profile, today);
+  // Un día sin pesas puede tener alberca: sin esto la app diría "descanso".
+  const other = await todayOtherSession(user.id, user.profile, today);
+  // El día en el formato común de la semana (I1): la misma línea que Rutinas
+  // y el Resumen, con el "+ Cardio" que la tarjeta sola no dice.
+  const dia = await todayPlan(user.id, user.profile, today);
 
-  return NextResponse.json({ today: card, otherSession: other });
+  return NextResponse.json({ today: card, otherSession: other, dia });
 }

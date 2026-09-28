@@ -9,11 +9,7 @@ import { sleepMinutesFor } from "@/lib/health/db";
 import { prisma } from "@/lib/prisma";
 import { signedExerciseVideoUrls } from "@/lib/storage";
 import type { OtherSession } from "@/lib/training/disciplines";
-import {
-  buildSplit,
-  liftingDaysWithinBudget,
-  trainingDaysOf,
-} from "@/lib/training/split";
+import { diasDelPlan, type DiaDelPlan } from "@/lib/training/semana";
 import {
   ensureWeekMaterialized,
   otherPlanFor,
@@ -33,7 +29,7 @@ import {
 import { alternativesFor, type ExerciseAlternative } from "@/lib/training/substitutes";
 import { mondayOf, sundayEndOf } from "@/lib/training/generate";
 import { prefillSets } from "@/lib/training/progression";
-import { isoWeekNumber, SCHEMES } from "@/lib/training/schemes";
+import { SCHEMES } from "@/lib/training/schemes";
 import type { PlannedExercise, Warmup } from "@/lib/training/types";
 
 /**
@@ -105,6 +101,13 @@ export type WeekView = {
    * tal cual, porque cada uno termina en la acción ("Cambiar").
    */
   avisos: string[];
+  /**
+   * La semana día por día en el formato que comparten Rutinas, Ajustes "Tu
+   * semana", el Resumen y Hoy (I1): "LUN · Pierna · cuádriceps · 6 ejercicios
+   * · + Cardio HIIT 20 min". Sale de las sesiones materializadas —que ya son
+   * la semana canónica— y de las mismas disciplinas que `otherSessions`.
+   */
+  plan: DiaDelPlan[];
 };
 
 /**
@@ -141,7 +144,6 @@ export async function weekView(
   ]);
 
   const sessions = plans.map(({ workout, plan }): SessionView => {
-    const sessionNames = plan.exercises.map((exercise) => exercise.name);
     const date = isoFromDateColumn(workout.date);
 
     return {
@@ -173,47 +175,67 @@ export async function weekView(
           lastWeightKg: previous?.topWeightKg ?? null,
           bestWeightKg: records[exercise.name]?.weightKg ?? null,
           record: records[exercise.name] ?? null,
-          alternatives: alternativesFor(exercise, catalog, sessionNames),
+          // Los ejercicios del plan, no solo sus nombres: la exclusión por id
+          // es la que evita ofrecer uno que ya está en la sesión guardado con
+          // otro nombre que el del catálogo.
+          alternatives: alternativesFor(exercise, catalog, plan.exercises),
         };
       }),
     };
   });
 
   const disciplinas = otherPlanFor(profile, mondayOf(reference), workouts);
+  const weekStart = toISODate(mondayOf(reference));
 
   return {
-    weekStart: toISODate(mondayOf(reference)),
+    weekStart,
     today: toISODate(reference),
     sessions,
     otherSessions: disciplinas.sessions,
     // El split avisa vecindad ("hombro antes de pecho"); las disciplinas
     // avisan lo que no cupo o lo que se combinó con riesgo (Fase 9 y 11). Los
-    // dos son "esto no se arregla solo, decide" — se juntan en una sola lista
-    // para que Ajustes no tenga que saber de dos fuentes.
-    avisos: [...avisosDelSplit(profile, reference), ...disciplinas.avisos],
+    // dos salen del mismo esqueleto de la semana (I1) — una sola lista para
+    // que Ajustes no tenga que saber de dos fuentes.
+    avisos: disciplinas.avisos,
+    plan: planVisible(weekStart, workouts, disciplinas.sessions, profile),
   };
 }
 
+/** Las sesiones materializadas, en el formato común de la semana (`diasDelPlan`). */
+function planVisible(
+  weekStart: string,
+  workouts: Array<{ date: Date; muscleGroup: string; exercisesJson: unknown; trimmedMinutes: number | null }>,
+  otras: OtherSession[],
+  profile: Profile,
+): DiaDelPlan[] {
+  return diasDelPlan(
+    weekStart,
+    workouts.map((workout) => {
+      const plan = parseStoredPlan(workout.exercisesJson as never);
+      return {
+        date: isoFromDateColumn(workout.date),
+        dayKind: plan.dayKind,
+        muscleGroup: workout.muscleGroup,
+        ejercicios: plan.exercises.length,
+        minutos: plan.estimatedMin,
+        recortada: workout.trimmedMinutes,
+      };
+    }),
+    otras,
+    toTrainingProfile(profile).timePerDay,
+  );
+}
+
 /**
- * Los avisos de vecindad del split de esta persona.
- *
- * Se recalculan aquí y no se guardan: son función del perfil, y guardarlos
- * abriría la puerta a enseñar un aviso de un split que ya se cambió.
+ * El día de hoy en el formato común de la semana, para la pantalla de Hoy:
+ * la misma línea que Rutinas y el Resumen ("+ Cardio HIIT 20 min" incluido).
  */
-function avisosDelSplit(profile: Profile, reference: Date): string[] {
-  const training = toTrainingProfile(profile);
-  const porHorario = trainingDaysOf(training).slice(0, liftingDaysWithinBudget(training));
-  return buildSplit(
-    {
-      liftingDays: porHorario.length,
-      conditions: training.conditions,
-      avoidRepeatGroups: training.avoidRepeatGroups,
-      customSplit: training.customSplit,
-    },
-    // La misma semana que materializó el generador: avisar de un choque entre
-    // dos días que esta semana ni siquiera se entrenan sería ruido.
-    { semana: isoWeekNumber(mondayOf(reference)), objetivo: training.goal },
-  ).avisos;
+export async function todayPlan(userId: string, profile: Profile, reference: Date): Promise<DiaDelPlan | null> {
+  const workouts = await ensureWeekMaterialized(userId, profile, reference);
+  const monday = mondayOf(reference);
+  const { sessions } = otherPlanFor(profile, monday, workouts);
+  const iso = toISODate(reference);
+  return planVisible(toISODate(monday), workouts, sessions, profile).find((dia) => dia.date === iso) ?? null;
 }
 
 /** La sesión de hoy, o null si hoy toca descanso. */

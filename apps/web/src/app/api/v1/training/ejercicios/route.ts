@@ -5,13 +5,8 @@ import { emphasisFor } from "@/lib/training/emphasis";
 import { loadCatalog, parseManualExercises, toTrainingProfile } from "@/lib/training/db";
 import { mondayOf, sugerenciaDeEjercicios } from "@/lib/training/generate";
 import { porqueDeLaSugerencia } from "@/lib/training/manual";
-import { isoWeekNumber } from "@/lib/training/schemes";
-import {
-  DAY_LABELS,
-  buildSplit,
-  liftingDaysWithinBudget,
-  trainingDaysOf,
-} from "@/lib/training/split";
+import { esqueletoDeSemana } from "@/lib/training/esqueleto";
+import { DAY_LABELS } from "@/lib/training/split";
 import type { DayKind } from "@/lib/training/types";
 
 /**
@@ -42,16 +37,9 @@ export async function GET(request: Request): Promise<NextResponse> {
   const hoy = new Date();
   hoy.setHours(12, 0, 0, 0);
 
-  const porHorario = trainingDaysOf(training).slice(0, liftingDaysWithinBudget(training));
-  const split = buildSplit(
-    {
-      liftingDays: porHorario.length,
-      conditions: training.conditions,
-      avoidRepeatGroups: training.avoidRepeatGroups,
-      customSplit: training.customSplit,
-    },
-    { semana: isoWeekNumber(mondayOf(hoy)), objetivo: training.goal },
-  );
+  // Los tipos de día de ESTA semana salen del mismo esqueleto que la semana
+  // materializada (I1), no de otra copia de "horario → presupuesto → split".
+  const split = esqueletoDeSemana(training, mondayOf(hoy));
 
   const [catalogo, zonasLejos] = await Promise.all([
     loadCatalog().catch(() => []),

@@ -5,6 +5,8 @@ import { apiUser, unauthorized } from "@/lib/api/auth";
 import { prisma } from "@/lib/prisma";
 import { preferenciasCardioSchema } from "@/lib/training/cargas-schema";
 import { ensureWeekMaterialized, parseDisciplineLoads } from "@/lib/training/db";
+import { mondayOf } from "@/lib/training/generate";
+import { planDeSemana } from "@/lib/training/plan";
 import { PROPOSITOS, horarioDesde, replanificar, type TiempoPorDia } from "@/lib/training/replan";
 import { WEEK_DAYS } from "@/lib/training/split";
 import { DISCIPLINES } from "@/lib/training/types";
@@ -123,36 +125,65 @@ export async function POST(request: Request): Promise<NextResponse> {
     ? Math.min(...replan.diasActivos.map((dia) => completo[dia]))
     : user.profile.sessionMinutes;
 
+  const cambios = {
+    primaryDiscipline: primaria,
+    // `liftingDays` es el presupuesto semanal de sesiones: la primaria y lo
+    // que va en día propio. Lo que va "después de pesas" no paga un día (I1:
+    // antes se guardaba `asignadas.length` y cada cardio pegado contaba).
+    liftingDays: replan.presupuesto,
+    sessionMinutes: Math.max(20, Math.min(120, minutosPorSesion)),
+    trainingSchedule: horarioDesde(replan, user.profile.trainingTime),
+    otherDisciplines: replan.cargas.filter((carga) => carga.discipline !== primaria),
+    // El tiempo que la persona declaró día por día: es lo que hace honesto
+    // el reparto de un día combinado la próxima vez que se arme la semana
+    // (`timePerDay` en `disciplines.ts`), en vez de volver a preguntarlo.
+    timePerDay: completo,
+  };
+
+  const hoy = new Date();
+  hoy.setHours(12, 0, 0, 0);
+
+  // `?preview=1` (I1): la semana que saldría con estas respuestas, SIN
+  // escribir nada. Es lo que la pantalla enseña en vivo mientras se contesta:
+  // configurar sin ver el resultado era "hasta desesperante". Sale de la misma
+  // `planDeSemana` que después se materializa, con lo ya vivido encima.
+  const preview = new URL(request.url).searchParams.get("preview") === "1";
+  if (preview) {
+    const virtual = { ...user.profile, ...cambios } as typeof user.profile;
+    const semana = await planDeSemana(user.id, mondayOf(hoy), { profile: virtual, conLoVivido: true, hoy });
+    return NextResponse.json({
+      preview: true,
+      asignadas: replan.asignadas,
+      cargas: replan.cargas,
+      diasActivos: replan.diasActivos,
+      avisos: [...replan.avisos, ...semana.avisos.filter((aviso) => !replan.avisos.includes(aviso))],
+      acciones: replan.acciones,
+      sesionesDePesas,
+      semana: semana.dias,
+    });
+  }
+
   await prisma.profile.update({
     where: { userId: user.id },
     data: {
-      primaryDiscipline: primaria,
-      // `liftingDays` es el presupuesto semanal de sesiones; el generador le
-      // resta lo que se llevan las otras disciplinas.
-      liftingDays: replan.asignadas.length,
-      sessionMinutes: Math.max(20, Math.min(120, minutosPorSesion)),
-      trainingSchedule: horarioDesde(replan, user.profile.trainingTime),
-      otherDisciplines: replan.cargas.filter((carga) => carga.discipline !== primaria),
-      // El tiempo que la persona declaró día por día: es lo que hace honesto
-      // el reparto de un día combinado la próxima vez que se arme la semana
-      // (`timePerDay` en `disciplines.ts`), en vez de volver a preguntarlo.
-      timePerDay: completo,
+      ...cambios,
       ...(ageRange !== undefined && !user.profile.birthDate ? { ageRange } : {}),
     },
   });
 
   // Se rearma la semana ya, para que la respuesta pueda enseñar el resultado
   // real y no una promesa de lo que pasará al abrir Rutinas.
-  const hoy = new Date();
-  hoy.setHours(12, 0, 0, 0);
   const perfil = await prisma.profile.findUniqueOrThrow({ where: { userId: user.id } });
   await ensureWeekMaterialized(user.id, perfil, hoy);
+  const semana = await planDeSemana(user.id, mondayOf(hoy), { profile: perfil, conLoVivido: true, hoy });
 
   return NextResponse.json({
     asignadas: replan.asignadas,
     cargas: replan.cargas,
     diasActivos: replan.diasActivos,
-    avisos: replan.avisos,
+    avisos: [...replan.avisos, ...semana.avisos.filter((aviso) => !replan.avisos.includes(aviso))],
+    acciones: replan.acciones,
     sesionesDePesas,
+    semana: semana.dias,
   });
 }

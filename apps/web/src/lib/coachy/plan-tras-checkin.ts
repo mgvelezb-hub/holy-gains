@@ -1,13 +1,15 @@
 import "server-only";
 
-import type { Profile } from "@prisma/client";
+import type { Profile, Workout } from "@prisma/client";
 
 import { goalStatusFor, type GoalStatus } from "@/lib/coachy/goal";
 import type { FotosMensuales } from "@/lib/coachy/mensual";
 import { fromISODate, isoFromDateColumn, shiftISODate, toISODate } from "@/lib/format";
+import { prisma } from "@/lib/prisma";
 import { ensureWeekMaterialized } from "@/lib/training/db";
 import { emphasisFor } from "@/lib/training/emphasis";
 import { mondayOf } from "@/lib/training/generate";
+import { planDeSemana } from "@/lib/training/plan";
 import type { MuscleGroup } from "@/lib/training/types";
 
 /**
@@ -55,21 +57,29 @@ export interface RutinaRearmada {
 /**
  * Rearma lo no entrenado de esta semana y arma la siguiente.
  *
- * Reusa `ensureWeekMaterialized` con `force`: lo mismo que hacen replan y
- * recalibrar, pero sin cambiar el perfil — lo que cambia es el historial
- * (la semana que se acaba de cerrar) y el énfasis del objetivo, que el
- * generador lee del caché que `lecturaDelObjetivo` acaba de refrescar.
- * Un día con series o completado no se toca.
+ * I1: sale de `planDeSemana`, la misma semana canónica que ven Rutinas, el
+ * Resumen y el replanteo — no de un camino propio. Por ahí entra todo lo que
+ * el check-in pudo mover: el objetivo y la fase (el perfil se vuelve a leer:
+ * el que llega aquí es de ANTES del análisis, y una fase nueva cambia el
+ * volumen), las zonas lejos de la referencia (el énfasis, del caché que
+ * `lecturaDelObjetivo` acaba de refrescar) y las preferencias (split,
+ * ejercicios a mano, disciplinas, cardio). Un día con series o completado no
+ * se toca.
  */
 export async function rearmaRutina(userId: string, profile: Profile): Promise<RutinaRearmada> {
   const hoyISO = toISODate(new Date());
   const hoy = fromISODate(hoyISO);
   const lunesSiguiente = fromISODate(shiftISODate(toISODate(mondayOf(hoy)), 7));
 
-  const estaSemana = await ensureWeekMaterialized(userId, profile, hoy, { force: true });
-  const siguiente = await ensureWeekMaterialized(userId, profile, lunesSiguiente, { force: true });
+  const fresco = (await prisma.profile.findUnique({ where: { userId } })) ?? profile;
 
-  const pendientes = [...estaSemana, ...siguiente].filter(
+  const semanas: Workout[] = [];
+  for (const referencia of [hoy, lunesSiguiente]) {
+    const plan = await planDeSemana(userId, referencia, { profile: fresco });
+    semanas.push(...(await ensureWeekMaterialized(userId, fresco, referencia, { force: true, plan })));
+  }
+
+  const pendientes = semanas.filter(
     (workout) => isoFromDateColumn(workout.date) >= hoyISO && workout.completedAt === null,
   );
 

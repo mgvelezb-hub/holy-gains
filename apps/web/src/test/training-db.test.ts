@@ -92,14 +92,19 @@ describe.skipIf(!available)("rutina y sesiones contra la base", () => {
       const semanaDe4 = await ensureWeekMaterialized(otroId, conCuatro, reference);
       expect(semanaDe4).toHaveLength(4);
 
-      // Cambia a 5 días (lunes a viernes): el viernes que faltaba se genera,
-      // y los 4 que ya existían se quedan tal cual — mismos ids.
+      // Cambia a 5 días (lunes a viernes): el viernes que faltaba se genera.
+      // Lo de antes de hoy (lunes y martes) se queda tal cual — mismos ids —;
+      // lo de hoy en adelante sin tocar se rearma con el split de 5 días (I1:
+      // antes quedaba un split de 4 repartido en 5 días, que no es ninguno).
       await prisma.profile.update({ where: { userId: otroId }, data: { liftingDays: 5 } });
       const conCinco = await prisma.profile.findUniqueOrThrow({ where: { userId: otroId } });
       const semanaDe5 = await ensureWeekMaterialized(otroId, conCinco, reference);
 
       expect(semanaDe5).toHaveLength(5);
-      expect(semanaDe5.slice(0, 4).map((row) => row.id)).toEqual(semanaDe4.map((row) => row.id));
+      expect(semanaDe5.slice(0, 2).map((row) => row.id)).toEqual(semanaDe4.slice(0, 2).map((row) => row.id));
+      expect(semanaDe5.slice(2).map((row) => parseStoredPlan(row.exercisesJson).firma)).toEqual(
+        Array(3).fill(parseStoredPlan(semanaDe5[2]!.exercisesJson).firma),
+      );
 
       const monday = mondayOf(reference);
       const viernes = new Date(monday);
@@ -200,10 +205,11 @@ describe.skipIf(!available)("rutina y sesiones contra la base", () => {
     expect(vuelta.trimmedMinutes).toBeNull();
   });
 
-  it("no recorta una sesión que ya empezó", async () => {
+  it("no recorta una sesión ya cerrada", async () => {
     const perfil = await prisma.profile.findUniqueOrThrow({ where: { userId } });
     const semana = await ensureWeekMaterialized(userId, perfil, reference);
-    // La primera sí tiene series capturadas: sus filas apuntan a este plan.
+    // La primera ya se cerró: lo entrenado es historia. (Una empezada y sin
+    // cerrar sí se recorta, solo lo pendiente — ver plan-integral-db.)
     const conSeries = semana[0]!;
 
     await expect(trimSession(userId, perfil, conSeries.id, 20)).rejects.toBeInstanceOf(

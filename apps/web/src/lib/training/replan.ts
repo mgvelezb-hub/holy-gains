@@ -137,6 +137,20 @@ export type SesionAsignada = {
   discipline: Discipline;
   minutos: number;
   esPrimaria: boolean;
+  /** Va pegada después de la primaria: no paga un día del presupuesto. */
+  despues?: boolean;
+};
+
+/**
+ * Lo que se puede hacer con una secundaria sin salir del replanteo (I1): el
+ * aviso ya no manda a Ajustes, trae la acción y la vista previa se recalcula.
+ */
+export type AccionReplan = {
+  discipline: Discipline;
+  /** Cómo quedó en esta propuesta. */
+  modo: ModoDisciplina;
+  /** El cambio que se ofrece: "Pegar el cardio después de pesas" / "Darle su propio día". */
+  alternativa: { modo: ModoDisciplina; texto: string };
 };
 
 export type Replan = {
@@ -158,6 +172,14 @@ export type Replan = {
   }>;
   /** Días que quedaron con entrenamiento. */
   diasActivos: WeekDay[];
+  /**
+   * Sesiones que pagan presupuesto: la primaria y las de día propio. Lo que
+   * va "después de pesas" no cuenta — es `liftingDays`, y antes se guardaba
+   * `asignadas.length`, que sumaba cada cardio pegado como si fuera un día.
+   */
+  presupuesto: number;
+  /** Una por secundaria: cómo quedó y el cambio que se le puede hacer ahí mismo. */
+  acciones: AccionReplan[];
   /**
    * Lo que no cupo y por qué. Se dice siempre: un plan que recorta en silencio
    * hace pensar que la app se equivocó.
@@ -318,7 +340,13 @@ function anexarDespues(
         continue;
       }
       ocupante.minutos = reparto.gym;
-      asignadas.push({ weekday: ocupante.weekday, discipline: "CARDIO", minutos: reparto.cardio, esPrimaria: false });
+      asignadas.push({
+        weekday: ocupante.weekday,
+        discipline: "CARDIO",
+        minutos: reparto.cardio,
+        esPrimaria: false,
+        despues: true,
+      });
     } else {
       const existente: BloqueDia = { discipline: ocupante.discipline };
       const nuevo: BloqueDia = { discipline: elegida.discipline };
@@ -338,6 +366,7 @@ function anexarDespues(
         discipline: elegida.discipline,
         minutos: nuevoEsPrimero ? reparto.minutos[0] : reparto.minutos[1],
         esPrimaria: false,
+        despues: true,
       });
     }
 
@@ -494,13 +523,36 @@ export function replanificar(entrada: EntradaReplan): Replan {
   // Cada secundaria toma sus días entre los que le alcanzan, empezando por los
   // que menos tiempo tienen: los días largos se dejan para lo que pide más.
   const tomados = new Set<WeekDay>();
+  // I1: lo que no trae modo y no encontró día libre se pega después de pesas
+  // por default. Es lo que casi siempre se quiere —la primaria ya llenó los
+  // días— y antes se quedaba en 0 sesiones con un aviso que mandaba a Ajustes.
+  const modoAplicado = new Map<Discipline, ModoDisciplina>();
   for (const fila of reparto) {
     if (fila.sesiones === 0) {
+      const elegida = entrada.secundarias.find((candidata) => candidata.discipline === fila.discipline);
+      if (elegida && elegida.modo === undefined && diasPrimaria.size > 0) {
+        const pedidas = Math.max(0, Math.min(7, Math.trunc(elegida.sesiones ?? diasPrimaria.size)));
+        const colocadas = anexarDespues(
+          { ...elegida, modo: "DESPUES" },
+          pedidas,
+          entrada.tiempo,
+          asignadas,
+          diasConDosBloques,
+          avisos,
+        );
+        if (colocadas > 0) {
+          modoAplicado.set(fila.discipline, "DESPUES");
+          colocadasDespues.set(fila.discipline, colocadas);
+          avisos.push(
+            `${nombreSecundaria(fila.discipline)} va después de pesas: no quedó ningún día libre con tiempo.`,
+          );
+          continue;
+        }
+      }
       // Sin huecos no hay reparto que hacer, pero callarlo es lo que hizo
-      // desaparecer el cardio de Mau (H2): se dice, y se sugiere la salida.
-      avisos.push(
-        `${nombreSecundaria(fila.discipline)} no cupo: no queda ningún día libre con tiempo. Márcalo "después de pesas" en Ajustes para que vaya pegado al gimnasio.`,
-      );
+      // desaparecer el cardio de Mau (H2): se dice, y la acción para
+      // resolverlo viaja en `acciones` — ya no se manda a nadie a Ajustes.
+      avisos.push(`${nombreSecundaria(fila.discipline)} no cupo: no queda ningún día libre con tiempo.`);
       continue;
     }
 
@@ -577,21 +629,36 @@ export function replanificar(entrada: EntradaReplan): Replan {
         .map((elegida) => [elegida.discipline, 0] as const),
     ].map(([discipline, sessionsPerWeek]) => {
       const elegida = eleccionPorDisciplina.get(discipline);
+      const modo = modoAplicado.get(discipline) ?? elegida?.modo;
       return {
         discipline,
         // Una `DESPUES` guarda lo que pidió, no lo que cupo esta vez: la
         // semana que viene puede traer más tiempo, y el aviso ya dijo qué
         // días no alcanzaron.
         sessionsPerWeek:
-          elegida?.modo === "DESPUES"
-            ? Math.max(sessionsPerWeek, Math.trunc(elegida.sesiones ?? colocadasDespues.get(discipline) ?? 0))
+          modo === "DESPUES"
+            ? Math.max(sessionsPerWeek, Math.trunc(elegida?.sesiones ?? colocadasDespues.get(discipline) ?? 0))
             : sessionsPerWeek,
         ...(elegida ? { proposito: elegida.proposito, importancia: elegida.importancia } : {}),
-        ...(elegida?.modo ? { modo: elegida.modo } : {}),
+        ...(modo ? { modo } : {}),
         ...(elegida?.cardio ? { cardio: elegida.cardio } : {}),
       };
     }),
     diasActivos: [...new Set(ordenadas.map((sesion) => sesion.weekday))],
+    presupuesto: ordenadas.filter((sesion) => !sesion.despues).length,
+    acciones: entrada.secundarias.map((elegida) => {
+      const modo = modoAplicado.get(elegida.discipline) ?? elegida.modo ?? "DIA_PROPIO";
+      const nombre = nombreSecundaria(elegida.discipline);
+      const minuscula = nombre.charAt(0).toLowerCase() + nombre.slice(1);
+      return {
+        discipline: elegida.discipline,
+        modo,
+        alternativa:
+          modo === "DESPUES"
+            ? { modo: "DIA_PROPIO" as const, texto: "Darle su propio día" }
+            : { modo: "DESPUES" as const, texto: `Pegar ${minuscula} después de pesas` },
+      };
+    }),
     avisos,
   };
 }

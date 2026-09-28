@@ -18,17 +18,13 @@ import {
 } from "@/lib/training/duracion";
 import { exerciseCountFor, recipeFor, type Slot } from "@/lib/training/recipes";
 import { SCHEMES, isoWeekNumber, schemeForExercise, schemeForWeek } from "@/lib/training/schemes";
-import { planDisciplines, type OtherSession } from "@/lib/training/disciplines";
+import { esqueletoDeSemana } from "@/lib/training/esqueleto";
 import {
   DAY_LABELS,
   DAY_GROUPS,
   WEEK_DAYS,
-  buildSplit,
-  liftingDaysWithinBudget,
   parseInjuries,
-  trainingDaysOf,
   type InjuryState,
-  type WeekDay,
 } from "@/lib/training/split";
 import type {
   DayKind,
@@ -369,27 +365,13 @@ export function generateWeek(
   // cual siempre se comportó; una preferencia fija la sobreescribe.
   const weekScheme = schemeForWeek(weekStart, profile.schemePreference);
 
-  // El presupuesto semanal se paga antes de repartir la semana: si hay otras
-  // disciplinas activas, el gimnasio se queda con los días que sobran, no con
-  // los que pidió.
-  const gymDays = liftingDaysWithinBudget(profile);
-  const porHorario = trainingDaysOf(profile).slice(0, gymDays);
-  const split = buildSplit(
-    {
-      liftingDays: porHorario.length,
-      conditions: profile.conditions,
-      avoidRepeatGroups: profile.avoidRepeatGroups,
-      customSplit: profile.customSplit,
-    },
-    // Con split propio que no cabe en el presupuesto, el recorte tiene que
-    // salir igual aquí, en `plannedDatesOf` y en los avisos de la vista: por
-    // eso los tres pasan la misma semana ISO y el mismo objetivo.
-    { semana: isoWeek, objetivo: profile.goal },
-  );
-  const { kinds, rehabIndexes, injury } = split;
-  // Con split propio los días los fija ella, no el horario: el presupuesto
-  // semanal ya no puede recortarlos por la mitad sin decir cuáles.
-  const days = split.days ?? porHorario;
+  // El esqueleto —días, split y disciplinas— sale de UNA sola función
+  // (`esqueletoDeSemana`, I1): la misma que leen la reconciliación, la vista
+  // y el replanteo. Antes cada uno lo recalculaba por su lado y la semana
+  // materializada acababa distinta de la que enseñaba Ajustes.
+  const esqueleto = esqueletoDeSemana(profile, weekStart);
+  const { kinds, days, rehabIndexes, injury } = esqueleto;
+  const disciplines = esqueleto.disciplines;
 
   const weekStartISO = toISODate(weekStart);
   const previousWeekStart = new Date(weekStart);
@@ -401,30 +383,8 @@ export function generateWeek(
       .flatMap((workout) => workout.exerciseNames),
   );
 
-  const exerciseCount = exerciseCountFor(profile.sessionMinutes, profile.volumeBias);
   const emphasis = config.emphasis ?? [];
   const workouts: PlannedWorkout[] = [];
-
-  // Las otras disciplinas se reparten sobre la semana de pesas ya decidida:
-  // sin saber qué día es de pierna no se puede aplicar la vecindad.
-  const gymByDay = new Map<WeekDay, (typeof kinds)[number]>();
-  kinds.forEach((kind, index) => {
-    const day = days[index];
-    if (day) gymByDay.set(day, kind);
-  });
-
-  const disciplines = planDisciplines({
-    weekStart,
-    otherDisciplines: profile.otherDisciplines,
-    gymByDay,
-    niveles: profile.disciplineLevels,
-    objetivo: profile.goal as never,
-    isoWeek,
-    timePerDay: profile.timePerDay,
-    // Mismo `compactDays` que `otherSessionsFor` en `db.ts`: si uno combina y
-    // el otro no, la semana materializada y la vista que la muestra divergen.
-    compactos: profile.compactDays,
-  });
 
   /**
    * Qué grupos llegan cansados cada día por otra disciplina.
@@ -470,9 +430,17 @@ export function generateWeek(
     // 25 — un parche parejo para un recorte que no lo es. `gymMinutesPorFecha`
     // ya trae el resultado de `repartirMinutos`, así que la cuenta base sale
     // de los minutos de verdad, no de una resta fija.
-    const minutosDelDia = disciplines.gymMinutesPorFecha[fecha];
-    const cuentaBase =
-      minutosDelDia !== undefined ? exerciseCountFor(minutosDelDia, profile.volumeBias) : exerciseCount;
+    //
+    // I1: sin otra disciplina ese día, los minutos son los que ella declaró
+    // PARA ESE DÍA (`timePerDay`), no `sessionMinutes` —que es el día más
+    // corto de la semana y solo queda como respaldo—. Y "hoy tengo menos
+    // tiempo" (`minutosGymPorFecha`) gana sobre todo: es el tiempo real de hoy.
+    const minutosDelDia =
+      config.minutosGymPorFecha?.[fecha] ??
+      disciplines.gymMinutesPorFecha[fecha] ??
+      (profile.timePerDay?.[day] ? profile.timePerDay[day] : undefined) ??
+      profile.sessionMinutes;
+    const cuentaBase = exerciseCountFor(minutosDelDia, profile.volumeBias);
 
     // Y el recorte se hace DONDE toca: si ayer nadaste, el que sobra es un
     // accesorio de espalda, no el de pierna que hoy está fresca.
@@ -612,7 +580,7 @@ export function generateWeek(
     // ejercicios de 9×20 no duran lo que seis de 5×6. Aquí se mide de verdad
     // —serie por serie, con descansos y calentamiento— y lo que no cabe se
     // suelta por prioridad.
-    const minutosTope = minutosDelDia ?? profile.sessionMinutes;
+    const minutosTope = minutosDelDia;
     const warmup = calentamientoPara(kind);
     const recortables = candidatos.filter((candidato) => !candidato.enfasis);
     const exercises = [
@@ -652,6 +620,7 @@ export function generateWeek(
     scheme: weekScheme,
     workouts,
     otherSessions: disciplines.sessions,
+    avisos: esqueleto.avisos,
   };
 }
 

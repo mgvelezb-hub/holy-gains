@@ -214,6 +214,11 @@ export type GeneratedWeek = {
    * registro de lo que pase vive en `ActivitySession`.
    */
   otherSessions: OtherSessionPlan[];
+  /**
+   * Lo que estorba o no cupo: vecindad del split y disciplinas sin lugar
+   * (I1: sale del mismo esqueleto que la semana, no de un cálculo aparte).
+   */
+  avisos?: string[];
 };
 
 /**
@@ -464,4 +469,10 @@ export type GenerateWeekConfig = {
    * el énfasis no cambia el split, los días ni las cargas.
    */
   emphasis?: MuscleGroup[];
+  /**
+   * Minutos de PESAS por fecha que ganan sobre todo lo demás: es "hoy tengo
+   * menos tiempo" (`trim.ts`). Sin esto el recorte se calculaba con
+   * `sessionMinutes` y el día con cardio después seguía usando sus 70 min.
+   */
+  minutosGymPorFecha?: Record<string, number>;
 };

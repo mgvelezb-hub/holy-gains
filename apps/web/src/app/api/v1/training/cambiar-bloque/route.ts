@@ -9,8 +9,10 @@ import {
   ensureWeekMaterialized,
   loadCatalog,
   loadHistory,
+  planGuardable,
   toTrainingProfile,
 } from "@/lib/training/db";
+import { firmaDelPlan } from "@/lib/training/semana";
 import { prisma } from "@/lib/prisma";
 import { DISCIPLINES } from "@/lib/training/types";
 
@@ -154,6 +156,11 @@ async function materializaGimnasioEn(userId: string, dateISO: string): Promise<b
       // forma de que el generador le asigne un split.
       liftingDays: base.liftingDays + 1,
       trainingSchedule: { ...(base.trainingSchedule ?? {}), [dia]: "TARDE" },
+      // I1: un día con 0 min declarados nunca tiene gimnasio. Aquí la persona
+      // acaba de pedirlo para ESE día, así que ese día sí tiene tiempo.
+      ...(base.timePerDay && !base.timePerDay[dia as keyof typeof base.timePerDay]
+        ? { timePerDay: { ...base.timePerDay, [dia]: base.sessionMinutes } }
+        : {}),
     },
     history,
     { weekStart: monday, catalog, emphasis: [] },
@@ -168,12 +175,9 @@ async function materializaGimnasioEn(userId: string, dateISO: string): Promise<b
       date: fecha,
       muscleGroup: plan.muscleGroup,
       scheme: plan.scheme,
-      exercisesJson: {
-        dayKind: plan.dayKind,
-        schemeLabel: plan.schemeLabel,
-        cardioMinutes: plan.cardioMinutes,
-        exercises: plan.exercises,
-      } as unknown as Prisma.InputJsonValue,
+      // Completo (con calentamiento): sin él, la siguiente reconciliación lo
+      // leía como plan viejo. Y el día queda protegido por el cambio a pesas.
+      exercisesJson: planGuardable(plan, firmaDelPlan(base)),
     },
   });
 

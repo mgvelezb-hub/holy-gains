@@ -130,12 +130,16 @@ export function recipeFor(kind: DayKind): Slot[] {
 /**
  * Cuántos ejercicios caben.
  *
- * 45 min ⇒ 4-5 ejercicios ("rápido y efectivo", formato desde 05/06/26);
+ * Menos de 45 min ⇒ 4 (el recorte del día); 45 min ⇒ 4-5 ejercicios
+ * ("rápido y efectivo", formato desde 05/06/26);
  * 60+ ⇒ 6-8. Con `volumeBias: "reducido"` se recorta uno: menos volumen,
  * mismos básicos. Este módulo no sabe nada de fases de dieta — quien decide
  * cuándo toca "reducido" es `volumeBiasForPhase` en `db.ts`.
  */
 export function exerciseCountFor(sessionMinutes: number, volumeBias: VolumeBias): number {
-  const base = sessionMinutes < 55 ? 5 : sessionMinutes < 75 ? 6 : sessionMinutes < 90 ? 7 : 8;
+  // Menos de 45 min es "hoy tengo menos tiempo" (I1): 40 minutos no son una
+  // sesión de 45 un poco apretada, son los básicos del día y nada más.
+  const base =
+    sessionMinutes < 45 ? 4 : sessionMinutes < 55 ? 5 : sessionMinutes < 75 ? 6 : sessionMinutes < 90 ? 7 : 8;
   return Math.max(4, volumeBias === "reducido" ? base - 1 : base);
 }
