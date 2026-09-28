@@ -55,9 +55,16 @@ export {
 } from './foods.js';
 export { PREPARACIONES } from './preparaciones.js';
 export {
+  CATALOGO_SUPLEMENTOS,
   SUPPLEMENTS,
+  esSuplemento,
+  fichaDe,
   pautasDeSuplementos,
   permitePolvos,
+  type AnclaSuplemento,
+  type CategoriaSuplemento,
+  type FichaSuplemento,
+  type ObjetivoSuplemento,
   type PautaSuplemento,
   type Supplement,
 } from './suplementos.js';

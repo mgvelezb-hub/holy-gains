@@ -1,3 +1,4 @@
+import catalogoData from '../data/suplementos.json';
 import type { MacroTargets, Phase, Profile } from './types.js';
 
 /**
@@ -10,17 +11,114 @@ import type { MacroTargets, Phase, Profile } from './types.js';
  * meterlos al solver los volveria variables de una ecuacion a la que no
  * pertenecen.
  *
- * Lo que si son: una lista corta de "esto tomas, esta cantidad, en este
- * momento", derivada de reglas fijas. Por eso viven aparte.
+ * Dos capas, y ninguna vende nada:
  *
- * **Solo se sugiere lo que la persona declaro tener.** No hay recomendaciones
- * de compra: si no marco la creatina, la creatina no aparece — ni como
- * sugerencia ni como "te falta". Un plan que empuja productos deja de ser un
- * plan y se vuelve un catalogo.
+ * - **Tomas**: lo que la persona declaro tomar o acepto. Cada una con dosis,
+ *   momento anclado a una comida y porque (`pautasDeSuplementos`).
+ * - **Sugerencias**: lo que el motor propone por una SENAL concreta de sus
+ *   datos —un laboratorio, un sintoma del check-in, el sueno del reloj—, con
+ *   motivo, evidencia y que cambiaria (`sugerencias-suplementos.ts`). La
+ *   persona acepta, dice que ya lo toma o lo descarta; nada entra solo.
+ *
+ * El catalogo vive en `data/suplementos.json`: dosis dentro de los topes de
+ * las guias (UL de NIH ODS donde existe), evidencia citada y los frenos que
+ * bloquean cada uno.
  */
 
-export const SUPPLEMENTS = ['WHEY', 'CREATINA', 'OMEGA3'] as const;
+export const SUPPLEMENTS = [
+  'WHEY',
+  'CREATINA',
+  'OMEGA3',
+  'VITAMINA_D3',
+  'MAGNESIO',
+  'ASHWAGANDHA',
+  'CAFEINA',
+  'CAFEINA_L_TEANINA',
+  'ELECTROLITOS',
+  'FIBRA',
+  'ZINC',
+  'VITAMINA_B12',
+  'HIERRO',
+  'MULTIVITAMINICO',
+  'MELATONINA',
+  'PROBIOTICO',
+] as const;
 export type Supplement = (typeof SUPPLEMENTS)[number];
+
+export type CategoriaSuplemento = 'SUPLEMENTO' | 'INFUSION';
+
+/**
+ * A que se amarra la toma en el dia.
+ *
+ * Las comidas son el reloj que la persona ya sigue: "con la cena" se cumple
+ * mas que "a las 21:00". Las anclas que no son comida (entreno, dormir) no
+ * tienen slot y se dicen con palabras.
+ */
+export type AnclaSuplemento =
+  | 'DESAYUNO'
+  | 'MEDIA_MANANA'
+  | 'COMIDA'
+  | 'CENA'
+  | 'PRE_ENTRENO'
+  | 'POST_ENTRENO'
+  | 'ENTRENO'
+  | 'DORMIR'
+  | 'LIBRE';
+
+/** Para que objetivo tiene sentido. Solo desempata sugerencias, nunca las crea. */
+export type ObjetivoSuplemento =
+  | 'bajar_grasa'
+  | 'ganar_musculo'
+  | 'rendimiento'
+  | 'sueno'
+  | 'animo'
+  | 'salud'
+  | 'digestion';
+
+export interface FichaSuplemento {
+  id: Supplement;
+  categoria: CategoriaSuplemento;
+  nombre: string;
+  /** Como se dice en una linea de aviso: "+ omega-3". */
+  corto: string;
+  dosis: { min: number; max: number; default: number; unidad: string };
+  /** La dosis por defecto, dicha para leerse. */
+  dosisTexto: string;
+  momento: string;
+  ancla: AnclaSuplemento;
+  /** `true` con comida, `false` lejos de ella, `null` da igual. */
+  conComida: boolean | null;
+  porque: string;
+  /** Cita corta: guia, autor y ano. Sin ella no entra al catalogo. */
+  evidencia: string;
+  /** Tope diario (UL de NIH ODS o de la guia citada). */
+  tope: string;
+  /**
+   * Condiciones que lo bloquean. Casi todas son etiquetas de
+   * `Profile.conditions` (`renal`, `hipertension`, `embarazo`...); unas pocas
+   * se calculan de los datos (`sueno_corto`, `entreno_tarde`).
+   */
+  frenos: string[];
+  /** Senales que lo sugieren (ids de regla de `sugerirSuplementos`). */
+  senales: string[];
+  objetivos: ObjetivoSuplemento[];
+  /** Solo infusiones: como se prepara, en una linea. */
+  preparacion?: string;
+}
+
+export const CATALOGO_SUPLEMENTOS: FichaSuplemento[] = catalogoData as FichaSuplemento[];
+
+const POR_ID = new Map<string, FichaSuplemento>(CATALOGO_SUPLEMENTOS.map((ficha) => [ficha.id, ficha]));
+
+/** La ficha de un id del catalogo; `undefined` si no existe. */
+export function fichaDe(id: string): FichaSuplemento | undefined {
+  return POR_ID.get(id);
+}
+
+/** `true` si el valor es un id del catalogo. Sirve para filtrar lo que llega de la DB. */
+export function esSuplemento(valor: string): valor is Supplement {
+  return POR_ID.has(valor);
+}
 
 export type PautaSuplemento = {
   supplement: Supplement;
