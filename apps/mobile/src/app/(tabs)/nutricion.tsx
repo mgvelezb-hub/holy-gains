@@ -1,9 +1,16 @@
 import {
+  Activity,
+  AlertTriangle,
+  CalendarClock,
+  Clock,
   Flame,
   FlaskConical,
   Info,
   MessageCircleQuestion,
+  Package,
+  Pill,
   ShoppingBasket,
+  Sun,
   UtensilsCrossed,
 } from "lucide-react-native";
 import { useCallback, useMemo, useState } from "react";
@@ -12,24 +19,23 @@ import { useFocusEffect, useRouter } from "expo-router";
 
 import { EngraneAjustes } from "@/components/EngraneAjustes";
 import { InfoTip, TextoInfo } from "@/components/InfoTip";
-import { ScoreCard } from "@/components/ScoreCard";
+import { ScoreCard, type ScoreTone } from "@/components/ScoreCard";
 import { SectionLabel } from "@/components/SectionLabel";
 import { ErrorState, LoadingState } from "@/components/States";
 import { useTheme } from "@/context/theme";
 import { useScrollTop } from "@/lib/scroll-top";
+import { ApiError, putMenuPreferido, type MenuPreference } from "@/lib/api";
+import { getPlanNutricion, type AvisoPlan, type PlanNutricion } from "@/lib/api-nutricion";
 import {
-  ApiError,
-  getHorariosComidaCompleto,
-  getSuplementos,
-  getNutrition,
-  ONBOARDING_WEEK_DAYS,
-  putMenuPreferido,
-  type GroceryItem,
-  type MenuPreference,
-  type NutritionResponse,
-} from "@/lib/api";
-import { programarComidas, type ComidaAviso } from "@/lib/recordatorio";
-import { extrasPorSlot } from "@/lib/suplementos";
+  faseLegible,
+  lineaHorarios,
+  lineaHoy,
+  lineaMenu,
+  lineaPlan,
+  lineaSuper,
+  lineaSuplementos,
+} from "@/lib/plan-nutricion";
+import { programarComidas } from "@/lib/recordatorio";
 import { fonts, radius, spacing, type as typeScale, type Palette } from "@/lib/theme";
 import { actualizarComidaEnElReloj } from "@/lib/reloj-nativo";
 import { formatMealItem, pickNextMeal, syncWidgetData } from "@/lib/widget";
@@ -47,10 +53,17 @@ import { formatMealItem, pickNextMeal, syncWidgetData } from "@/lib/widget";
  * menú completo con su swap vive en `/menu/[numero]`, y la consulta libre
  * vive en `/pregunta-plan`. Esta pantalla vuelve a caber casi sin scroll.
  *
- * Fase 1 mueve de casa lo que ya existía en Hoy. El tipo de dieta, sus
- * beneficios, los platillos por tiempo de preparación y el porqué de cada
- * alimento entran en la fase de Nutrición, no aquí.
+ * K1: todo sale de `planDeNutricion` (`GET /api/v1/nutricion/plan`). Las
+ * tarjetas solo dicen en una línea lo que el plan ya trae —kcal y fase, la
+ * próxima comida con sus tomas, los menús, la lista con lo que ya tienes, las
+ * tomas, los horarios— y los avisos (freno clínico, glucosa, vitamina D,
+ * despensa) van arriba con su acción. Nada se calcula aquí, ni los
+ * recordatorios: llegan ya escritos y con la hora de cada día.
  */
+
+const ICONO_AVISO = { freno: AlertTriangle, glucosa: Activity, vitamina_d: Sun, despensa: Package } as const;
+const TONO_AVISO: Record<AvisoPlan["nivel"], ScoreTone> = { freno: "alto", aviso: "warn", info: "neutral" };
+const ETIQUETA_AVISO: Record<AvisoPlan["nivel"], string> = { freno: "Freno", aviso: "Ajusta tu plan", info: "" };
 
 /** true si el error de API es "onboarding incompleto" (403): no es una falla real. */
 function isOnboardingIncomplete(error: unknown): boolean {
@@ -63,118 +76,57 @@ export default function NutricionScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   // Tocar esta pestaña estando en ella regresa el scroll hasta arriba.
   const scrollRef = useScrollTop();
-  const [data, setData] = useState<NutritionResponse | null>(null);
-  // Qué menús se cocinan esta semana y la lista de súper que les corresponde.
-  // Viven aquí y no dentro del selector porque la lista de abajo también las
-  // usa: cambiar de menú tiene que mover las dos cosas a la vez.
-  const [preferencia, setPreferencia] = useState<MenuPreference>("AMBOS");
-  const [groceriesLocal, setGroceriesLocal] = useState<GroceryItem[] | null>(null);
+  const [plan, setPlan] = useState<PlanNutricion | null>(null);
+  const [sinOnboarding, setSinOnboarding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const nutrition = await getNutrition().catch((e) =>
-        isOnboardingIncomplete(e) ? null : Promise.reject(e),
-      );
-      setData(nutrition ?? { decision: null, menus: [], groceries: [], materialized: false });
-      setPreferencia(nutrition?.menuPreference ?? "AMBOS");
-      // La lista recién llegada manda sobre cualquier recálculo anterior.
-      setGroceriesLocal(null);
+      const nuevo = await getPlanNutricion();
+      setPlan(nuevo);
+      setSinOnboarding(false);
+      setError(null);
 
-      // Nutrición es la única pantalla donde el usuario cambia un alimento
-      // (swap, ahora en su propia hoja `/menu/[numero]`) y la equivalencia
-      // queda guardada en el servidor: si no avisamos aquí, el widget de iOS
-      // se queda con la comida vieja hasta que el usuario abre Hoy. Se
-      // recarga al enfocar esta pantalla (ver `useFocusEffect` abajo), así
-      // que volver de un swap en la hoja del menú también resincroniza esto.
-      // Igual que Hoy, tomamos el menú 1 (`menus[0]`) como el vigente del
-      // día — es el mismo criterio que ya usa `index.tsx` para el widget, así
-      // ambas pantallas están de acuerdo en cuál menú es "el de hoy". Mandamos
-      // SOLO los campos de comida: racha/entreno son de Hoy, y como
-      // `undefined` no borra nada (ver el contrato en `lib/widget.ts`), no se
-      // los pisamos desde aquí.
+      // El widget y el reloj reciben la próxima comida del menú de HOY (el
+      // que dice el plan), con la hora de hoy ya resuelta.
       try {
-        const nextMeal = pickNextMeal(nutrition?.menus[0]?.meals ?? []);
-        syncWidgetData({
+        const menuHoy = nuevo.menus.find((menu) => menu.menuNumber === nuevo.menuDeHoy) ?? nuevo.menus[0];
+        const horas = nuevo.horariosPorDia[nuevo.hoy.dia] ?? {};
+        const comidas = (menuHoy?.meals ?? []).map((meal) => ({ ...meal, timeHint: horas[meal.slot] ?? meal.timeHint }));
+        const nextMeal = pickNextMeal(comidas);
+        const datos = {
           comidaLabel: nextMeal?.label ?? null,
           comidaHora: nextMeal?.timeHint ?? null,
           comidaItems: nextMeal ? nextMeal.items.slice(0, 3).map(formatMealItem) : null,
-        });
-
-        // El reloj recibe lo mismo, conservando lo que Hoy ya le dijo de
-        // entrenamiento y racha (esta pantalla no sabe de eso).
-        actualizarComidaEnElReloj({
-          comida: nextMeal?.label ?? null,
-          comidaHora: nextMeal?.timeHint ?? null,
-          comidaItems: nextMeal ? nextMeal.items.slice(0, 3).map(formatMealItem) : null,
-        });
+        };
+        syncWidgetData(datos);
+        actualizarComidaEnElReloj({ comida: datos.comidaLabel, comidaHora: datos.comidaHora, comidaItems: datos.comidaItems });
       } catch {
         // Sincronizar el widget o el reloj nunca debe tumbar Nutrición.
       }
 
-      setError(null);
+      // Los avisos de comida llegan escritos del servidor: el "Prepárate" con
+      // su menú y sus tomas, y la hora de cada día (el sábado distinto).
+      void programarComidas(
+        nuevo.recordatorios.map((rec) => ({
+          slot: rec.slot,
+          label: rec.label,
+          extras: rec.extras,
+          menuNumber: rec.menuNumber,
+          items: rec.items,
+          horaPorDia: rec.horaPorDia,
+        })),
+      );
     } catch (e) {
+      if (e instanceof ApiError && e.status === 403) {
+        setSinOnboarding(true);
+        setError(null);
+        return;
+      }
       setError(e instanceof ApiError ? e.message : "No se pudo cargar tu alimentación");
     }
   }, []);
-
-  /**
-   * Los avisos por comida se programan con los horarios del menú vigente.
-   *
-   * Aquí y no en Hoy porque esta es la pantalla que ya tiene el menú completo
-   * cargado; Hoy solo conoce la siguiente comida. `comida.timeHint` ya trae
-   * la hora general propia aplicada (`toMenuView` la pisa sobre la del
-   * motor); lo único que falta cruzar aquí es el horario por día
-   * (`horariosPorDia`, Fase 2) para que un sábado con otra hora avise a su
-   * propia hora, no a la de entre semana.
-   */
-  useFocusEffect(
-    useCallback(() => {
-      const comidas = data?.menus?.[0]?.meals ?? [];
-      const menuNumber = data?.menus?.[0]?.menuNumber ?? 1;
-      if (comidas.length === 0) return;
-
-      let vivo = true;
-      // Las tomas amarradas a cada comida viajan en su "Prepárate" ("+
-      // omega-3"). Si no se pueden leer, el aviso sale igual, sin ellas.
-      Promise.all([getHorariosComidaCompleto(), getSuplementos().catch(() => null)])
-        .then(([respuesta, suplementos]) => {
-          if (!vivo) return;
-          const horariosPorDia = respuesta.horariosPorDia ?? {};
-          const extras = extrasPorSlot(suplementos?.tomas ?? [], { soloPendientes: false });
-
-          const avisos: ComidaAviso[] = comidas.map((comida) => ({
-            slot: comida.slot,
-            label: comida.label,
-            extras: extras[comida.slot] ?? [],
-            menuNumber,
-            items: comida.items.map((item) => ({ name: item.name })),
-            horaPorDia: Object.fromEntries(
-              ONBOARDING_WEEK_DAYS.map((dia) => [dia, horariosPorDia[dia]?.[comida.slot] ?? comida.timeHint]),
-            ),
-          }));
-
-          void programarComidas(avisos);
-        })
-        .catch(() => {
-          // Sin poder leer el horario por día, se avisa con la hora general:
-          // peor sería no avisar nada.
-          void programarComidas(
-            comidas.map((comida) => ({
-              slot: comida.slot,
-              label: comida.label,
-              menuNumber,
-              items: comida.items.map((item) => ({ name: item.name })),
-              horaPorDia: Object.fromEntries(ONBOARDING_WEEK_DAYS.map((dia) => [dia, comida.timeHint])),
-            })),
-          );
-        });
-      return () => {
-        vivo = false;
-      };
-    }, [data?.menus]),
-  );
 
   // Se recarga al enfocar, no solo al montar: volver de la hoja de un menú
   // (donde vive el swap) tiene que verse aquí sin que la persona jale para
@@ -191,14 +143,16 @@ export default function NutricionScreen() {
     setRefreshing(false);
   }
 
-  if (!data && !error) return <LoadingState label="Cargando tu alimentación..." />;
-  if (!data && error) return <ErrorState message={error} onRetry={load} />;
-  if (!data) return null;
+  if (!plan && !error && !sinOnboarding) return <LoadingState label="Cargando tu alimentación..." />;
+  if (!plan && error) return <ErrorState message={error} onRetry={load} />;
 
-  const { decision, menus } = data;
-  // La lista de súper puede venir recalculada por el selector de menú sin
-  // volver a pedir toda la pantalla: mientras eso pasa, manda la local.
-  const groceries = groceriesLocal ?? data.groceries;
+  const preferencia = plan?.menuPreference ?? "AMBOS";
+  const menus = (plan?.menus ?? []).filter(
+    (menu) =>
+      preferencia === "AMBOS" ||
+      (preferencia === "MENU_1" && menu.menuNumber === 1) ||
+      (preferencia === "MENU_2" && menu.menuNumber === 2),
+  );
 
   return (
     <ScrollView
@@ -214,63 +168,93 @@ export default function NutricionScreen() {
         <EngraneAjustes seccion="nutricion" />
       </View>
 
+      {(plan?.avisos ?? []).map((aviso) => (
+        <ScoreCard
+          key={aviso.id}
+          icon={ICONO_AVISO[aviso.id]}
+          tint={aviso.nivel === "freno" ? colors.error : colors.champan}
+          title={aviso.titulo}
+          summary={aviso.corto}
+          status={aviso.nivel === "info" ? null : { label: ETIQUETA_AVISO[aviso.nivel], tone: TONO_AVISO[aviso.nivel] }}
+          onPress={aviso.accion ? () => router.push(aviso.accion!.ruta as never) : undefined}
+          infoTip={
+            <InfoTip titulo={aviso.titulo}>
+              <TextoInfo>{aviso.texto}</TextoInfo>
+            </InfoTip>
+          }
+        />
+      ))}
+
       <ScoreCard
         icon={Flame}
         tint={colors.champan}
         title="Tu plan"
-        summary={decision ? `${decision.kcal} kcal` : "Sin plan publicado todavía"}
-        status={decision ? { label: decision.phase.replace(/_/g, " "), tone: "ok" } : null}
-        onPress={decision ? () => router.push("/plan-nutricion" as never) : undefined}
+        summary={plan ? lineaPlan(plan) : "Termina tu perfil para ver tu plan"}
+        status={plan?.decision ? { label: faseLegible(plan.decision.phase), tone: "ok" } : null}
+        onPress={plan?.decision ? () => router.push("/plan-nutricion" as never) : undefined}
+        infoTip={
+          plan?.porque ? (
+            <InfoTip titulo="Por qué estos números">
+              <TextoInfo>{plan.porque}</TextoInfo>
+            </InfoTip>
+          ) : undefined
+        }
       />
 
-      {menus.length > 1 && (
-        <SelectorDeMenu
-          preferencia={preferencia}
-          onCambio={(nueva, nuevasCompras) => {
-            setPreferencia(nueva);
-            setGroceriesLocal(nuevasCompras);
-          }}
+      {plan && plan.hoy.comidas.length > 0 && (
+        <ScoreCard
+          icon={Clock}
+          tint={colors.paloRosa}
+          title="Hoy"
+          summary={lineaHoy(plan)}
+          onPress={() => router.push("/comida-hoy" as never)}
         />
       )}
 
-      {menus
-        .filter(
-          (menu) =>
-            preferencia === "AMBOS" ||
-            (preferencia === "MENU_1" && menu.menuNumber === 1) ||
-            (preferencia === "MENU_2" && menu.menuNumber === 2),
-        )
-        .map((menu) => {
-          const primera = menu.meals[0];
-          const resumen =
-            menu.meals.length === 0
-              ? "Sin comidas"
-              : `${menu.meals.length} comidas · empieza ${primera?.timeHint ?? ""}`.trim();
-          return (
-            <ScoreCard
-              key={menu.menuNumber}
-              icon={UtensilsCrossed}
-              tint={colors.guindaLight}
-              title={`Menú ${menu.menuNumber}`}
-              summary={resumen}
-              onPress={() => router.push(`/menu/${menu.menuNumber}` as never)}
-            />
-          );
-        })}
+      {plan && plan.menus.length > 1 && <SelectorDeMenu preferencia={preferencia} onCambio={() => void load()} />}
 
-      <ScoreCard
-        icon={ShoppingBasket}
-        tint={colors.paloRosa}
-        title="Lista de súper"
-        summary={
-          groceries.length === 0
-            ? "Sin artículos todavía"
-            : `${groceries.length} ${groceries.length === 1 ? "artículo" : "artículos"} · ${
-                preferencia === "AMBOS" ? "los dos menús" : "un menú"
-              }`
-        }
-        onPress={() => router.push("/lista-super" as never)}
-      />
+      {plan &&
+        menus.map((menu) => (
+          <ScoreCard
+            key={menu.menuNumber}
+            icon={UtensilsCrossed}
+            tint={colors.guindaLight}
+            title={`Menú ${menu.menuNumber}`}
+            summary={lineaMenu(menu, plan)}
+            onPress={() => router.push(`/menu/${menu.menuNumber}` as never)}
+          />
+        ))}
+
+      {plan && (
+        <ScoreCard
+          icon={ShoppingBasket}
+          tint={colors.paloRosa}
+          title="Lista de súper"
+          summary={lineaSuper(plan)}
+          onPress={() => router.push("/lista-super" as never)}
+        />
+      )}
+
+      {plan && (plan.resumenTomas.total > 0 || plan.tomasPausadas > 0) && (
+        <ScoreCard
+          icon={Pill}
+          tint={colors.champan}
+          title="Suplementos"
+          summary={lineaSuplementos(plan)}
+          status={plan.freno ? { label: "En pausa", tone: "alto" } : null}
+          onPress={() => router.push("/suplementos-hoy" as never)}
+        />
+      )}
+
+      {plan && plan.hoy.comidas.length > 0 && (
+        <ScoreCard
+          icon={CalendarClock}
+          tint={colors.guindaLight}
+          title="Horarios"
+          summary={lineaHorarios(plan)}
+          onPress={() => router.push("/ajustes/detalle/horarios-comida" as never)}
+        />
+      )}
 
       <ScoreCard
         icon={Info}
@@ -297,8 +281,9 @@ export default function NutricionScreen() {
         infoTip={
           <InfoTip titulo="Sobre tus estudios">
             <TextoInfo>
-              Se guardan y se grafican. La app no los interpreta: lo que salga fuera del rango de tu
-              laboratorio lo revisa un médico.
+              Se guardan y se grafican. Tu glucosa en ayuno y tu vitamina D sí cambian tu plan: la
+              primera pide carbohidratos de índice glucémico bajo y más fibra, la segunda trae la
+              sugerencia de D3. Lo que salga fuera del rango de tu laboratorio lo revisa un médico.
             </TextoInfo>
           </InfoTip>
         }
@@ -330,7 +315,8 @@ function SelectorDeMenu({
   onCambio,
 }: {
   preferencia: MenuPreference;
-  onCambio: (nueva: MenuPreference, groceries: GroceryItem[]) => void;
+  /** Ya guardó: la pantalla vuelve a pedir el plan (la lista cambia con la elección). */
+  onCambio: () => void;
 }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -348,8 +334,8 @@ function SelectorDeMenu({
     setError(null);
     setGuardando(valor);
     try {
-      const respuesta = await putMenuPreferido(valor);
-      onCambio(respuesta.menuPreference, respuesta.groceries);
+      await putMenuPreferido(valor);
+      onCambio();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "No se pudo guardar tu elección");
     } finally {

@@ -42,19 +42,6 @@ export const PRESUPUESTOS = [
   },
 ];
 
-/** El tipo de dieta que la app arma hoy, con lo que sí y lo que no hace. */
-export const DIETA_ACTUAL = {
-  nombre: "Omnívora por equivalencias",
-  resumen:
-    "Comida normal repartida en tus comidas del día, con intercambios por alimento. No hay grupos prohibidos ni ventanas de ayuno: lo que manda son las cantidades.",
-  puntos: [
-    "Proteína en cada comida: es lo que sostiene el músculo mientras bajas grasa, y lo que más sacia por caloría.",
-    "Los carbohidratos densos se acomodan alrededor de tu entrenamiento, donde se usan mejor.",
-    "Los vegetales van libres: suman volumen y fibra sin mover los números.",
-    "Cada alimento trae equivalencias dentro del 10 % de su macro, para que puedas cambiarlo sin recalcular nada.",
-  ],
-} as const;
-
 /**
  * Por qué el menú se ve como se ve. Son las reglas del motor dichas en
  * español, no consejos sueltos.

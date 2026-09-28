@@ -10,46 +10,35 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/States";
 import { Parrafo } from "@/components/Parrafo";
 import { SectionLabel } from "@/components/SectionLabel";
 import { useTheme } from "@/context/theme";
-import {
-  ApiError,
-  getCheckins,
-  getMe,
-  getNutrition,
-  type MeResponse,
-  type NutritionDecisionSummary,
-} from "@/lib/api";
-import { DIETA_ACTUAL, PRESUPUESTOS, aguaDelDia } from "@/lib/nutricion";
+import { ApiError, getCheckins } from "@/lib/api";
+import { getPlanNutricion, type PlanNutricion } from "@/lib/api-nutricion";
+import { PRESUPUESTOS, aguaDelDia } from "@/lib/nutricion";
+import { faseLegible } from "@/lib/plan-nutricion";
 import { fonts, spacing, type as typeScale, type Palette } from "@/lib/theme";
 
 /**
  * Hoja "Tu plan" — el desglose completo de macros y el porqué.
  *
  * En el tablero, la tarjeta "Tu plan" solo dice kcal y fase: lo suficiente
- * para un vistazo. Proteína/carbohidrato/grasa en gramos, el tipo de dieta y
- * el agua del día son cosas que se consultan, no que se leen a diario, así
- * que viven aquí. Se ven una vez cuando alguien quiere entender su plan a
- * fondo — como `porque-plan.tsx`, que hace lo mismo con las reglas del motor.
+ * para un vistazo. Aquí va el resto, TODO del plan canónico (K1): los
+ * gramos con la fibra, el porqué en una línea (fase, déficit, ritmo y para
+ * qué es la proteína), el estilo de dieta que de verdad sigue —antes esta
+ * hoja decía "omnívora" aunque el perfil fuera keto— y lo que arma el menú.
  */
 export default function PlanNutricionScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
-  const [decision, setDecision] = useState<NutritionDecisionSummary | null>(null);
-  const [me, setMe] = useState<MeResponse | null>(null);
+  const [plan, setPlan] = useState<PlanNutricion | null>(null);
   const [pesoKg, setPesoKg] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cargado, setCargado] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [nutrition, perfil, checkins] = await Promise.all([
-        getNutrition(),
-        getMe().catch(() => null),
-        getCheckins(4).catch(() => null),
-      ]);
-      setDecision(nutrition.decision);
-      setMe(perfil);
+      const [nuevo, checkins] = await Promise.all([getPlanNutricion(), getCheckins(4).catch(() => null)]);
+      setPlan(nuevo);
       setPesoKg(checkins?.checkIns.find((fila) => fila.weightKg !== null)?.weightKg ?? null);
       setError(null);
     } catch (e) {
@@ -66,9 +55,14 @@ export default function PlanNutricionScreen() {
   );
 
   if (!cargado) return <LoadingState label="Cargando tu plan..." />;
-  if (error && !decision) return <ErrorState message={error} onRetry={load} />;
+  if (error && !plan) return <ErrorState message={error} onRetry={load} />;
 
+  const decision = plan?.decision ?? null;
   const agua = aguaDelDia(pesoKg);
+  const pref = plan?.preferencias;
+  const preparacionesApagadas = pref
+    ? (["licuados", "sopas", "cremas"] as const).filter((tipo) => !pref.preparaciones[tipo])
+    : [];
 
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
@@ -84,42 +78,47 @@ export default function PlanNutricionScreen() {
           <EmptyState message="En cuanto tu coach publique tu decisión, aquí aparecen tus números." />
         ) : (
           <Card>
-            <SectionLabel>{decision.phase.replace(/_/g, " ")}</SectionLabel>
+            <SectionLabel>{faseLegible(decision.phase)}</SectionLabel>
             <Text style={styles.kcal}>{decision.kcal} kcal</Text>
             <View style={styles.macros}>
               <Macro label="Proteína" valor={`${decision.proteinG} g`} />
               <Macro label="Carbohidratos" valor={`${decision.carbsG} g`} />
               <Macro label="Grasas" valor={`${decision.fatG} g`} />
+              {decision.fiberG !== null && <Macro label="Fibra" valor={`${decision.fiberG} g`} />}
             </View>
+            {plan?.porque && <Parrafo style={styles.parrafo}>{plan.porque}</Parrafo>}
           </Card>
         )}
 
-        <Card>
-          <View style={styles.head}>
-            <SectionLabel>Tu dieta</SectionLabel>
-            <InfoTip titulo="Sobre el presupuesto">
-              <TextoInfo>
-                El presupuesto se cambia en Ajustes → Nutrición, y entra en tu siguiente check-in: el
-                menú de esta semana ya se compró.
-              </TextoInfo>
-            </InfoTip>
-          </View>
-          <Text style={styles.nombreDieta}>
-            {DIETA_ACTUAL.nombre}
-            {me?.profile ? ` · ${me.profile.mealsPerDay} comidas al día` : ""}
-          </Text>
-          {me?.profile && (
+        {plan && (
+          <Card>
+            <View style={styles.head}>
+              <SectionLabel>Tu dieta</SectionLabel>
+              <InfoTip titulo="Qué arma tu menú">
+                <TextoInfo>
+                  Tu estilo, el presupuesto, el tiempo de cocina, la leche, las preparaciones y tu
+                  despensa deciden CON QUÉ alimentos se cumplen tus números. Se cambian en Ajustes →
+                  Nutrición o en "Rearmar tu alimentación", y el menú se puede rearmar ese mismo día.
+                </TextoInfo>
+              </InfoTip>
+            </View>
+            <Text style={styles.nombreDieta}>
+              {plan.estilo.nombre} · {plan.preferencias.comidas} comidas al día
+            </Text>
             <Text style={styles.presupuesto}>
-              Presupuesto {PRESUPUESTOS.find((p) => p.valor === me.profile!.budget)?.nombre.toLowerCase()}
+              Presupuesto {PRESUPUESTOS.find((p) => p.valor === plan.preferencias.presupuesto)?.nombre.toLowerCase()}
+              {plan.preferencias.maxPrepMin !== null ? ` · hasta ${plan.preferencias.maxPrepMin} min de cocina` : ""}
+              {` · leche ${plan.preferencias.leche.replace(/_/g, " ")}`}
             </Text>
-          )}
-          <Parrafo style={styles.parrafo}>{DIETA_ACTUAL.resumen}</Parrafo>
-          {DIETA_ACTUAL.puntos.map((punto) => (
-            <Text key={punto} style={styles.vinneta}>
-              · {punto}
+            <Text style={styles.presupuesto}>
+              {preparacionesApagadas.length === 0
+                ? "Licuados, sopas y cremas: sí"
+                : `Sin ${preparacionesApagadas.join(", ")}`}
+              {plan.despensa.total > 0 ? ` · despensa ${plan.despensa.enMenu} de ${plan.despensa.total} en el menú` : ""}
             </Text>
-          ))}
-        </Card>
+            <Parrafo style={styles.parrafo}>{plan.estilo.detalle}</Parrafo>
+          </Card>
+        )}
 
         <Card>
           <SectionLabel>Agua del día</SectionLabel>
@@ -133,7 +132,7 @@ export default function PlanNutricionScreen() {
           </Parrafo>
         </Card>
 
-        {error && decision && <Text style={styles.errorTexto}>{error}</Text>}
+        {error && plan && <Text style={styles.errorTexto}>{error}</Text>}
       </ScrollView>
     </SafeAreaView>
   );
@@ -177,6 +176,7 @@ const makeStyles = (colors: Palette) =>
     },
     macros: {
       flexDirection: "row",
+      flexWrap: "wrap",
       gap: spacing.xl,
       marginTop: spacing.md,
     },

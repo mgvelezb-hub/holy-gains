@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Card } from "@/components/Card";
+import { InfoTip, TextoInfo } from "@/components/InfoTip";
 import { Parrafo } from "@/components/Parrafo";
 import { RegenerarMenu } from "@/components/RegenerarMenu";
 import { SectionLabel } from "@/components/SectionLabel";
@@ -27,7 +28,9 @@ import {
   type MeResponse,
   type NutricionReplanResponse,
 } from "@/lib/api";
+import { postReplanDietaPreview, type RespuestasReplanDieta, type VistaPreviaPlan } from "@/lib/api-nutricion";
 import { ESTILOS_DIETA, OBJETIVOS, PRESUPUESTOS, SUPLEMENTOS } from "@/lib/nutricion";
+import { faseLegible, lineaPrevia } from "@/lib/plan-nutricion";
 import { TIEMPOS_COCINA } from "@/lib/entrenamiento";
 import { fonts, radius, spacing, type as typeScale, withAlpha, type Palette } from "@/lib/theme";
 
@@ -41,6 +44,12 @@ import { fonts, radius, spacing, type as typeScale, withAlpha, type Palette } fr
  * sino el momento: ahí se corrige una cosa, aquí se replantea el conjunto. Por
  * eso al final llega una **lectura** de lo que cada respuesta implica, incluido
  * lo que cuesta: una dieta que aparece sin explicación se sigue tres días.
+ *
+ * K1: mientras se contesta, "Así queda" enseña en vivo lo que saldría
+ * (`POST /api/v1/nutricion/replan?preview=1`, sin escribir): kcal y macros,
+ * un día de muestra en medidas caseras, cuánto de la despensa entra, las
+ * tomas del día y los avisos con su acción. Sale del mismo perfil del motor
+ * que arma los menús de verdad.
  */
 export default function ReplantearDietaScreen() {
   const router = useRouter();
@@ -60,6 +69,9 @@ export default function ReplantearDietaScreen() {
   const [suplementos, setSuplementos] = useState<Array<"WHEY" | "CREATINA" | "OMEGA3">>([]);
   const [excluidos, setExcluidos] = useState("");
   const [favoritos, setFavoritos] = useState("");
+
+  const [previa, setPrevia] = useState<VistaPreviaPlan | null>(null);
+  const [calculando, setCalculando] = useState(false);
 
   const cargar = useCallback(async () => {
     try {
@@ -97,22 +109,51 @@ export default function ReplantearDietaScreen() {
       .filter(Boolean);
   }
 
+  function respuestas(): RespuestasReplanDieta {
+    return {
+      goal: objetivo,
+      mealsPerDay: comidas,
+      budget: presupuesto,
+      dietStyle: dieta,
+      maxPrepMin: tiempoCocina,
+      supplements: suplementos,
+      excludedFoods: lista(excluidos),
+      favoriteFoods: lista(favoritos),
+    };
+  }
+
+  // La vista previa se pide sola en cuanto cambia una respuesta, con una
+  // pausa corta para no pedir una por tecla en los campos de texto.
+  const clave = JSON.stringify([objetivo, comidas, presupuesto, dieta, tiempoCocina, suplementos, excluidos, favoritos]);
+  useEffect(() => {
+    if (!me?.profile) return;
+    let vivo = true;
+    const espera = setTimeout(() => {
+      setCalculando(true);
+      postReplanDietaPreview(respuestas())
+        .then((respuesta) => {
+          if (vivo) setPrevia(respuesta.previa);
+        })
+        .catch(() => {
+          // Sin vista previa el cuestionario sigue funcionando igual.
+        })
+        .finally(() => {
+          if (vivo) setCalculando(false);
+        });
+    }, 450);
+    return () => {
+      vivo = false;
+      clearTimeout(espera);
+    };
+    // `respuestas()` se arma de las mismas variables que `clave`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clave, me?.profile]);
+
   async function guardar() {
     setGuardando(true);
     setError(null);
     try {
-      setResultado(
-        await postNutricionReplan({
-          goal: objetivo,
-          mealsPerDay: comidas,
-          budget: presupuesto,
-          dietStyle: dieta,
-          maxPrepMin: tiempoCocina,
-          supplements: suplementos,
-          excludedFoods: lista(excluidos),
-          favoriteFoods: lista(favoritos),
-        }),
-      );
+      setResultado(await postNutricionReplan(respuestas()));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo guardar tu perfil");
     } finally {
@@ -137,8 +178,51 @@ export default function ReplantearDietaScreen() {
 
         <Text style={styles.title}>Rearmar tu alimentación</Text>
         <Parrafo style={styles.subtitle}>
-          Las respuestas que cambian tu menú, todas juntas. Entra con tu siguiente check-in.
+          Las respuestas que cambian tu menú, todas juntas. Arriba ves en vivo cómo queda.
         </Parrafo>
+
+        {previa && (
+          <Card>
+            <View style={styles.previaHead}>
+              <SectionLabel>{`Así queda · ${faseLegible(previa.fase)}`}</SectionLabel>
+              <InfoTip titulo="Así queda">
+                <TextoInfo>{previa.porque}</TextoInfo>
+                <TextoInfo>{previa.cuando}</TextoInfo>
+              </InfoTip>
+            </View>
+            <Text style={[styles.previaLinea, calculando && styles.previaCalculando]}>{lineaPrevia(previa)}</Text>
+            {previa.diaMuestra.map((comida) => (
+              <Text key={comida.slot} style={styles.previaComida} numberOfLines={2}>
+                {comida.hora} {comida.label} · {comida.items.join(", ")}
+              </Text>
+            ))}
+            {previa.despensa.total > 0 && (
+              <Text style={styles.previaDato}>
+                Despensa: {previa.despensa.enMenu} de {previa.despensa.total} entran esta semana
+              </Text>
+            )}
+            <Text style={styles.previaDato} numberOfLines={2}>
+              {previa.tomasPausadas > 0
+                ? `Tomas: ${previa.tomasPausadas} en pausa hasta que lo veas con tu médico`
+                : previa.tomas.length > 0
+                  ? `Tomas: ${previa.tomas.map((toma) => `${toma.corto} ${toma.cuando}`).join(" · ")}`
+                  : "Tomas: ninguna"}
+            </Text>
+            {previa.avisos.map((aviso) => (
+              <Pressable
+                key={aviso.id}
+                disabled={!aviso.accion}
+                onPress={() => aviso.accion && router.push(aviso.accion.ruta as never)}
+                style={[styles.previaAviso, aviso.nivel === "freno" && styles.previaAvisoFreno]}
+              >
+                <Text style={styles.previaAvisoTexto} numberOfLines={1}>
+                  {aviso.titulo} · {aviso.corto}
+                </Text>
+                {aviso.accion && <Text style={styles.previaAvisoAccion}>{aviso.accion.etiqueta} ›</Text>}
+              </Pressable>
+            ))}
+          </Card>
+        )}
 
         <Card>
           <SectionLabel>Para qué entrenas</SectionLabel>
@@ -412,6 +496,24 @@ const makeStyles = (colors: Palette) =>
       color: colors.marfil,
       marginTop: spacing.md,
     },
+    previaHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm },
+    previaLinea: { fontFamily: fonts.sansSemiBold, ...typeScale.body, color: colors.marfil, marginTop: spacing.xs },
+    previaCalculando: { opacity: 0.5 },
+    previaComida: { fontFamily: fonts.sans, ...typeScale.bodySm, color: colors.marfil, marginTop: spacing.xs },
+    previaDato: { fontFamily: fonts.sansMedium, ...typeScale.bodySm, color: colors.champan, marginTop: spacing.sm },
+    previaAviso: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: spacing.sm,
+      marginTop: spacing.sm,
+      padding: spacing.sm,
+      borderRadius: radius.md,
+      backgroundColor: withAlpha(colors.champan, 0.1),
+    },
+    previaAvisoFreno: { backgroundColor: withAlpha(colors.error, 0.15) },
+    previaAvisoTexto: { flex: 1, fontFamily: fonts.sansMedium, ...typeScale.bodySm, color: colors.marfil },
+    previaAvisoAccion: { fontFamily: fonts.sansSemiBold, ...typeScale.bodySm, color: colors.paloRosa },
     cuando: {
       fontFamily: fonts.sansMedium,
       ...typeScale.bodySm,
