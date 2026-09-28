@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { DetalleCardio } from "@/lib/api";
-import { actividadDeCardio, notasDeCardio, pasosDeCardio, tituloTarjetaCardio } from "@/lib/cardio";
+import { actividadDeCardio, notasDeCardio, pasosDeCardio, renglonDeCardio, tituloTarjetaCardio } from "@/lib/cardio";
 
 /**
  * H2 — el bloque de cardio al cerrar la última serie: su tarjeta, los pasos
@@ -53,5 +53,24 @@ describe("cardio después de pesas", () => {
       notes: notasDeCardio(HIIT),
     });
     expect(notasDeCardio(HIIT)).toBe("HIIT · caminadora · nivel 8");
+  });
+});
+
+describe("renglón de Ajustes (H2)", () => {
+  it("'Cardio · 5/semana · después de pesas · HIIT caminadora 20 min'", () => {
+    expect(
+      renglonDeCardio({
+        discipline: "CARDIO",
+        sessionsPerWeek: 5,
+        modo: "DESPUES",
+        cardio: { equipo: "CAMINADORA", tipo: "HIIT", minutos: 20 },
+      }),
+    ).toBe("Cardio · 5/semana · después de pesas · HIIT caminadora 20 min");
+  });
+
+  it("sin preferencias declaradas usa los defaults del motor", () => {
+    expect(renglonDeCardio({ discipline: "CARDIO", sessionsPerWeek: 1, modo: "DESPUES" })).toBe(
+      "Cardio · 1/semana · después de pesas · HIIT caminadora 20 min",
+    );
   });
 });

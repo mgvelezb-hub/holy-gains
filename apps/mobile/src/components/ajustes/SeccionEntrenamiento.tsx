@@ -30,6 +30,7 @@ import {
   type SwimLevel,
   type WeekView,
 } from "@/lib/api";
+import { renglonDeCardio } from "@/lib/cardio";
 import { iconoDe } from "@/lib/disciplinas";
 import { DISCIPLINAS, GRUPOS, NIVELES_POR_DISCIPLINA, diasDeGimnasio } from "@/lib/entrenamiento";
 import { DIAS_SEMANA, PROPOSITOS } from "@/lib/replantear";
@@ -201,6 +202,9 @@ export function SeccionEntrenamiento({ me }: { me: MeResponse | null }) {
     const partes: string[] = [];
     if (discipline === primaria) {
       partes.push(`${diasGym} ${diasGym === 1 ? "día" : "días"} de gimnasio`);
+    } else if (carga && discipline === "CARDIO") {
+      // El renglón de cardio ya dice todo: frecuencia, modo, tipo, máquina y minutos.
+      return renglonDeCardio(carga).replace(/^Cardio · /, "");
     } else if (carga) {
       partes.push(`${carga.sessionsPerWeek} ${carga.sessionsPerWeek === 1 ? "sesión" : "sesiones"}`);
       partes.push(textoModo(carga.modo));

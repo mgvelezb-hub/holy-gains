@@ -20,6 +20,7 @@ import {
   type Discipline,
   type DisciplineLoad,
   type MeResponse,
+  type PreferenciasCardio,
   type CustomSplit,
   type DayKind,
   type MuscleGroup,
@@ -38,6 +39,13 @@ import {
   lineaDelDia,
   ordenarBloquesDelDia,
 } from "@/lib/entrenamiento";
+import {
+  CARDIO_POR_DEFECTO,
+  OPCIONES_EQUIPO,
+  OPCIONES_NIVEL,
+  OPCIONES_TIPO,
+  renglonDeCardio,
+} from "@/lib/cardio";
 import { DIAS_SEMANA, PROPOSITOS, TIEMPOS_DIA, type Proposito, type WeekDay } from "@/lib/replantear";
 import { fonts, radius, spacing, type as typeScale, withAlpha, type Palette } from "@/lib/theme";
 
@@ -223,7 +231,7 @@ export function disciplinaNombre(discipline: Discipline): string {
  * romper la regla del archivo.
  */
 export type ModoDisciplina = "DESPUES" | "DIA_PROPIO";
-export type CargaConModo = DisciplineLoad & { modo?: ModoDisciplina };
+export type CargaConModo = DisciplineLoad & { modo?: ModoDisciplina; cardio?: PreferenciasCardio };
 
 /**
  * "2/semana · después de pesas" — el renglón de una disciplina secundaria.
@@ -691,9 +699,16 @@ export function EditorDisciplina({
    * perdería los otros en el camino.
    */
   async function actualizarCarga(
-    cambios: Partial<Pick<CargaConModo, "sessionsPerWeek" | "proposito" | "importancia" | "modo">>,
+    cambios: Partial<Pick<CargaConModo, "sessionsPerWeek" | "proposito" | "importancia" | "modo" | "cardio">>,
   ) {
     const actual = otras.find((entrada) => entrada.discipline === discipline);
+    // Quien afina cómo hace su cardio lo está pensando después de pesas: una
+    // carga vieja sin `modo` (el PATCH lo tiraba antes de H2) se completa aquí.
+    const modoPorCardio =
+      cambios.cardio !== undefined && actual?.modo === undefined && cambios.modo === undefined
+        ? "DESPUES"
+        : undefined;
+    const cardio = cambios.cardio !== undefined ? { ...actual?.cardio, ...cambios.cardio } : actual?.cardio;
     const entry: CargaConModo = {
       discipline,
       sessionsPerWeek: Math.max(
@@ -705,9 +720,10 @@ export function EditorDisciplina({
       // `modo` no se toca a menos que se pida explícito: subir sesiones o
       // cambiar propósito no debe voltear en silencio una preferencia que la
       // persona ya declaró (ni inventarle una a una carga vieja sin ella).
-      ...(cambios.modo !== undefined || actual?.modo !== undefined
-        ? { modo: cambios.modo ?? actual?.modo }
+      ...(cambios.modo !== undefined || actual?.modo !== undefined || modoPorCardio
+        ? { modo: cambios.modo ?? actual?.modo ?? modoPorCardio }
         : {}),
+      ...(cardio ? { cardio } : {}),
     };
     const siguiente =
       entry.sessionsPerWeek > 0
@@ -835,13 +851,20 @@ export function EditorDisciplina({
         </View>
       )}
 
+      {!esPrimaria && carga && discipline === "CARDIO" && (
+        <EditorCardio
+          prefs={{ ...CARDIO_POR_DEFECTO, ...carga.cardio }}
+          onChange={(cardio) => actualizarCarga({ cardio })}
+        />
+      )}
+
       {!esPrimaria && !carga && (
         <Text style={styles.nota}>
           Esta disciplina ya no está en tu semana. Regresa a la sección para volver a agregarla.
         </Text>
       )}
 
-      {opciones.length > 0 && (
+      {opciones.length > 0 && discipline !== "CARDIO" && (
         <View style={styles.lista}>
           {opciones.map((opcion) => (
             <Pressable
@@ -860,6 +883,70 @@ export function EditorDisciplina({
 
       {entrenoMsg && <Text style={styles.msg}>{entrenoMsg}</Text>}
     </Card>
+  );
+}
+
+/**
+ * Cómo hace su cardio (H2): máquina, HIIT o continuo, nivel y minutos. Cada
+ * toque guarda — sin botón de "guardar" que olvidar — y todo cabe en chips
+ * de una línea; el porqué vive en el InfoTip.
+ */
+function EditorCardio({
+  prefs,
+  onChange,
+}: {
+  prefs: Required<PreferenciasCardio>;
+  onChange: (cambios: PreferenciasCardio) => void;
+}) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  function filaDeChips<T extends string>(
+    opciones: Array<{ valor: T; nombre: string }>,
+    actual: T,
+    elegir: (valor: T) => void,
+  ) {
+    return (
+      <View style={styles.chipsRow}>
+        {opciones.map((opcion) => {
+          const activo = actual === opcion.valor;
+          return (
+            <Pressable
+              key={opcion.valor}
+              onPress={() => elegir(opcion.valor)}
+              style={[styles.chip, activo && styles.chipOn]}
+            >
+              <Text style={[styles.chipText, activo && styles.chipTextOn]}>{opcion.nombre}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    );
+  }
+
+  return (
+    <>
+      <View style={styles.subHeader}>
+        <Text style={styles.subLabel}>Cómo haces tu cardio</Text>
+        <InfoTip titulo="HIIT o continuo">
+          <TextoInfo>
+            Para perder grasa rinden igual; el HIIT lo logra en menos minutos, por eso es el default
+            al terminar pesas. El nivel decide el de la máquina (básico 6–8, medio 9–12, avanzado
+            13+) y sube uno cada semana, con descarga la cuarta.
+          </TextoInfo>
+        </InfoTip>
+      </View>
+      {filaDeChips(OPCIONES_EQUIPO, prefs.equipo, (equipo) => onChange({ equipo }))}
+      {filaDeChips(OPCIONES_TIPO, prefs.tipo, (tipo) => onChange({ tipo }))}
+      {filaDeChips(OPCIONES_NIVEL, prefs.nivel, (nivel) => onChange({ nivel }))}
+      <NumberStepper
+        label="Minutos por sesión"
+        value={prefs.minutos}
+        onChange={(minutos) => onChange({ minutos: Math.max(10, Math.min(60, minutos)) })}
+        step={5}
+        min={10}
+      />
+    </>
   );
 }
 
@@ -1600,9 +1687,11 @@ export function EditorDisciplinasBase({ me }: { me: MeResponse | null }) {
               >
                 <Text style={styles.filaNombre}>{disciplinaNombre(discipline)}</Text>
                 <Text style={styles.filaDetalle}>
-                  {carga
-                    ? `${carga.sessionsPerWeek}/semana · ${textoModo(carga.modo)}`
-                    : "1/semana · el mismo día que pesas"}
+                  {carga && discipline === "CARDIO"
+                    ? renglonDeCardio(carga).replace(/^Cardio · /, "")
+                    : carga
+                      ? `${carga.sessionsPerWeek}/semana · ${textoModo(carga.modo)}`
+                      : "1/semana · el mismo día que pesas"}
                 </Text>
               </Pressable>
             );

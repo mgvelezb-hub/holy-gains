@@ -1,4 +1,13 @@
-import type { ActivityPayload, DetalleCardio, EquipoCardio, WarmupStep } from "@/lib/api";
+import type {
+  ActivityPayload,
+  DetalleCardio,
+  DisciplineLoad,
+  EquipoCardio,
+  NivelCardio,
+  PreferenciasCardio,
+  TipoCardio,
+  WarmupStep,
+} from "@/lib/api";
 
 /**
  * El cardio de después de pesas en la sesión en vivo (H2) — lógica pura.
@@ -78,3 +87,42 @@ export function actividadDeCardio(
     notes: notasDeCardio(detalle),
   };
 }
+
+/** Los defaults del motor (`DEFAULTS_CARDIO` en disciplinas/cardio.ts de la web). */
+export const CARDIO_POR_DEFECTO: Required<PreferenciasCardio> = {
+  equipo: "CAMINADORA",
+  tipo: "HIIT",
+  nivel: "BASICO",
+  minutos: 20,
+};
+
+export const OPCIONES_EQUIPO: Array<{ valor: EquipoCardio; nombre: string }> = [
+  { valor: "CAMINADORA", nombre: "Caminadora" },
+  { valor: "ESCALERA", nombre: "Escalera" },
+  { valor: "BICI", nombre: "Bici" },
+  { valor: "ELIPTICA", nombre: "Elíptica" },
+  { valor: "LIBRE", nombre: "Libre" },
+];
+
+export const OPCIONES_TIPO: Array<{ valor: TipoCardio; nombre: string }> = [
+  { valor: "HIIT", nombre: "HIIT" },
+  { valor: "CONTINUO", nombre: "Continuo" },
+];
+
+export const OPCIONES_NIVEL: Array<{ valor: NivelCardio; nombre: string }> = [
+  { valor: "BASICO", nombre: "Básico" },
+  { valor: "MEDIO", nombre: "Medio" },
+  { valor: "AVANZADO", nombre: "Avanzado" },
+];
+
+/** "Cardio · 5/semana · después de pesas · HIIT caminadora 20 min". */
+export function renglonDeCardio(
+  carga: DisciplineLoad & { modo?: "DESPUES" | "DIA_PROPIO"; cardio?: PreferenciasCardio },
+): string {
+  const prefs = { ...CARDIO_POR_DEFECTO, ...carga.cardio };
+  const tipo = prefs.tipo === "HIIT" ? "HIIT" : "continuo";
+  const como = prefs.equipo === "LIBRE" ? tipo : `${tipo} ${EQUIPO[prefs.equipo]}`;
+  const modo = carga.modo === "DESPUES" ? "después de pesas" : "día propio";
+  return `Cardio · ${carga.sessionsPerWeek}/semana · ${modo} · ${como} ${prefs.minutos} min`;
+}
+
