@@ -38,6 +38,7 @@ import {
   EditorPreparaciones,
   EditorPresupuesto,
 } from "@/components/ajustes/detalle/EditoresNutricion";
+import { EditorLeche } from "@/components/ajustes/detalle/EditorLeche";
 import { useTheme } from "@/context/theme";
 import { ApiError, getMe, type Discipline, type MeResponse } from "@/lib/api";
 import { DISCIPLINAS } from "@/lib/entrenamiento";
@@ -164,6 +165,7 @@ export default function AjustesDetalleScreen() {
           {me && tema === "alacena" && <EditorAlacena me={me} />}
           {me && tema === "gustos" && <EditorGustos me={me} />}
           {me && tema === "preparaciones" && <EditorPreparaciones me={me} />}
+          {me && tema === "preparaciones" && <EditorLeche me={me} />}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

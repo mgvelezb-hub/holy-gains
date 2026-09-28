@@ -37,7 +37,7 @@ export const TIPOS_DE_PREPARACION: ReadonlyArray<{
   {
     clave: "cremas",
     nombre: "Cremas",
-    detalle: "De calabacita, espinaca, champiñón o elote, con leche descremada, sin crema.",
+    detalle: "De calabacita, espinaca, champiñón o elote, con tu leche, sin crema.",
   },
 ];
 

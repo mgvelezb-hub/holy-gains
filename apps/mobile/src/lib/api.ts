@@ -2368,3 +2368,18 @@ export function postLogSuplemento(
 export type DecisionConSuplementos = Decision & {
   suplementos?: { freno: string | null; sugerencias: SugerenciaSuplemento[]; notas: string[] } | null;
 };
+
+/**
+ * `PATCH /api/v1/me/leche` — la leche de licuados y cremas. Rearma la semana
+ * de hoy en adelante; si ya hay comidas registradas responde `congelado` y
+ * solo rearma con `rearmar` (el mismo sí explícito que la despensa).
+ */
+export function patchLeche(
+  tipoLeche: "descremada" | "entera" | "deslactosada" | "deslactosada_light",
+  rearmar = false,
+): Promise<{ tipoLeche: string; rearmado: boolean; congelado: boolean }> {
+  return apiFetch<{ tipoLeche: string; rearmado: boolean; congelado: boolean }>(
+    `/api/v1/me/leche${rearmar ? "?rearmar=1" : ""}`,
+    { method: "PATCH", body: { tipoLeche } },
+  );
+}

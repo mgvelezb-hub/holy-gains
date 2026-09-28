@@ -55,6 +55,7 @@ import {
 } from "@/lib/api";
 import { ESTILOS_DIETA, PRESUPUESTOS, avisoDeDieta } from "@/lib/nutricion";
 import { preferenciaDelPerfil, resumenPreparaciones } from "@/lib/preparaciones";
+import { nombreDeLeche, tipoLecheDelPerfil } from "@/lib/leche";
 import { resumenRenglon } from "@/lib/suplementos";
 import { estadoDelReloj } from "@/lib/reloj-nativo";
 import { TIEMPOS_COCINA } from "@/lib/entrenamiento";
@@ -550,7 +551,7 @@ export default function AjustesDetalleScreen() {
           icon={Soup}
           tint={colors.champan}
           title="Preparaciones: licuados, sopas y cremas"
-          summary={resumenPreparaciones(preferenciaDelPerfil(me?.profile ?? null))}
+          summary={`${resumenPreparaciones(preferenciaDelPerfil(me?.profile ?? null))} · leche ${nombreDeLeche(tipoLecheDelPerfil(me?.profile ?? null)).toLowerCase()}`}
           onPress={() => router.push("/ajustes/detalle/preparaciones")}
         />
 
