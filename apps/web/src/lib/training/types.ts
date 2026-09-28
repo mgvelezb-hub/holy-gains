@@ -291,6 +291,36 @@ export type DisciplineLoad = {
   /** 1 a 3. Fuera de rango se descarta el campo, no la entrada entera. */
   importancia?: number;
   modo?: ModoDisciplina;
+  /**
+   * Solo CARDIO: cómo lo hace (máquina, HIIT o continuo, nivel, minutos). Vive
+   * dentro del mismo JSON de `other_disciplines` — no hay columna nueva — y
+   * `parseDisciplineLoads` lo tolera campo por campo.
+   */
+  cardio?: PreferenciasCardio;
+};
+
+/** Máquina (o ninguna) en la que se hace el cardio. */
+export const EQUIPOS_CARDIO = ["CAMINADORA", "ESCALERA", "BICI", "ELIPTICA", "LIBRE"] as const;
+export type EquipoCardio = (typeof EQUIPOS_CARDIO)[number];
+
+/** HIIT (intervalos) o continuo (zona 2). */
+export const TIPOS_CARDIO = ["HIIT", "CONTINUO"] as const;
+export type TipoCardio = (typeof TIPOS_CARDIO)[number];
+
+/** Nivel de cardio: decide el nivel sugerido de la máquina, no la duración. */
+export const NIVELES_CARDIO = ["BASICO", "MEDIO", "AVANZADO"] as const;
+export type NivelCardio = (typeof NIVELES_CARDIO)[number];
+
+/**
+ * Preferencias de cardio. Todas opcionales: lo que falte cae a los defaults
+ * de `disciplinas/cardio.ts` (caminadora, HIIT, básico, 20 min).
+ */
+export type PreferenciasCardio = {
+  equipo?: EquipoCardio;
+  tipo?: TipoCardio;
+  nivel?: NivelCardio;
+  /** Minutos por sesión, 10 a 60. */
+  minutos?: number;
 };
 
 /** Nivel en el agua. Igual que `SwimLevel` en el schema. */

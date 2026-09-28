@@ -634,7 +634,7 @@ export function avisosDeVecindad(
   return avisos;
 }
 
-const NOMBRES_DE_DIA: Record<WeekDay, string> = {
+export const NOMBRES_DE_DIA: Record<WeekDay, string> = {
   LUN: "lunes",
   MAR: "martes",
   MIE: "miércoles",

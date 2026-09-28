@@ -5,7 +5,7 @@ import { z } from "zod";
 import { apiUser, unauthorized } from "@/lib/api/auth";
 import { materializeMealPlans } from "@/lib/coachy/menu";
 import { prisma } from "@/lib/prisma";
-import { PROPOSITOS } from "@/lib/training/replan";
+import { cargaDisciplinaSchema } from "@/lib/training/cargas-schema";
 import { SCHEME_PREFERENCES } from "@/lib/training/schemes";
 import { DAY_KIND_VALUES, WEEK_DAYS, normalizeCustomSplit } from "@/lib/training/split";
 import { UNILATERAL_MODES } from "@/lib/training/types";
@@ -61,20 +61,10 @@ const schema = z
     // tiene. Con `record`, subir el nivel de pesas devolvía 422 porque
     // "faltaban" crossfit y funcional.
     disciplineLevels: z.partialRecord(z.enum(DISCIPLINES), z.enum(SWIM_LEVELS)).optional(),
-    otherDisciplines: z
-      .array(
-        z.object({
-          discipline: z.enum(DISCIPLINES),
-          /** 0 = declarada pero sin carga: se registra, no planea. */
-          sessionsPerWeek: z.number().int().min(0).max(7),
-          /** Para qué sirve esta disciplina — lo que se pregunta al rearmar la rutina. */
-          proposito: z.enum(PROPOSITOS).optional(),
-          /** 1 a 3: cuánto quiere la persona que pese, dentro de su propósito. */
-          importancia: z.number().int().min(1).max(3).optional(),
-        }),
-      )
-      .max(DISCIPLINES.length)
-      .optional(),
+    // El schema compartido trae `modo` y las preferencias de cardio: el
+    // `z.object` que vivía aquí no los declaraba y zod los tiraba en
+    // silencio (H2).
+    otherDisciplines: z.array(cargaDisciplinaSchema).max(DISCIPLINES.length).optional(),
     /**
      * Minutos disponibles por día. `null` limpia lo declarado (vuelve a los
      * defaults); omitido deja lo que ya había. 0 = ese día no se entrena.

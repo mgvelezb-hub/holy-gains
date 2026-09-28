@@ -3,7 +3,8 @@ import { z } from "zod";
 
 import { apiUser, unauthorized } from "@/lib/api/auth";
 import { prisma } from "@/lib/prisma";
-import { ensureWeekMaterialized } from "@/lib/training/db";
+import { preferenciasCardioSchema } from "@/lib/training/cargas-schema";
+import { ensureWeekMaterialized, parseDisciplineLoads } from "@/lib/training/db";
 import { PROPOSITOS, horarioDesde, replanificar, type TiempoPorDia } from "@/lib/training/replan";
 import { WEEK_DAYS } from "@/lib/training/split";
 import { DISCIPLINES } from "@/lib/training/types";
@@ -41,6 +42,11 @@ const schema = z.object({
         discipline: z.enum(DISCIPLINES),
         proposito: z.enum(PROPOSITOS),
         importancia: z.number().int().min(1).max(3),
+        /** Después de pesas o día propio. Sin dato, el que ya tenía en Ajustes. */
+        modo: z.enum(["DESPUES", "DIA_PROPIO"]).optional(),
+        /** Solo con `DESPUES`: cuántas por semana. */
+        sesiones: z.number().int().min(0).max(7).optional(),
+        cardio: preferenciasCardioSchema.optional(),
       }),
     )
     .max(DISCIPLINES.length),
@@ -74,7 +80,25 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   // La primaria no puede además estar en la lista de secundarias: se contaría
   // dos veces sobre el mismo presupuesto.
-  const otras = secundarias.filter((entrada) => entrada.discipline !== primaria);
+  // Lo que no viene en el cuestionario (modo, sesiones de una `DESPUES`,
+  // preferencias de cardio) se hereda de lo que ya declaró en Ajustes: este
+  // flujo no lo pregunta, y antes lo borraba al sobrescribir
+  // `otherDisciplines` (H2).
+  const previas = parseDisciplineLoads(user.profile.otherDisciplines);
+  const otras = secundarias
+    .filter((entrada) => entrada.discipline !== primaria)
+    .map((entrada) => {
+      const previa = previas.find((carga) => carga.discipline === entrada.discipline);
+      const modo = entrada.modo ?? previa?.modo;
+      const sesiones = entrada.sesiones ?? (modo === "DESPUES" ? previa?.sessionsPerWeek : undefined);
+      const cardio = entrada.cardio ?? previa?.cardio;
+      return {
+        ...entrada,
+        ...(modo ? { modo } : {}),
+        ...(sesiones !== undefined ? { sesiones } : {}),
+        ...(cardio ? { cardio } : {}),
+      };
+    });
 
   const completo = Object.fromEntries(
     WEEK_DAYS.map((dia) => [dia, tiempo[dia] ?? 0]),

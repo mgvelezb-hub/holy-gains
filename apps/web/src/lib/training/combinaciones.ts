@@ -252,6 +252,36 @@ export function repartirMinutos(
   return { minutos: [primero, segundo] };
 }
 
+/** Día mínimo para gym + cardio después: por debajo, ni cediendo el gym caben los dos. */
+export const MINIMO_DIA_CON_CARDIO = 45;
+
+/** Lo que el gym conserva como mínimo cuando le cede minutos al cardio. */
+const MINIMO_PESAS_CON_CARDIO = 25;
+
+/** Lo más que se encoge el cardio para caber: menos que esto ya no es sesión. */
+const MINIMO_CARDIO = 10;
+
+/**
+ * Minutos de gym y cardio cuando el cardio va DESPUÉS de pesas, o `null` si
+ * el día es menor a `MINIMO_DIA_CON_CARDIO`.
+ *
+ * No es el 60/40 de `repartirMinutos`: aquí la persona declaró cuánto cardio
+ * quiere (15–20 min de caminadora al terminar), y lo que se ajusta es el gym
+ * — la sesión de pesas se recorta por prioridad a lo que queda
+ * (`recortarPorPrioridad` en `generate.ts`, vía `gymMinutesPorFecha`). Sin
+ * transición: la caminadora está en la misma sala, no hay cancha ni alberca
+ * a la que moverse. Solo si ni así cabe el mínimo del gym, el cardio se
+ * encoge (hasta `MINIMO_CARDIO`).
+ */
+export function repartirCardioDespues(
+  total: number,
+  minutosCardio: number,
+): { gym: number; cardio: number } | null {
+  if (total < MINIMO_DIA_CON_CARDIO) return null;
+  const cardio = Math.max(MINIMO_CARDIO, Math.min(minutosCardio, total - MINIMO_PESAS_CON_CARDIO));
+  return { gym: total - cardio, cardio };
+}
+
 const NOMBRES_DISCIPLINA: Record<Discipline, string> = {
   PESAS: "el gimnasio",
   FUNCIONAL: "funcional",

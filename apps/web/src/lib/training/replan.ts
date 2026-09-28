@@ -1,6 +1,13 @@
-import { compatibilidad, ordenar, repartirMinutos, type BloqueDia } from "@/lib/training/combinaciones";
-import { WEEK_DAYS, type WeekDay } from "@/lib/training/split";
-import type { Discipline } from "@/lib/training/types";
+import {
+  MINIMO_DIA_CON_CARDIO,
+  compatibilidad,
+  ordenar,
+  repartirCardioDespues,
+  repartirMinutos,
+  type BloqueDia,
+} from "@/lib/training/combinaciones";
+import { NOMBRES_DE_DIA, WEEK_DAYS, type WeekDay } from "@/lib/training/split";
+import type { Discipline, ModoDisciplina, PreferenciasCardio } from "@/lib/training/types";
 
 /**
  * Rearmar la semana desde cero — lógica PURA.
@@ -79,7 +86,33 @@ export type DisciplinaElegida = {
   proposito: Proposito;
   /** 1 a 3: cuánto quiere la persona que pese, dentro de su propósito. */
   importancia: number;
+  /**
+   * `DESPUES`: va pegada a los días de la primaria, no compite por un día
+   * propio (H2). Sin `modo`, día propio — igual que siempre.
+   */
+  modo?: ModoDisciplina;
+  /** Solo con `DESPUES`: cuántas por semana. Sin dato, una por día de primaria. */
+  sesiones?: number;
+  /** Solo CARDIO: se guarda tal cual y de aquí salen sus minutos. */
+  cardio?: PreferenciasCardio;
 };
+
+/** Minutos de cardio después de pesas cuando la persona no los declaró. */
+export const MINUTOS_CARDIO_DESPUES = 20;
+
+const NOMBRE_SECUNDARIA: Partial<Record<Discipline, string>> = {
+  CARDIO: "El cardio",
+  NATACION: "La natación",
+  SQUASH: "El squash",
+  BOX: "El box",
+  FUNCIONAL: "El funcional",
+  CROSSFIT: "El CrossFit",
+  GOLF: "El golf",
+};
+
+function nombreSecundaria(discipline: Discipline): string {
+  return NOMBRE_SECUNDARIA[discipline] ?? "Esa disciplina";
+}
 
 export type TiempoPorDia = Record<WeekDay, number>;
 
@@ -120,6 +153,8 @@ export type Replan = {
     sessionsPerWeek: number;
     proposito?: Proposito;
     importancia?: number;
+    modo?: ModoDisciplina;
+    cardio?: PreferenciasCardio;
   }>;
   /** Días que quedaron con entrenamiento. */
   diasActivos: WeekDay[];
@@ -249,6 +284,75 @@ function intentarAnexarEnDia(
   return true;
 }
 
+/**
+ * Pega una secundaria `DESPUES` a los días de la primaria, en orden de semana,
+ * hasta `sesiones` (H2).
+ *
+ * El cardio no se reparte 60/40: lleva los minutos que la persona declaró y
+ * el gym cede el resto (`repartirCardioDespues`). Lo demás (squash después de
+ * pesas) sí usa `repartirMinutos`. Lo que no cupo se dice día por día —"El
+ * cardio no cupo el martes: 40 min declarados"— en vez de desaparecer.
+ */
+function anexarDespues(
+  elegida: DisciplinaElegida,
+  sesiones: number,
+  tiempo: TiempoPorDia,
+  asignadas: SesionAsignada[],
+  diasConDosBloques: Set<WeekDay>,
+  avisos: string[],
+): number {
+  let colocadas = 0;
+  const diasPrimaria = asignadas.filter((sesion) => sesion.esPrimaria);
+
+  for (const ocupante of diasPrimaria) {
+    if (colocadas >= sesiones) break;
+    if (diasConDosBloques.has(ocupante.weekday)) continue;
+    const total = tiempo[ocupante.weekday] ?? 0;
+
+    if (elegida.discipline === "CARDIO") {
+      const reparto = repartirCardioDespues(total, elegida.cardio?.minutos ?? MINUTOS_CARDIO_DESPUES);
+      if (!reparto) {
+        avisos.push(
+          `El cardio no cupo el ${NOMBRES_DE_DIA[ocupante.weekday]}: ${total} min declarados (pide al menos ${MINIMO_DIA_CON_CARDIO}).`,
+        );
+        continue;
+      }
+      ocupante.minutos = reparto.gym;
+      asignadas.push({ weekday: ocupante.weekday, discipline: "CARDIO", minutos: reparto.cardio, esPrimaria: false });
+    } else {
+      const existente: BloqueDia = { discipline: ocupante.discipline };
+      const nuevo: BloqueDia = { discipline: elegida.discipline };
+      if (compatibilidad(existente, nuevo, { explicita: true }) === null) continue;
+      const orden = ordenar(existente, nuevo);
+      const reparto = repartirMinutos(total, orden);
+      if (!reparto) {
+        avisos.push(
+          `${nombreSecundaria(elegida.discipline)} no cupo el ${NOMBRES_DE_DIA[ocupante.weekday]}: ${total} min declarados.`,
+        );
+        continue;
+      }
+      const nuevoEsPrimero = orden[0].discipline === elegida.discipline;
+      ocupante.minutos = nuevoEsPrimero ? reparto.minutos[1] : reparto.minutos[0];
+      asignadas.push({
+        weekday: ocupante.weekday,
+        discipline: elegida.discipline,
+        minutos: nuevoEsPrimero ? reparto.minutos[0] : reparto.minutos[1],
+        esPrimaria: false,
+      });
+    }
+
+    diasConDosBloques.add(ocupante.weekday);
+    colocadas += 1;
+  }
+
+  if (colocadas < sesiones && diasPrimaria.length < sesiones) {
+    avisos.push(
+      `${nombreSecundaria(elegida.discipline)} después de pesas: pediste ${sesiones} y solo hay ${diasPrimaria.length} ${diasPrimaria.length === 1 ? "día" : "días"} de gimnasio.`,
+    );
+  }
+  return colocadas;
+}
+
 /** Un día con exactamente una sesión: candidato a compactarse con otro. */
 type CandidatoCompacto = { weekday: WeekDay; sesion: SesionAsignada };
 
@@ -365,18 +469,41 @@ export function replanificar(entrada: EntradaReplan): Replan {
     esPrimaria: true,
   }));
 
+  // Días que ya combinaron dos disciplinas: no se ofrece un tercer bloque.
+  const diasConDosBloques = new Set<WeekDay>();
+
+  // H2 — las `DESPUES` van primero y pegadas a la primaria: no compiten por
+  // huecos. Antes no existían aquí, y con la primaria en todos los días con
+  // tiempo el cardio salía con 0 sesiones y sin aviso.
+  const despues = entrada.secundarias.filter((elegida) => elegida.modo === "DESPUES");
+  const colocadasDespues = new Map<Discipline, number>();
+  for (const elegida of despues) {
+    const pedidas = Math.max(0, Math.min(7, Math.trunc(elegida.sesiones ?? diasPrimaria.size)));
+    colocadasDespues.set(
+      elegida.discipline,
+      anexarDespues(elegida, pedidas, entrada.tiempo, asignadas, diasConDosBloques, avisos),
+    );
+  }
+
   const librePorDia = WEEK_DAYS.filter((dia) => !diasPrimaria.has(dia));
   const reparto = repartirSecundarias(
-    entrada.secundarias,
+    entrada.secundarias.filter((elegida) => elegida.modo !== "DESPUES"),
     librePorDia.filter((dia) => (entrada.tiempo[dia] ?? 0) >= MINUTOS_MINIMOS.HOBBY).length,
   );
 
   // Cada secundaria toma sus días entre los que le alcanzan, empezando por los
   // que menos tiempo tienen: los días largos se dejan para lo que pide más.
   const tomados = new Set<WeekDay>();
-  // Días que ya combinaron dos disciplinas: no se ofrece un tercer bloque.
-  const diasConDosBloques = new Set<WeekDay>();
   for (const fila of reparto) {
+    if (fila.sesiones === 0) {
+      // Sin huecos no hay reparto que hacer, pero callarlo es lo que hizo
+      // desaparecer el cardio de Mau (H2): se dice, y se sugiere la salida.
+      avisos.push(
+        `${nombreSecundaria(fila.discipline)} no cupo: no queda ningún día libre con tiempo. Márcalo "después de pesas" en Ajustes para que vaya pegado al gimnasio.`,
+      );
+      continue;
+    }
+
     const minimo = MINUTOS_MINIMOS[fila.proposito];
     const candidatos = librePorDia
       .filter((dia) => !tomados.has(dia) && (entrada.tiempo[dia] ?? 0) >= minimo)
@@ -441,12 +568,27 @@ export function replanificar(entrada: EntradaReplan): Replan {
 
   return {
     asignadas: ordenadas,
-    cargas: [...porDisciplina.entries()].map(([discipline, sessionsPerWeek]) => {
+    cargas: [
+      ...porDisciplina.entries(),
+      // Una secundaria elegida que no alcanzó sesión sigue siendo suya: se
+      // guarda en 0 (declarada, no planeada) en vez de borrarse del perfil.
+      ...entrada.secundarias
+        .filter((elegida) => !porDisciplina.has(elegida.discipline))
+        .map((elegida) => [elegida.discipline, 0] as const),
+    ].map(([discipline, sessionsPerWeek]) => {
       const elegida = eleccionPorDisciplina.get(discipline);
       return {
         discipline,
-        sessionsPerWeek,
+        // Una `DESPUES` guarda lo que pidió, no lo que cupo esta vez: la
+        // semana que viene puede traer más tiempo, y el aviso ya dijo qué
+        // días no alcanzaron.
+        sessionsPerWeek:
+          elegida?.modo === "DESPUES"
+            ? Math.max(sessionsPerWeek, Math.trunc(elegida.sesiones ?? colocadasDespues.get(discipline) ?? 0))
+            : sessionsPerWeek,
         ...(elegida ? { proposito: elegida.proposito, importancia: elegida.importancia } : {}),
+        ...(elegida?.modo ? { modo: elegida.modo } : {}),
+        ...(elegida?.cardio ? { cardio: elegida.cardio } : {}),
       };
     }),
     diasActivos: [...new Set(ordenadas.map((sesion) => sesion.weekday))],

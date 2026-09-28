@@ -5,6 +5,7 @@ import type { Phase, Prisma, Profile, Workout } from "@prisma/client";
 import { fromISODate, isoFromDateColumn, shiftISODate, toISODate } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 import { aplicaCambios, parseCambiosDeBloque } from "@/lib/training/bloques";
+import { parsePreferenciasCardio } from "@/lib/training/cargas-schema";
 import { parseDayBlocks, sesionesDeBloquesDelDia } from "@/lib/training/bloques-dia";
 import { emphasisFor } from "@/lib/training/emphasis";
 import { planDisciplines, sesionesDeDiaOverride, type OtherSession } from "@/lib/training/disciplines";
@@ -83,7 +84,10 @@ export function parseDisciplineLoads(raw: unknown): DisciplineLoad[] {
   const loads: DisciplineLoad[] = [];
   for (const entry of raw) {
     if (entry === null || typeof entry !== "object") continue;
-    const { discipline, sessionsPerWeek, proposito, importancia, modo } = entry as Record<string, unknown>;
+    const { discipline, sessionsPerWeek, proposito, importancia, modo, cardio } = entry as Record<
+      string,
+      unknown
+    >;
     if (typeof discipline !== "string") continue;
     if (!(DISCIPLINES as readonly string[]).includes(discipline)) continue;
     if (typeof sessionsPerWeek !== "number" || !Number.isFinite(sessionsPerWeek)) continue;
@@ -107,6 +111,10 @@ export function parseDisciplineLoads(raw: unknown): DisciplineLoad[] {
     }
     if (modo === "DESPUES" || modo === "DIA_PROPIO") {
       load.modo = modo;
+    }
+    if (discipline === "CARDIO") {
+      const prefs = parsePreferenciasCardio(cardio);
+      if (prefs) load.cardio = prefs;
     }
 
     loads.push(load);
