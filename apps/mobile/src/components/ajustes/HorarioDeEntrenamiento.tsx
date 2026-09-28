@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-nati
 
 import { Card } from "@/components/Card";
 import { InfoTip, TextoInfo } from "@/components/InfoTip";
+import { Parrafo } from "@/components/Parrafo";
 import { SectionLabel } from "@/components/SectionLabel";
 import { useTheme } from "@/context/theme";
 import {
@@ -142,10 +143,10 @@ export function HorarioDeEntrenamiento({ me }: { me: MeResponse | null }) {
           toggle que abre hacia abajo es justo lo que el rediseño prohibió. */}
       <Text style={styles.subLabel}>Si no entrenas igual todos los días</Text>
       <View style={styles.dias}>
-        <Text style={styles.diasNota}>
+        <Parrafo style={styles.diasNota}>
           Los días que no marques siguen tu horario de arriba. Toca dos veces para quitar la
           excepción.
-        </Text>
+        </Parrafo>
         {DIAS_SEMANA.map(({ valor: dia, nombre }) => (
           <View key={dia} style={styles.diaFila}>
             <Text style={styles.diaNombre}>{nombre}</Text>
@@ -185,7 +186,7 @@ export function HorarioDeEntrenamiento({ me }: { me: MeResponse | null }) {
       </View>
 
       {guardando && <ActivityIndicator size="small" color={colors.champan} style={styles.spinner} />}
-      {aviso && <Text style={styles.aviso}>{aviso}</Text>}
+      {aviso && <Parrafo style={styles.aviso}>{aviso}</Parrafo>}
       {error && <Text style={styles.error}>{error}</Text>}
     </Card>
   );

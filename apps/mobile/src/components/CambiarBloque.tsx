@@ -2,6 +2,7 @@ import { CalendarOff, RefreshCw } from "lucide-react-native";
 import { useMemo, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
+import { Parrafo } from "@/components/Parrafo";
 import { useTheme } from "@/context/theme";
 import { ApiError, postCambiarBloque, postCambiarBloqueDia, type Discipline } from "@/lib/api";
 import { iconoDe } from "@/lib/disciplinas";
@@ -107,10 +108,10 @@ export function CambiarBloque({
             {vista === "cambiar" ? (
               <>
                 <Text style={styles.titulo}>¿Por qué lo cambias?</Text>
-                <Text style={styles.nota}>
+                <Parrafo style={styles.nota}>
                   Solo cambia hoy. Mañana tu semana sigue como la armaste. Si eliges pesas, te armo
                   la sesión completa con tus pesos.
-                </Text>
+                </Parrafo>
 
                 <View style={styles.lista}>
                   {opciones.map((opcion) => {
@@ -142,9 +143,9 @@ export function CambiarBloque({
             ) : (
               <>
                 <Text style={styles.titulo}>Hoy sin gimnasio</Text>
-                <Text style={styles.nota}>
+                <Parrafo style={styles.nota}>
                   Elige una o dos: es todo lo de hoy, ya no hay sesión de pesas.
-                </Text>
+                </Parrafo>
 
                 <View style={styles.chips}>
                   {opcionesSinGym.map((opcion) => {

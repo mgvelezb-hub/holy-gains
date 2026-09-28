@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-nati
 
 import { Card } from "@/components/Card";
 import { InfoTip, TextoInfo } from "@/components/InfoTip";
+import { Parrafo } from "@/components/Parrafo";
 import { SectionLabel } from "@/components/SectionLabel";
 import { useTheme } from "@/context/theme";
 import {
@@ -104,9 +105,9 @@ export function SeccionPuntoCero({
         </View>
       ) : (
         <View style={styles.estado}>
-          <Text style={styles.estadoTexto}>
+          <Parrafo style={styles.estadoTexto}>
             Ahora mismo te comparas contra tu primer check-in registrado.
-          </Text>
+          </Parrafo>
         </View>
       )}
 
@@ -128,9 +129,9 @@ export function SeccionPuntoCero({
       )}
 
       {!ultimo && (
-        <Text style={styles.vacio}>
+        <Parrafo style={styles.vacio}>
           Cuando subas tu primer check-in vas a poder marcarlo como tu punto cero.
-        </Text>
+        </Parrafo>
       )}
 
       {puntoCero && (

@@ -6,6 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Card } from "@/components/Card";
 import { InfoTip, TextoInfo } from "@/components/InfoTip";
+import { Parrafo } from "@/components/Parrafo";
 import { SectionLabel } from "@/components/SectionLabel";
 import { ErrorState, LoadingState } from "@/components/States";
 import { useTheme } from "@/context/theme";
@@ -148,9 +149,9 @@ export default function ReplantearScreen() {
         </Pressable>
 
         <Text style={styles.title}>Rearmar tu rutina</Text>
-        <Text style={styles.subtitle}>
+        <Parrafo style={styles.subtitle}>
           Cuatro preguntas y tu semana queda de nuevo. Lo que ya entrenaste no se toca.
-        </Text>
+        </Parrafo>
 
         {pideEdad && (
           <Card>
@@ -406,9 +407,9 @@ function Resultado({
       {/* Lo que no cupo se dice: un plan que recorta en silencio hace pensar
           que la app se equivocó. */}
       {resultado.avisos.map((aviso) => (
-        <Text key={aviso} style={styles.aviso}>
+        <Parrafo key={aviso} style={styles.aviso}>
           {aviso}
-        </Text>
+        </Parrafo>
       ))}
 
       <Pressable onPress={onVer} style={styles.boton}>

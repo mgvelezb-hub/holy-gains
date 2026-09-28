@@ -7,6 +7,7 @@ import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from
 import { AnalizandoCheckin } from "@/components/AnalizandoCheckin";
 import { Card } from "@/components/Card";
 import { Chip } from "@/components/Chip";
+import { Parrafo } from "@/components/Parrafo";
 import { PercentStepper } from "@/components/PercentStepper";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { SectionLabel } from "@/components/SectionLabel";
@@ -509,11 +510,11 @@ export default function CheckinScreen() {
             onChangeText={setStrengthRpe}
             error={fieldErrors.strengthRpe}
           />
-          <Text style={styles.rpeHint}>
+          <Parrafo style={styles.rpeHint}>
             Del 1 al 10, qué tan exigente sentiste tu entrenamiento esta semana: 1 es
             &quot;me sobró&quot; y 10 es &quot;no podía con una más&quot;. Si no estás
             seguro, déjalo vacío.
-          </Text>
+          </Parrafo>
         </View>
       </Card>
 
@@ -522,18 +523,18 @@ export default function CheckinScreen() {
         <View style={styles.fieldGroup}>
           <PercentStepper label="Dieta" value={dietCompliance} onChange={setDietCompliance} />
           {dietaAuto && (
-            <Text style={styles.autoNota}>
+            <Parrafo style={styles.autoNota}>
               Prellenado con tus comidas confirmadas: {dietaAuto.contestadas}{" "}
               {dietaAuto.contestadas === 1 ? "respondida" : "respondidas"} estos días.
-            </Text>
+            </Parrafo>
           )}
           <PercentStepper label="Entreno" value={trainingCompliance} onChange={setTrainingCompliance} />
           {entrenoAuto && (
-            <Text style={styles.autoNota}>
+            <Parrafo style={styles.autoNota}>
               Prellenado con lo que ya entrenaste: {entrenoAuto.hechas} de {entrenoAuto.total}{" "}
               sesiones de tu semana, gimnasio y otras disciplinas.
               Corrígelo si entrenaste fuera de la app.
-            </Text>
+            </Parrafo>
           )}
         </View>
       </Card>
@@ -561,9 +562,9 @@ export default function CheckinScreen() {
             multiline
             style={styles.commentInput}
           />
-          <Text style={styles.commentHint}>
+          <Parrafo style={styles.commentHint}>
             Las fotos del check-in llegan en una fase posterior: suben directo a Storage.
-          </Text>
+          </Parrafo>
         </View>
 
         {preguntaCiclo && (
@@ -583,11 +584,11 @@ export default function CheckinScreen() {
 
       <Card>
         <SectionLabel>Fotos (opcional)</SectionLabel>
-        <Text style={styles.fotosNota}>
+        <Parrafo style={styles.fotosNota}>
           Son las que se comparan contra tu objetivo. Con una basta para empezar, y no hace falta
           cada semana: una vez al mes dice lo mismo y cuesta la cuarta parte. Solo se ven en tu
           bóveda, detrás de tu clave.
-        </Text>
+        </Parrafo>
 
         <View style={styles.fotosRow}>
           {PHOTO_VIEWS.map((view) => {

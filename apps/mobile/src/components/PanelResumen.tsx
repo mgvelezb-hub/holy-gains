@@ -25,6 +25,7 @@ import { GapChart, type Brecha } from "@/components/GapChart";
 import { InfoTip, TextoInfo } from "@/components/InfoTip";
 import { LineChart } from "@/components/LineChart";
 import { PanelGrande } from "@/components/PanelGrande";
+import { Parrafo } from "@/components/Parrafo";
 import { RadarChart, type Eje } from "@/components/RadarChart";
 import { ScoreTile } from "@/components/ScoreTile";
 import { useTheme } from "@/context/theme";
@@ -423,23 +424,23 @@ export function PanelResumen({
 
           {conDesglose ? (
             <>
-              <Text style={styles.heroCaption}>
+              <Parrafo style={styles.heroCaption}>
                 Cada eje contra lo que tocaba a estas alturas
                 {objetivoLabel ? `, para tu objetivo de ${objetivoLabel}` : ""}.
-              </Text>
+              </Parrafo>
               <ChartBoundary label="La telaraña no se pudo dibujar.">
                 <RadarChart ejes={ejes} size={completa ? 260 : 220} />
               </ChartBoundary>
             </>
           ) : (
             <>
-              <Text style={styles.heroCaption}>
+              <Parrafo style={styles.heroCaption}>
                 {peor
                   ? `Lo que más te falta: ${peor.label}, ${Math.abs(
                       Math.round((peor.value! - (peor.esperado ?? 0)) * 100),
                     )} puntos abajo de lo esperado.`
                   : "Todavía sin datos suficientes para comparar tu semana."}
-              </Text>
+              </Parrafo>
               <View style={styles.ejesFila}>
                 {conDato.map((eje) => {
                   const desvio = Math.round((eje.value! - (eje.esperado ?? 0)) * 100);
@@ -480,10 +481,10 @@ export function PanelResumen({
       return (
         <View style={styles.perfil}>
           <Text style={styles.heroTitle}>Tu mes</Text>
-          <Text style={styles.heroCaption}>
+          <Parrafo style={styles.heroCaption}>
             Dónde estás hoy y a dónde llega el escalón de este mes, desde tu check-in del{" "}
             {metas.desde}
-          </Text>
+          </Parrafo>
 
           <View style={{ marginTop: spacing.md }}>
             <ChartBoundary label="Las metas del mes no se pudieron dibujar.">
@@ -519,11 +520,11 @@ export function PanelResumen({
       return (
         <View style={styles.perfil}>
           <Text style={styles.heroTitle}>Vs. tu objetivo final</Text>
-          <Text style={styles.heroCaption}>
+          <Parrafo style={styles.heroCaption}>
             {objetivoListo
               ? "Sale de comparar tus fotos con tu referencia: es una lectura por zona, no centímetros."
               : "Todavía sin fotos tuyas: esto es el énfasis que pide tu referencia, no tu brecha."}
-          </Text>
+          </Parrafo>
           <View style={{ marginTop: spacing.md }}>
             <ChartBoundary label="La brecha no se pudo dibujar.">
               <GapChart brechas={conDesglose ? brechas : brechas.slice(0, 3)} />
@@ -573,7 +574,7 @@ export function PanelResumen({
           .map((punto) => ({ date: punto.date, value: punto.waistCm })),
         formato: (valor: number) => `${valor} cm`,
         meta: plan?.meta ?? null,
-        children: plan ? <Text style={styles.panelNota}>{textoDeGlidepath(plan)}</Text> : null,
+        children: plan ? <Parrafo style={styles.panelNota}>{textoDeGlidepath(plan)}</Parrafo> : null,
       });
     }
 
@@ -876,10 +877,10 @@ export function PanelResumen({
             {/* Aviso accionable: falta dato real (comidas confirmadas), no
                 explicación de mecánica — se queda visible, no va al InfoTip. */}
             {!cumplimiento.dietaMedida && (
-              <Text style={styles.panelNota}>
+              <Parrafo style={styles.panelNota}>
                 La rutina se cuenta sola. Para que la dieta también, confirma tus comidas desde
                 Hoy o desde el aviso.
-              </Text>
+              </Parrafo>
             )}
           </>
         ),

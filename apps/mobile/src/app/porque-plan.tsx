@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { Parrafo } from "@/components/Parrafo";
 import { useTheme } from "@/context/theme";
 import { PORQUE_DEL_PLAN } from "@/lib/nutricion";
 import { fonts, spacing, type as typeScale, type Palette } from "@/lib/theme";
@@ -35,14 +36,14 @@ export default function PorqueDelPlanScreen() {
         {PORQUE_DEL_PLAN.map((bloque) => (
           <View key={bloque.titulo} style={styles.bloque}>
             <Text style={styles.bloqueTitulo}>{bloque.titulo}</Text>
-            <Text style={styles.parrafo}>{bloque.texto}</Text>
+            <Parrafo style={styles.parrafo}>{bloque.texto}</Parrafo>
           </View>
         ))}
 
-        <Text style={styles.aviso}>
+        <Parrafo style={styles.aviso}>
           Esto explica un plan generado por reglas; no es una indicación médica. Si tienes una
           condición que cambie tu alimentación, consúltalo con una especialista.
-        </Text>
+        </Parrafo>
       </ScrollView>
     </SafeAreaView>
   );

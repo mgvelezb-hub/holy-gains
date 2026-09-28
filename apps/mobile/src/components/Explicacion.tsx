@@ -2,6 +2,7 @@ import { ChevronDown, ChevronRight } from "lucide-react-native";
 import { useMemo, useState, type ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { Parrafo } from "@/components/Parrafo";
 import { useTheme } from "@/context/theme";
 import { fonts, spacing, type as typeScale, type Palette } from "@/lib/theme";
 
@@ -56,7 +57,7 @@ export function Explicacion({
 export function TextoExplicativo({ children }: { children: ReactNode }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  return <Text style={styles.parrafo}>{children}</Text>;
+  return <Parrafo style={styles.parrafo}>{children}</Parrafo>;
 }
 
 const makeStyles = (colors: Palette) =>

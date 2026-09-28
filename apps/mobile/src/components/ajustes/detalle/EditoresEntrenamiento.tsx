@@ -6,6 +6,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Card } from "@/components/Card";
 import { InfoTip, TextoInfo } from "@/components/InfoTip";
 import { NumberStepper } from "@/components/NumberStepper";
+import { Parrafo } from "@/components/Parrafo";
 import { SectionLabel } from "@/components/SectionLabel";
 import { useTheme } from "@/context/theme";
 import {
@@ -347,9 +348,9 @@ export function DetalleSemana() {
       )}
 
       {avisos.map((aviso) => (
-        <Text key={aviso} style={styles.aviso}>
+        <Parrafo key={aviso} style={styles.aviso}>
           {aviso}
-        </Text>
+        </Parrafo>
       ))}
     </Card>
   );
@@ -859,9 +860,9 @@ export function EditorDisciplina({
       )}
 
       {!esPrimaria && !carga && (
-        <Text style={styles.nota}>
+        <Parrafo style={styles.nota}>
           Esta disciplina ya no está en tu semana. Regresa a la sección para volver a agregarla.
-        </Text>
+        </Parrafo>
       )}
 
       {opciones.length > 0 && discipline !== "CARDIO" && (
@@ -1187,7 +1188,7 @@ export function EditorSplit({ me }: { me: MeResponse | null }) {
         </View>
       </Card>
 
-      {mensaje && <Text style={styles.mensaje}>{mensaje}</Text>}
+      {mensaje && <Parrafo style={styles.mensaje}>{mensaje}</Parrafo>}
     </>
   );
 }
@@ -1250,7 +1251,7 @@ export function EditorUnilateral({ me }: { me: MeResponse | null }) {
         })}
       </View>
 
-      {mensaje && <Text style={styles.mensaje}>{mensaje}</Text>}
+      {mensaje && <Parrafo style={styles.mensaje}>{mensaje}</Parrafo>}
     </Card>
   );
 }
@@ -1275,7 +1276,7 @@ export function EditorEjercicios() {
 
   const { dias, error, recargar } = useEjerciciosPorDia();
 
-  if (error) return <Text style={styles.mensaje}>{error}</Text>;
+  if (error) return <Parrafo style={styles.mensaje}>{error}</Parrafo>;
   if (!dias) return <Text style={styles.mensaje}>Cargando tus ejercicios...</Text>;
 
   return (
@@ -1423,7 +1424,7 @@ export function EditorEjerciciosDia({ dayKind }: { dayKind: string }) {
     void guardar(siguiente);
   }
 
-  if (error) return <Text style={styles.mensaje}>{error}</Text>;
+  if (error) return <Parrafo style={styles.mensaje}>{error}</Parrafo>;
   if (!dia || !lista) return <Text style={styles.mensaje}>Cargando...</Text>;
 
   return (
@@ -1440,7 +1441,7 @@ export function EditorEjerciciosDia({ dayKind }: { dayKind: string }) {
           </InfoTip>
         </View>
 
-        <Text style={styles.nota}>{dia.porque}</Text>
+        <Parrafo style={styles.nota}>{dia.porque}</Parrafo>
 
         <View style={styles.lista}>
           {lista.map((id, indice) => (
@@ -1484,7 +1485,7 @@ export function EditorEjerciciosDia({ dayKind }: { dayKind: string }) {
           )}
         </View>
 
-        {mensaje && <Text style={styles.mensaje}>{mensaje}</Text>}
+        {mensaje && <Parrafo style={styles.mensaje}>{mensaje}</Parrafo>}
       </Card>
     </>
   );
@@ -1536,7 +1537,7 @@ export function EditorAgregarEjercicio({ dayKind }: { dayKind: string }) {
     }
   }
 
-  if (error) return <Text style={styles.mensaje}>{error}</Text>;
+  if (error) return <Parrafo style={styles.mensaje}>{error}</Parrafo>;
   if (!dia || !catalogo) return <Text style={styles.mensaje}>Cargando el catálogo...</Text>;
 
   return (
@@ -1550,7 +1551,7 @@ export function EditorAgregarEjercicio({ dayKind }: { dayKind: string }) {
           </Pressable>
         ))}
       </View>
-      {mensaje && <Text style={styles.mensaje}>{mensaje}</Text>}
+      {mensaje && <Parrafo style={styles.mensaje}>{mensaje}</Parrafo>}
     </Card>
   );
 }
@@ -1667,11 +1668,11 @@ export function EditorDisciplinasBase({ me }: { me: MeResponse | null }) {
           })}
         </View>
 
-        <Text style={styles.nota}>
+        <Parrafo style={styles.nota}>
           Lo que no sea base lo agregas el día, con el tiempo que te sobre.
-        </Text>
+        </Parrafo>
 
-        {mensaje && <Text style={styles.mensaje}>{mensaje}</Text>}
+        {mensaje && <Parrafo style={styles.mensaje}>{mensaje}</Parrafo>}
       </Card>
 
       <Card>

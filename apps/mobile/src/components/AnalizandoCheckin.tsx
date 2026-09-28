@@ -2,6 +2,7 @@ import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, AppState, Linking, Pressable, StyleSheet, Text, View } from "react-native";
 
+import { Parrafo } from "@/components/Parrafo";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/context/theme";
 import { SONDEO_MS, pasoAviso, textoAnalizando, type AvisoAnalisis } from "@/lib/analisis-checkin";
@@ -122,10 +123,10 @@ export function AnalizandoCheckin({
     return (
       <View style={styles.screen}>
         <Text style={styles.title}>Check-in recibido</Text>
-        <Text style={styles.message}>
+        <Parrafo style={styles.message}>
           Tu coach revisa tus números antes de publicar tu retroalimentación. La verás en Hoy en
           cuanto la apruebe.
-        </Text>
+        </Parrafo>
         <PrimaryButton label="Volver a Hoy" onPress={() => router.replace("/")} />
       </View>
     );
@@ -135,7 +136,7 @@ export function AnalizandoCheckin({
     <View style={styles.screen}>
       <ActivityIndicator size="large" color={colors.champan} />
       <Text style={styles.title}>Analizando tu check-in…</Text>
-      <Text style={styles.message}>{textoAnalizando({ conFotos, esMensual })}</Text>
+      <Parrafo style={styles.message}>{textoAnalizando({ conFotos, esMensual })}</Parrafo>
       {sigoConEllo ? <Text style={styles.nota}>Tarda más de lo normal; sigo con ello.</Text> : null}
       {avisosApagados ? (
         <Pressable onPress={() => void Linking.openSettings()} hitSlop={10} accessibilityRole="link">

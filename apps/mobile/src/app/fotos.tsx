@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Card } from "@/components/Card";
+import { Parrafo } from "@/components/Parrafo";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { SectionLabel } from "@/components/SectionLabel";
 import { EmptyState, ErrorState, LoadingState } from "@/components/States";
@@ -244,9 +245,9 @@ export default function FotosScreen() {
             {!error && ultimoCheckIn && (
               <Card>
                 <SectionLabel>Agregar al último check-in</SectionLabel>
-                <Text style={styles.agregarNota}>
+                <Parrafo style={styles.agregarNota}>
                   Se pegan al check-in del {ultimoCheckIn.date}, sin crear uno nuevo.
-                </Text>
+                </Parrafo>
                 <View style={styles.agregarRow}>
                   {PHOTO_VIEWS.map((view) => (
                     <Pressable
@@ -260,7 +261,7 @@ export default function FotosScreen() {
                     </Pressable>
                   ))}
                 </View>
-                {avisoSubida && <Text style={styles.agregarAviso}>{avisoSubida}</Text>}
+                {avisoSubida && <Parrafo style={styles.agregarAviso}>{avisoSubida}</Parrafo>}
               </Card>
             )}
 

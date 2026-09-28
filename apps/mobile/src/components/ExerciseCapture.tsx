@@ -4,6 +4,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-nati
 
 import { Card } from "@/components/Card";
 import { NumberStepper } from "@/components/NumberStepper";
+import { Parrafo } from "@/components/Parrafo";
 import { RestTimer } from "@/components/RestTimer";
 import { useTheme } from "@/context/theme";
 import type { ExerciseAlternative, SessionExerciseView, WorkoutSetInput } from "@/lib/api";
@@ -290,10 +291,10 @@ function SwapModal({
       <View style={styles.modalBackdrop}>
         <View style={styles.modalSheet}>
           <Text style={styles.modalTitle}>Cambiar ejercicio</Text>
-          <Text style={styles.modalSubtitle}>
+          <Parrafo style={styles.modalSubtitle}>
             En lugar de {exercise.name}. Mismas series y esquema; el peso lo escribes tú, porque no
             es la misma máquina.
-          </Text>
+          </Parrafo>
 
           <ScrollView style={styles.modalList}>
             {exercise.alternatives.map((alternative) => (
@@ -312,12 +313,12 @@ function SwapModal({
           </ScrollView>
 
           {captured > 0 && (
-            <Text style={styles.modalWarning}>
+            <Parrafo style={styles.modalWarning}>
               Ojo: {captured === 1 ? "la serie que ya marcaste se borra" : `las ${captured} series que ya marcaste se borran`}
               {" "}— eran de la otra máquina.
-            </Text>
+            </Parrafo>
           )}
-          {!online && <Text style={styles.modalWarning}>Sin conexión: el cambio queda en el teléfono y se sube solo.</Text>}
+          {!online && <Parrafo style={styles.modalWarning}>Sin conexión: el cambio queda en el teléfono y se sube solo.</Parrafo>}
 
           <Pressable onPress={onClose} style={styles.modalClose}>
             <Text style={styles.modalCloseText}>CANCELAR</Text>

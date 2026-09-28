@@ -7,6 +7,7 @@ import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { InfoTip, TextoInfo } from "@/components/InfoTip";
+import { Parrafo } from "@/components/Parrafo";
 import { ScoreCard } from "@/components/ScoreCard";
 import { SectionLabel } from "@/components/SectionLabel";
 import { ErrorState } from "@/components/States";
@@ -129,12 +130,12 @@ export default function BibliotecaDisciplinaScreen() {
           <Icono size={28} color={colors.paloRosa} strokeWidth={2} />
           <Text style={styles.title}>{DISCIPLINE_LABELS[disciplina as Discipline]}</Text>
         </View>
-        <Text style={styles.subtitle}>
+        <Parrafo style={styles.subtitle}>
           Los que aparecen en tus sesiones, con cómo se hacen, para qué sirven y el error más común.
           {conVideoTotal > 0
             ? ` ${conVideoTotal} tienen video de referencia.`
             : " Todavía sin video de referencia."}
-        </Text>
+        </Parrafo>
 
         {!online && (
           <View style={styles.offlineBadge}>

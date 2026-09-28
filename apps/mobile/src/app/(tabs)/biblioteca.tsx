@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { EngraneAjustes } from "@/components/EngraneAjustes";
+import { Parrafo } from "@/components/Parrafo";
 import { ScoreCard } from "@/components/ScoreCard";
 import { ErrorState, LoadingState } from "@/components/States";
 import { useTheme } from "@/context/theme";
@@ -121,10 +122,10 @@ export default function BibliotecaScreen() {
         <Text style={styles.title}>Biblioteca</Text>
         <EngraneAjustes seccion="entrenamiento" />
       </View>
-      <Text style={styles.subtitle}>
+      <Parrafo style={styles.subtitle}>
         Todo lo que la app sabe prescribir, por disciplina y por nivel. Los videos se descargan con
         señal y quedan en tu teléfono para el gimnasio.
-      </Text>
+      </Parrafo>
 
       <ScoreCard
         icon={Dumbbell}

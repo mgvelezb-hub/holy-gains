@@ -15,6 +15,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Card } from "@/components/Card";
 import { ChartBoundary } from "@/components/ChartBoundary";
 import { LineChart, type Punto } from "@/components/LineChart";
+import { Parrafo } from "@/components/Parrafo";
 import { SectionLabel } from "@/components/SectionLabel";
 import { EmptyState, ErrorState, LoadingState } from "@/components/States";
 import { useTheme } from "@/context/theme";
@@ -209,9 +210,9 @@ export default function LaboratoriosScreen() {
 
         <Card>
           <SectionLabel>Cargar un estudio</SectionLabel>
-          <Text style={styles.ayuda}>
+          <Parrafo style={styles.ayuda}>
             Escribe los valores tal como vienen en tu reporte. Los que dejes vacíos no se guardan.
-          </Text>
+          </Parrafo>
 
           <Text style={styles.campoLabel}>Fecha del estudio</Text>
           <View style={styles.fechaFila}>
@@ -279,7 +280,7 @@ export default function LaboratoriosScreen() {
             <Text style={styles.botonText}>{guardando ? "Guardando..." : "Guardar estudio"}</Text>
           </Pressable>
 
-          {mensaje && <Text style={styles.mensaje}>{mensaje}</Text>}
+          {mensaje && <Parrafo style={styles.mensaje}>{mensaje}</Parrafo>}
         </Card>
 
         {delTipo.length === 0 ? (
@@ -290,7 +291,7 @@ export default function LaboratoriosScreen() {
               <SectionLabel>{lab.takenOn}</SectionLabel>
 
               {!lab.coherence.coherent && lab.coherence.reason && (
-                <Text style={styles.alerta}>{lab.coherence.reason}</Text>
+                <Parrafo style={styles.alerta}>{lab.coherence.reason}</Parrafo>
               )}
 
               {lab.values.map((value) => {
@@ -309,11 +310,11 @@ export default function LaboratoriosScreen() {
               })}
 
               {lab.outsideRange.length > 0 && (
-                <Text style={styles.alerta}>
+                <Parrafo style={styles.alerta}>
                   Hay {lab.outsideRange.length}{" "}
                   {lab.outsideRange.length === 1 ? "valor" : "valores"} fuera del rango que
                   imprimió tu laboratorio. No lo interpretamos: eso lo revisa un médico.
-                </Text>
+                </Parrafo>
               )}
             </Card>
           ))

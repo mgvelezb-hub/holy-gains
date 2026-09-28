@@ -14,6 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Card } from "@/components/Card";
 import { InfoTip, TextoInfo } from "@/components/InfoTip";
+import { Parrafo } from "@/components/Parrafo";
 import { EmptyState, ErrorState, LoadingState } from "@/components/States";
 import { useTheme } from "@/context/theme";
 import { ApiError, getNutrition, postSwap, type Menu, type MenuItem, type MenuMeal } from "@/lib/api";
@@ -221,10 +222,10 @@ function ComidaDelMenu({
             {expandido && equivalencia && (
               <View style={styles.equivalenciaWrap}>
                 {equivalencia.aproximada ? (
-                  <Text style={styles.equivalenciaAviso}>
+                  <Parrafo style={styles.equivalenciaAviso}>
                     Cambio aproximado: los macros no quedan idénticos, pero es lo más cercano de tu
                     catálogo. Se queda guardado.
-                  </Text>
+                  </Parrafo>
                 ) : (
                   <InfoTip titulo="Sobre este cambio">
                     <TextoInfo>El cambio se queda: tu menú, tu widget y tu día lo muestran así.</TextoInfo>

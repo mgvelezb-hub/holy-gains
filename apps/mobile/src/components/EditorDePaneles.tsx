@@ -11,6 +11,7 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PanelResumen, type VistaResumen } from "@/components/PanelResumen";
+import { Parrafo } from "@/components/Parrafo";
 import { useTheme } from "@/context/theme";
 import {
   DESCRIPCION_TAMANO,
@@ -116,10 +117,10 @@ export function EditorDePaneles({
         <ScrollView
           contentContainerStyle={[styles.contenido, { paddingBottom: insets.bottom + 80 }]}
         >
-          <Text style={styles.ayuda}>
+          <Parrafo style={styles.ayuda}>
             Mantén y arrastra para acomodar. Toca un panel para cambiar su tamaño o su detalle: lo
             que ves aquí es lo que va a quedar.
-          </Text>
+          </Parrafo>
 
           {layout.map((panel, index) => (
             <PanelEditable
@@ -138,9 +139,9 @@ export function EditorDePaneles({
           ))}
 
           {layout.length === 0 && (
-            <Text style={styles.ayuda}>
+            <Parrafo style={styles.ayuda}>
               Tu resumen quedó vacío. Agrega los paneles que quieras de la lista de abajo.
-            </Text>
+            </Parrafo>
           )}
 
           {disponibles.length > 0 && (
@@ -322,9 +323,9 @@ function PanelEditable({
           )}
 
           {def.tamanos.length === 1 && vistasPara(def, panel.tamano).length === 1 && (
-            <Text style={styles.opcionDescripcion}>
+            <Parrafo style={styles.opcionDescripcion}>
               Este panel existe en una sola forma: en otra no enseñaría nada distinto.
-            </Text>
+            </Parrafo>
           )}
         </View>
       )}

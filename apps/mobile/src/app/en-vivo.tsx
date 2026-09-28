@@ -26,6 +26,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { InfoTip, TextoInfo } from "@/components/InfoTip";
+import { Parrafo } from "@/components/Parrafo";
 import { ErrorState, LoadingState } from "@/components/States";
 import { useTheme } from "@/context/theme";
 import {
@@ -970,10 +971,10 @@ export default function EnVivoScreen() {
       ) : estado.terminada ? (
         <ScrollView contentContainerStyle={styles.contenido}>
           <Text style={styles.tituloFin}>Sesión completa</Text>
-          <Text style={styles.subtituloFin}>
+          <Parrafo style={styles.subtituloFin}>
             {avance.total} series · {volumenKg(estado)} kg levantados. Ya quedó guardada en tu
             teléfono; se sube sola cuando haya señal.
-          </Text>
+          </Parrafo>
           {cardioDelDia?.sesion?.cardio && cardioEstado === "pendiente" ? (
             // La tarjeta del cardio: una línea y un botón. El timer es el del
             // calentamiento; al terminar se registra solo.
@@ -991,7 +992,7 @@ export default function EnVivoScreen() {
             </View>
           ) : (
             <>
-              {cardioMsg && <Text style={styles.subtituloFin}>{cardioMsg}</Text>}
+              {cardioMsg && <Parrafo style={styles.subtituloFin}>{cardioMsg}</Parrafo>}
               <Pressable onPress={cerrarSesion} style={styles.botonPrincipal}>
                 <Check size={22} color={colors.pergamino} strokeWidth={2.5} />
                 <Text style={styles.botonPrincipalTexto}>Cerrar sesión</Text>
@@ -1008,10 +1009,10 @@ export default function EnVivoScreen() {
 
           {!calentamientoIniciado ? (
             <View style={styles.serieCaja}>
-              <Text style={styles.seriePlan}>
+              <Parrafo style={styles.seriePlan}>
                 {Math.round(warmup.totalSeg / 60)} min para llegar lista al primer ejercicio:
                 pulso arriba y los músculos de hoy en movimiento, sin estirar estático.
-              </Text>
+              </Parrafo>
               <View style={styles.lista}>
                 {warmup.pasos.map((paso, index) => (
                   <View key={index} style={styles.listaFila}>
@@ -1269,10 +1270,10 @@ export default function EnVivoScreen() {
             <View style={styles.terminarCaja}>
               {confirmandoFin ? (
                 <>
-                  <Text style={styles.terminarPregunta}>
+                  <Parrafo style={styles.terminarPregunta}>
                     ¿Cerrar con {avance.hechas} de {avance.total} series? Las que faltan se quedan
                     sin registrar — no se inventan ceros.
-                  </Text>
+                  </Parrafo>
                   <View style={styles.terminarBotones}>
                     <Pressable onPress={() => setConfirmandoFin(false)} style={styles.botonSecundario}>
                       <Text style={styles.botonSecundarioTexto}>Seguir</Text>
@@ -1291,11 +1292,11 @@ export default function EnVivoScreen() {
             </View>
           )}
 
-          <Text style={styles.nota}>
+          <Parrafo style={styles.nota}>
             {conReloj
               ? "Esta misma serie está en tu reloj y la puedes cerrar desde ahí. Abre Holy Gains en la muñeca para verla. Las repeticiones todavía las cuentas tú: el reloj está grabando el movimiento de cada serie para poder contarlas solo más adelante."
               : motivoSinReloj(reloj)}
-          </Text>
+          </Parrafo>
         </ScrollView>
       )}
 

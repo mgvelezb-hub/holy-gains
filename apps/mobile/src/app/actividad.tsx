@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { NumberStepper } from "@/components/NumberStepper";
+import { Parrafo } from "@/components/Parrafo";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { SectionLabel } from "@/components/SectionLabel";
 import { useTheme } from "@/context/theme";
@@ -117,9 +118,9 @@ export default function ActividadScreen() {
         <View style={styles.header}>
           <View style={styles.headerText}>
             <Text style={styles.title}>Registrar sesión</Text>
-            <Text style={styles.subtitle}>
+            <Parrafo style={styles.subtitle}>
               Lo que hiciste fuera del gym: bici, box, alberca, funcional.
-            </Text>
+            </Parrafo>
           </View>
           <Pressable onPress={() => router.back()} hitSlop={10} style={styles.close}>
             <X size={24} color={colors.paloRosa} strokeWidth={2} />

@@ -4,6 +4,7 @@ import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View
 
 import { Card } from "@/components/Card";
 import { InfoTip, TextoInfo } from "@/components/InfoTip";
+import { Parrafo } from "@/components/Parrafo";
 import { SectionLabel } from "@/components/SectionLabel";
 import { useTheme } from "@/context/theme";
 import {
@@ -213,9 +214,9 @@ export function SeccionHorariosComida() {
       {cargando ? (
         <ActivityIndicator size="small" color={colors.champan} style={{ marginTop: spacing.md }} />
       ) : tiempos.length === 0 ? (
-        <Text style={styles.vacio}>
+        <Parrafo style={styles.vacio}>
           Cuando tengas tu menú publicado vas a poder mover sus horarios desde aquí.
-        </Text>
+        </Parrafo>
       ) : (
         <View style={styles.lista}>
           {tiempos.map((tiempo) => (
@@ -270,9 +271,9 @@ export function SeccionHorariosComida() {
         <Pressable style={styles.fondo} onPress={() => setEligiendo(null)}>
           <Pressable style={styles.hoja} onPress={() => {}}>
             <Text style={styles.hojaTitulo}>{eligiendo?.label}</Text>
-            <Text style={styles.hojaNota}>
+            <Parrafo style={styles.hojaNota}>
               Elige la hora. Si choca con otra comida te lo digo y no se guarda.
-            </Text>
+            </Parrafo>
             <ScrollView style={styles.hojaLista}>
               {HORAS.map((hora) => {
                 const actual = eligiendo?.hora === hora;
@@ -370,9 +371,9 @@ export function SeccionHorariosComida() {
 
       {error && <Text style={styles.error}>{error}</Text>}
       {avisos.map((aviso) => (
-        <Text key={aviso} style={styles.aviso}>
+        <Parrafo key={aviso} style={styles.aviso}>
           {aviso}
-        </Text>
+        </Parrafo>
       ))}
     </Card>
   );

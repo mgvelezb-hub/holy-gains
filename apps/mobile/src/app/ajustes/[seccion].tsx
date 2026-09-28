@@ -30,6 +30,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Card } from "@/components/Card";
 import { InfoTip, TextoInfo } from "@/components/InfoTip";
 import { ErrorState, LoadingState } from "@/components/States";
+import { Parrafo } from "@/components/Parrafo";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { RegenerarMenu } from "@/components/RegenerarMenu";
 import { ScoreCard } from "@/components/ScoreCard";
@@ -618,9 +619,9 @@ export default function AjustesDetalleScreen() {
                 value={me.profile?.heightCm != null ? `${me.profile.heightCm} cm` : "—"}
                 styles={styles}
               />
-              <Text style={styles.profileNote}>
+              <Parrafo style={styles.profileNote}>
                 Para cambiar tus datos de entrenamiento, escríbele a tu coach.
-              </Text>
+              </Parrafo>
             </View>
           )}
         </Card>
@@ -646,7 +647,7 @@ export default function AjustesDetalleScreen() {
                 </Text>
               </Pressable>
             </View>
-            {syncMessage && <Text style={styles.syncMessage}>{syncMessage}</Text>}
+            {syncMessage && <Parrafo style={styles.syncMessage}>{syncMessage}</Parrafo>}
 
             <View style={styles.phoneDivider} />
 
@@ -679,10 +680,10 @@ export default function AjustesDetalleScreen() {
             <SectionLabel>Tu reloj</SectionLabel>
             {!healthConnected ? (
               <View style={styles.healthBlock}>
-                <Text style={styles.profileNote}>
+                <Parrafo style={styles.profileNote}>
                   Conecta Apple Salud para que tus pasos, sueño y frecuencia cardiaca ajusten tu gasto
                   calórico solos — nada de armar atajos a mano.
-                </Text>
+                </Parrafo>
                 <PrimaryButton
                   label="Conectar Apple Salud"
                   onPress={handleConnectHealth}
@@ -714,7 +715,7 @@ export default function AjustesDetalleScreen() {
                 />
               </View>
             )}
-            {healthMessage && <Text style={styles.syncMessage}>{healthMessage}</Text>}
+            {healthMessage && <Parrafo style={styles.syncMessage}>{healthMessage}</Parrafo>}
           </Card>
         )}
 
@@ -746,30 +747,30 @@ export default function AjustesDetalleScreen() {
                   : "Con un Apple Watch emparejado, la serie que te toca se ve en la muñeca y se cierra desde ahí."}
             </Text>
 
-            <Text style={styles.profileNote}>
+            <Parrafo style={styles.profileNote}>
               Las repeticiones todavía las cuentas tú. El reloj graba el movimiento de cada serie
               para poder contarlas solo más adelante; hasta que ese conteo esté probado contra
               sesiones reales, el número que se guarda es el que tú pones.
-            </Text>
+            </Parrafo>
           </Card>
         )}
 
         {activa === "fotos" && (
         <Card>
           <SectionLabel>Tus fotos</SectionLabel>
-          <Text style={styles.vaultIntro}>
+          <Parrafo style={styles.vaultIntro}>
             Tus fotos de progreso no se ven en ninguna otra pantalla. Aquí defines la clave que las
             abre — distinta a la de tu teléfono a propósito: quien ya lo desbloqueó no debería
             poder verlas.
-          </Text>
+          </Parrafo>
 
           {/* Se dice ANTES de crearla, no después de olvidarla: la diferencia
               entre una decisión informada y una sorpresa. */}
-          <Text style={styles.vaultAviso}>
+          <Parrafo style={styles.vaultAviso}>
             Si la olvidas no hay manera de recuperarla. Tus fotos siguen guardadas en el servidor,
             pero esta pantalla no las va a poder abrir: habría que poner una clave nueva y perder
             el acceso a las anteriores.
-          </Text>
+          </Parrafo>
 
           <View style={styles.vaultRow}>
             <TextInput

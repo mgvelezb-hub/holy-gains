@@ -7,6 +7,7 @@ import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { InfoTip, TextoInfo } from "@/components/InfoTip";
+import { Parrafo } from "@/components/Parrafo";
 import { ScoreCard } from "@/components/ScoreCard";
 import { SectionLabel } from "@/components/SectionLabel";
 import { EmptyState, ErrorState, LoadingState } from "@/components/States";
@@ -160,10 +161,10 @@ export default function BibliotecaGymScreen() {
           <Dumbbell size={28} color={colors.paloRosa} strokeWidth={2} />
           <Text style={styles.title}>Gym</Text>
         </View>
-        <Text style={styles.subtitle}>
+        <Parrafo style={styles.subtitle}>
           Todo el catálogo por zona y por nivel. Tu rutina solo usa los de tu nivel y los de abajo;
           los que tienen video se pueden descargar para el gimnasio.
-        </Text>
+        </Parrafo>
 
         {!online && (
           <View style={styles.offlineBadge}>

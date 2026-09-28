@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { Parrafo } from "@/components/Parrafo";
 import { useTheme } from "@/context/theme";
 import { ApiError, preguntarNutricion, type ConsultaResponse } from "@/lib/api";
 import { fonts, radius, spacing, type as typeScale, type Palette } from "@/lib/theme";
@@ -53,9 +54,9 @@ export default function PreguntaPlanScreen() {
         </Pressable>
 
         <Text style={styles.title}>Pregúntale a tu plan</Text>
-        <Text style={styles.subtitle}>
+        <Parrafo style={styles.subtitle}>
           Por qué esos alimentos, cómo cambiar uno, qué hacer si comes fuera.
-        </Text>
+        </Parrafo>
 
         <TextInput
           value={pregunta}
@@ -74,12 +75,12 @@ export default function PreguntaPlanScreen() {
           <Text style={styles.consultaBotonText}>{pensando ? "Pensando..." : "Preguntar"}</Text>
         </Pressable>
 
-        {error && <Text style={styles.consultaAviso}>{error}</Text>}
+        {error && <Parrafo style={styles.consultaAviso}>{error}</Parrafo>}
 
         {respuesta && (
           <View style={styles.consultaRespuesta}>
-            <Text style={styles.consultaTexto}>{respuesta.answer}</Text>
-            <Text style={styles.consultaAviso}>{respuesta.disclaimer}</Text>
+            <Parrafo style={styles.consultaTexto}>{respuesta.answer}</Parrafo>
+            <Parrafo style={styles.consultaAviso}>{respuesta.disclaimer}</Parrafo>
           </View>
         )}
       </ScrollView>

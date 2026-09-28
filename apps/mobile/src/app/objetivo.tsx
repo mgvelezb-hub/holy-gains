@@ -7,6 +7,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Card } from "@/components/Card";
 import { EmptyState, ErrorState, LoadingState } from "@/components/States";
+import { Parrafo } from "@/components/Parrafo";
 import { SectionLabel } from "@/components/SectionLabel";
 import {
   ApiError,
@@ -164,9 +165,9 @@ export default function ObjetivoScreen() {
         </Pressable>
 
         <Text style={styles.title}>Tu objetivo</Text>
-        <Text style={styles.subtitle}>
+        <Parrafo style={styles.subtitle}>
           Hasta tres fotos del físico al que le apuntas: frente, perfil y espalda.
-        </Text>
+        </Parrafo>
 
         <ReferenciaNumerica />
 
@@ -281,10 +282,10 @@ function StatusCard({ status }: { status: GoalResponse["status"] }) {
             {/* Sin fotos propias no se puede decir qué tan lejos estás —eso
                 sería inventar—, pero sí qué implica la referencia en
                 entrenamiento, que es accionable desde hoy. */}
-            <Text style={styles.statusIntro}>
+            <Parrafo style={styles.statusIntro}>
               Esto es lo que implica tu referencia. Cuando subas fotos tuyas en un check-in, aquí
               va a aparecer además qué tan lejos estás de cada zona.
-            </Text>
+            </Parrafo>
             <View style={styles.statusLines}>
               {status.lines.map((line) => (
                 <Text key={line} style={styles.statusLine}>
@@ -409,9 +410,9 @@ function ReferenciaNumerica() {
           </View>
 
           {(lectura?.avisos ?? []).map((aviso) => (
-            <Text key={aviso} style={styles.refAviso}>
+            <Parrafo key={aviso} style={styles.refAviso}>
               {aviso}
-            </Text>
+            </Parrafo>
           ))}
 
           <Pressable onPress={() => guardar(null)} hitSlop={8}>
@@ -420,10 +421,10 @@ function ReferenciaNumerica() {
         </>
       ) : (
         <>
-          <Text style={styles.refIntro}>
+          <Parrafo style={styles.refIntro}>
             Si tu referencia tiene medidas publicadas, aquí se convierten en metas por zona
             escaladas a tu cuerpo. Sin ellas, la comparación se queda en la lectura de tus fotos.
-          </Text>
+          </Parrafo>
 
           <Pressable onPress={() => setAbierto((valor) => !valor)} hitSlop={8}>
             <Text style={styles.refQuitar}>
@@ -445,7 +446,7 @@ function ReferenciaNumerica() {
         </>
       )}
 
-      {mensaje && <Text style={styles.refAviso}>{mensaje}</Text>}
+      {mensaje && <Parrafo style={styles.refAviso}>{mensaje}</Parrafo>}
     </Card>
   );
 }

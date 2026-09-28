@@ -7,6 +7,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Card } from "@/components/Card";
 import { InfoTip, TextoInfo } from "@/components/InfoTip";
 import { EmptyState, ErrorState, LoadingState } from "@/components/States";
+import { Parrafo } from "@/components/Parrafo";
 import { SectionLabel } from "@/components/SectionLabel";
 import { useTheme } from "@/context/theme";
 import {
@@ -112,7 +113,7 @@ export default function PlanNutricionScreen() {
               Presupuesto {PRESUPUESTOS.find((p) => p.valor === me.profile!.budget)?.nombre.toLowerCase()}
             </Text>
           )}
-          <Text style={styles.parrafo}>{DIETA_ACTUAL.resumen}</Text>
+          <Parrafo style={styles.parrafo}>{DIETA_ACTUAL.resumen}</Parrafo>
           {DIETA_ACTUAL.puntos.map((punto) => (
             <Text key={punto} style={styles.vinneta}>
               · {punto}
@@ -125,11 +126,11 @@ export default function PlanNutricionScreen() {
           <Text style={styles.nombreDieta}>
             {agua === null ? "Registra tu peso en el check-in para calcularla" : `${agua} litros`}
           </Text>
-          <Text style={styles.parrafo}>
+          <Parrafo style={styles.parrafo}>
             {agua === null
               ? "Sale de tu peso: 35 ml por kilo al día, la referencia práctica para una persona adulta sana con actividad moderada."
               : `Son 35 ml por kilo de tu peso (${pesoKg} kg), la referencia práctica para actividad moderada. Sube con el calor y con las sesiones largas; si entrenas fuerte, agrégale medio litro ese día.`}
-          </Text>
+          </Parrafo>
         </Card>
 
         {error && decision && <Text style={styles.errorTexto}>{error}</Text>}

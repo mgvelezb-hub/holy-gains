@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { Parrafo } from "@/components/Parrafo";
 import { ErrorState, LoadingState } from "@/components/States";
 import { useTheme } from "@/context/theme";
 import type { SessionExerciseView, WeekView } from "@/lib/api";
@@ -81,11 +82,11 @@ export default function TecnicaScreen() {
             {uri ? (
               <Reproductor uri={uri} />
             ) : (
-              <Text style={styles.sinVideo}>
+              <Parrafo style={styles.sinVideo}>
                 Este ejercicio todavía no tiene video. Está en la lista.
-              </Text>
+              </Parrafo>
             )}
-            {ejercicio.note && <Text style={styles.nota}>{ejercicio.note}</Text>}
+            {ejercicio.note && <Parrafo style={styles.nota}>{ejercicio.note}</Parrafo>}
           </>
         )}
       </ScrollView>

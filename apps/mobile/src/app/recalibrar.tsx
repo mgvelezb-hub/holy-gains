@@ -5,6 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Card } from "@/components/Card";
+import { Parrafo } from "@/components/Parrafo";
 import { SectionLabel } from "@/components/SectionLabel";
 import { ErrorState, LoadingState } from "@/components/States";
 import { useTheme } from "@/context/theme";
@@ -119,17 +120,17 @@ export default function RecalibrarScreen() {
         </Pressable>
 
         <Text style={styles.title}>Cuánto pesa cada una</Text>
-        <Text style={styles.subtitle}>
+        <Parrafo style={styles.subtitle}>
           Sobre los días que ya tienes. Subirle a una le quita a otra: el tiempo de tu semana no
           cambia porque lo pidas.
-        </Text>
+        </Parrafo>
 
         {pesos.length <= 1 ? (
           <Card>
-            <Text style={styles.ayuda}>
+            <Parrafo style={styles.ayuda}>
               Solo tienes una disciplina activa. Agrega otra en Ajustes y aquí podrás repartir el
               peso entre ellas.
-            </Text>
+            </Parrafo>
           </Card>
         ) : (
           pesos.map((peso) => {
@@ -231,9 +232,9 @@ export default function RecalibrarScreen() {
             ))}
 
             {resultado.avisos.map((aviso) => (
-              <Text key={aviso} style={styles.aviso}>
+              <Parrafo key={aviso} style={styles.aviso}>
                 {aviso}
-              </Text>
+              </Parrafo>
             ))}
 
             <Pressable onPress={() => router.replace("/rutinas")} style={styles.boton}>

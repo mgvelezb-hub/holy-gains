@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 
+import { Parrafo } from "@/components/Parrafo";
 import { useTheme } from "@/context/theme";
 import { fonts, radius, spacing, type Palette, type as typeScale } from "@/lib/theme";
 
@@ -23,7 +24,7 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry: () 
   return (
     <View style={styles.center}>
       <Text style={styles.errorTitle}>Algo no cargó</Text>
-      <Text style={styles.errorMessage}>{message}</Text>
+      <Parrafo style={styles.errorMessage}>{message}</Parrafo>
       <Pressable onPress={onRetry} style={styles.retryButton}>
         <Text style={styles.retryLabel}>REINTENTAR</Text>
       </Pressable>
@@ -37,7 +38,7 @@ export function EmptyState({ message }: { message: string }) {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={styles.emptyContainer}>
-      <Text style={styles.emptyMessage}>{message}</Text>
+      <Parrafo style={styles.emptyMessage}>{message}</Parrafo>
     </View>
   );
 }

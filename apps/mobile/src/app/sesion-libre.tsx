@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { Parrafo } from "@/components/Parrafo";
 import { ErrorState, LoadingState } from "@/components/States";
 import { useTheme } from "@/context/theme";
 import {
@@ -228,19 +229,19 @@ export default function SesionLibreScreen() {
               <Text style={styles.botonPrincipalTexto}>Empezar</Text>
             </Pressable>
 
-            <Text style={styles.aviso}>
+            <Parrafo style={styles.aviso}>
               Si traes reloj, abre también el entrenamiento ahí. La app no lee latidos en vivo —eso
               necesita una app en la muñeca—, pero con el entrenamiento abierto tu reloj escribe el
               pulso en Salud y aquí aparece al cerrar cada tramo.
-            </Text>
+            </Parrafo>
           </>
         ) : estado.terminada ? (
           <>
             <Text style={styles.tituloFin}>Sesión completa</Text>
-            <Text style={styles.subtituloFin}>
+            <Parrafo style={styles.subtituloFin}>
               {minutosDe(transcurridoMs(estado, ahora))} min de {nombre.toLowerCase()}. Se registra
               con la duración real, no con la planeada.
-            </Text>
+            </Parrafo>
 
             <Pressable onPress={terminar} disabled={guardando} style={styles.botonPrincipal}>
               <Check size={22} color={colors.pergamino} strokeWidth={2.5} />
@@ -286,9 +287,9 @@ export default function SesionLibreScreen() {
         )}
 
         {sesion.sesion?.notes.map((nota) => (
-          <Text key={nota} style={styles.aviso}>
+          <Parrafo key={nota} style={styles.aviso}>
             {nota}
-          </Text>
+          </Parrafo>
         ))}
       </ScrollView>
     </SafeAreaView>

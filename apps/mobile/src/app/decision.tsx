@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import { Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { Parrafo } from "@/components/Parrafo";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScoreCard } from "@/components/ScoreCard";
 import { EmptyState, ErrorState, LoadingState } from "@/components/States";
@@ -192,7 +193,7 @@ export default function DecisionScreen() {
             {decision.texto && (
               <View style={styles.mensaje}>
                 <Text style={styles.mensajeTitulo}>Mensaje de Coachy</Text>
-                <Text style={styles.mensajeTexto}>{decision.texto}</Text>
+                <Parrafo style={styles.mensajeTexto}>{decision.texto}</Parrafo>
               </View>
             )}
           </>
@@ -284,9 +285,9 @@ function Lista({ renglones }: { renglones: string[] }) {
   return (
     <View style={styles.hojaCuerpo}>
       {renglones.map((renglon) => (
-        <Text key={renglon} style={styles.renglon}>
+        <Parrafo key={renglon} style={styles.renglon}>
           {renglon}
-        </Text>
+        </Parrafo>
       ))}
     </View>
   );

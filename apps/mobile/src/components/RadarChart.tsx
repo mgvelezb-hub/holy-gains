@@ -1,7 +1,8 @@
 import { useMemo } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import Svg, { Circle, Line, Polygon, Text as SvgText } from "react-native-svg";
 
+import { Parrafo } from "@/components/Parrafo";
 import { useTheme } from "@/context/theme";
 import { fonts, spacing, type as typeScale, withAlpha, type Palette } from "@/lib/theme";
 
@@ -217,17 +218,17 @@ export function RadarChart({ ejes, size = 240 }: { ejes: Eje[] | undefined; size
       </Svg>
 
       {esperadoPoligono && (
-        <Text style={styles.pie}>
+        <Parrafo style={styles.pie}>
           Los números son tu diferencia contra lo esperado, en puntos. La silueta punteada es lo
           que tocaba a estas alturas.
-        </Text>
+        </Parrafo>
       )}
 
       {lista.some((eje) => eje.value === null) && (
-        <Text style={styles.nota}>
+        <Parrafo style={styles.nota}>
           Los ejes sin dato ({lista.filter((e) => e.value === null).map((e) => e.label).join(", ")})
           se dibujan en el centro: falta medirlos, no es que estén en cero.
-        </Text>
+        </Parrafo>
       )}
     </View>
   );

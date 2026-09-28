@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { InfoTip, TextoInfo } from "@/components/InfoTip";
+import { Parrafo } from "@/components/Parrafo";
 import { useTheme } from "@/context/theme";
 import { ApiError, postRegenerarMenu } from "@/lib/api";
 import { fonts, radius, spacing, type as typeScale, type Palette } from "@/lib/theme";
@@ -78,7 +79,7 @@ export function RegenerarMenu({ onRegenerado }: { onRegenerado?: () => void }) {
         </Text>
       </Pressable>
 
-      {mensaje && <Text style={[styles.mensaje, esError && styles.mensajeError]}>{mensaje}</Text>}
+      {mensaje && <Parrafo style={[styles.mensaje, esError && styles.mensajeError]}>{mensaje}</Parrafo>}
     </View>
   );
 }

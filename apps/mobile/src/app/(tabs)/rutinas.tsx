@@ -8,6 +8,7 @@ import { CalendarRange, PlayCircle, Timer } from "lucide-react-native";
 import { Collapsible } from "@/components/Collapsible";
 import { EngraneAjustes } from "@/components/EngraneAjustes";
 import { InfoTip, TextoInfo } from "@/components/InfoTip";
+import { Parrafo } from "@/components/Parrafo";
 import { ScoreCard } from "@/components/ScoreCard";
 import { ExerciseCapture } from "@/components/ExerciseCapture";
 import { EmptyState, ErrorState, LoadingState } from "@/components/States";
@@ -459,14 +460,14 @@ export default function GymScreen() {
                 {viewedSession!.cardioMinutes ? ` · ${viewedSession!.cardioMinutes} min de cardio al final` : ""}
               </Text>
               {viewedSession!.cycleNote && <Text style={styles.note}>{viewedSession!.cycleNote}</Text>}
-              {viewedSession!.readinessNote && <Text style={styles.note}>🌙 {viewedSession!.readinessNote}</Text>}
+              {viewedSession!.readinessNote && <Parrafo style={styles.note}>🌙 {viewedSession!.readinessNote}</Parrafo>}
             </View>
 
             {!isViewingToday && (
               <View style={styles.viewingNotice}>
-                <Text style={styles.viewingNoticeText}>
+                <Parrafo style={styles.viewingNoticeText}>
                   Estás viendo el {weekdayLong(selectedDate)}; la captura solo se habilita en la sesión de hoy.
-                </Text>
+                </Parrafo>
               </View>
             )}
 
@@ -1014,9 +1015,9 @@ function OrdenDelDia({ bloques }: { bloques: Array<BloqueDelDia<SessionView>> })
     <View style={styles.ordenDelDia}>
       <Text style={styles.ordenDelDiaTitulo}>Hoy en este orden: {lineaDelDia(bloques)}</Text>
       {notas.map((nota) => (
-        <Text key={nota} style={styles.ordenDelDiaNota}>
+        <Parrafo key={nota} style={styles.ordenDelDiaNota}>
           {nota}
-        </Text>
+        </Parrafo>
       ))}
     </View>
   );
@@ -1049,11 +1050,11 @@ function RestDay({
             ? "Hoy toca descanso"
             : `Descanso el ${weekdayLong(selectedDate)}`}
       </Text>
-      <Text style={styles.restMessage}>
+      <Parrafo style={styles.restMessage}>
         {otra
           ? `Tu sesión de ${DISCIPLINE_LABELS[otra.discipline].toLowerCase()} está arriba. Las pesas vuelven el siguiente día que toque.`
           : "El descanso es parte del plan: el músculo se construye fuera del gimnasio."}
-      </Text>
+      </Parrafo>
 
       {next && (
         <View style={styles.nextCard}>
@@ -1117,9 +1118,9 @@ function SummaryModal({
           )}
 
           {!online && (
-            <Text style={styles.modalSubtitle}>
+            <Parrafo style={styles.modalSubtitle}>
               Sin conexión: quedó guardado en el teléfono y se sube solo cuando vuelva la red.
-            </Text>
+            </Parrafo>
           )}
 
           <Pressable onPress={onConfirm} style={styles.confirmButton}>

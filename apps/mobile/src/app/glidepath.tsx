@@ -8,6 +8,7 @@ import { Card } from "@/components/Card";
 import { ChartBoundary } from "@/components/ChartBoundary";
 import { LineChart, type Punto } from "@/components/LineChart";
 import { EmptyState, ErrorState, LoadingState } from "@/components/States";
+import { Parrafo } from "@/components/Parrafo";
 import { SectionLabel } from "@/components/SectionLabel";
 import { useTheme } from "@/context/theme";
 import {
@@ -126,11 +127,11 @@ export default function GlidepathScreen() {
                   <Text style={styles.destinoValor}>
                     {plan.destino} <Text style={styles.destinoUnidad}>cm</Text>
                   </Text>
-                  <Text style={styles.destinoNota}>
+                  <Parrafo style={styles.destinoNota}>
                     Tu destino: la mitad de tu estatura. Es el corte que se usa para riesgo
                     cardiometabólico y sirve para cualquier complexión, porque se mide contra tu
                     propia altura y no contra una tabla.
-                  </Text>
+                  </Parrafo>
                 </View>
               </View>
 
@@ -159,10 +160,10 @@ export default function GlidepathScreen() {
                   />
                 </ChartBoundary>
               </View>
-              <Text style={styles.aviso}>
+              <Parrafo style={styles.aviso}>
                 La parte proyectada es aritmética del ritmo actual, no una promesa de fecha: si un
                 mes rinde más, el plan se acorta solo; si rinde menos, no te cobra la deuda.
-              </Text>
+              </Parrafo>
             </Card>
 
             <Card>
@@ -196,11 +197,11 @@ export default function GlidepathScreen() {
 
             <Card>
               <SectionLabel>Todo el objetivo, zona por zona</SectionLabel>
-              <Text style={styles.aviso}>
+              <Parrafo style={styles.aviso}>
                 La cintura es la que tiene destino anclado —la mitad de tu estatura, o lo que salga
                 de tu referencia—. Las demás se miden por ritmo: no hay un número al que "hay que
                 llegar", hay una dirección y una velocidad.
-              </Text>
+              </Parrafo>
 
               <View style={styles.tabla}>
                 {proyeccion.map((zona) => (
@@ -213,41 +214,41 @@ export default function GlidepathScreen() {
                       </Text>
                     </View>
 
-                    <Text style={styles.zonaNota}>
+                    <Parrafo style={styles.zonaNota}>
                       Desde {zona.inicio.valor} {zona.unidad} el {zona.inicio.fecha}. Al ritmo del
                       plan ({zona.ritmoMensualPlan > 0 ? "+" : ""}
                       {zona.ritmoMensualPlan} {zona.unidad} al mes)
                       {zona.mesesAlPlan !== null
                         ? `: ${fechaEnMeses(new Date(), zona.mesesAlPlan)}.`
                         : " no hay una fecha que prometer, porque esta medida no tiene destino fijo."}
-                    </Text>
+                    </Parrafo>
 
-                    <Text style={styles.zonaNota}>
+                    <Parrafo style={styles.zonaNota}>
                       {zona.ritmoMensualReal === null
                         ? "Todavía no hay suficientes mediciones para leer tu ritmo real."
                         : zona.mesesReales !== null
                           ? `A tu ritmo real de los últimos meses (${zona.ritmoMensualReal > 0 ? "+" : ""}${zona.ritmoMensualReal} ${zona.unidad} al mes): ${fechaEnMeses(new Date(), zona.mesesReales)}.`
                           : `Tu ritmo real de los últimos meses: ${zona.ritmoMensualReal > 0 ? "+" : ""}${zona.ritmoMensualReal} ${zona.unidad} al mes.`}
-                    </Text>
+                    </Parrafo>
                   </View>
                 ))}
               </View>
 
-              <Text style={styles.aviso}>
+              <Parrafo style={styles.aviso}>
                 Las dos fechas están a propósito: la del plan es a lo que apunta el método, la tuya
                 es a lo que vas. Cuando se separan mucho, lo que hay que revisar es el ritmo, no la
                 fecha.
-              </Text>
+              </Parrafo>
             </Card>
 
             <Card>
               <SectionLabel>Cómo se recalcula</SectionLabel>
-              <Text style={styles.aviso}>
+              <Parrafo style={styles.aviso}>
                 Cada mes, cuando subes medidas y fotos, el escalón siguiente se calcula desde donde
                 estás —no desde donde debías estar—. Y la comparación contra tus fotos de referencia
                 dice qué zona lleva la prioridad, que es lo que ajusta tu rutina. Esto es una
                 sugerencia de ritmo, no una indicación médica.
-              </Text>
+              </Parrafo>
             </Card>
           </>
         )}

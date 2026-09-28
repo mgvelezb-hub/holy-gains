@@ -7,6 +7,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Card } from "@/components/Card";
 import { InfoTip, TextoInfo } from "@/components/InfoTip";
 import { NumberStepper } from "@/components/NumberStepper";
+import { Parrafo } from "@/components/Parrafo";
 import { SectionLabel } from "@/components/SectionLabel";
 import { useTheme } from "@/context/theme";
 import {
@@ -225,7 +226,7 @@ export default function BloqueDelDiaScreen() {
           <Text style={styles.botonTexto}>Agregar al día</Text>
         </Pressable>
 
-        {mensaje && <Text style={styles.mensaje}>{mensaje}</Text>}
+        {mensaje && <Parrafo style={styles.mensaje}>{mensaje}</Parrafo>}
       </ScrollView>
     </SafeAreaView>
   );

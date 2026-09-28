@@ -16,6 +16,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { Card } from "@/components/Card";
 import { InfoTip, TextoInfo } from "@/components/InfoTip";
+import { Parrafo } from "@/components/Parrafo";
 import { ScoreCard } from "@/components/ScoreCard";
 import { SectionLabel } from "@/components/SectionLabel";
 import { useTheme } from "@/context/theme";
@@ -228,9 +229,9 @@ export function SeccionEntrenamiento({ me }: { me: MeResponse | null }) {
       {/* Los avisos del planificador se quedan a la vista: son lo único de
           esta pantalla que puede pedir una decisión hoy. */}
       {avisos.map((aviso) => (
-        <Text key={aviso} style={styles.aviso}>
+        <Parrafo key={aviso} style={styles.aviso}>
           {aviso}
-        </Text>
+        </Parrafo>
       ))}
 
       {/* 2. El estado actual, un renglón por decisión. El editor de cada una

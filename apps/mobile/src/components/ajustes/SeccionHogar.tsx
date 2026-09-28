@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 
 import { Card } from "@/components/Card";
 import { InfoTip, TextoInfo } from "@/components/InfoTip";
+import { Parrafo } from "@/components/Parrafo";
 import { SectionLabel } from "@/components/SectionLabel";
 import { useTheme } from "@/context/theme";
 import { ApiError } from "@/lib/api";
@@ -199,9 +200,9 @@ export function SeccionHogar() {
 
       {!cargando && vinculo?.status === "PENDIENTE" && (
         <View style={styles.pendiente}>
-          <Text style={styles.pendienteAviso}>
+          <Parrafo style={styles.pendienteAviso}>
             Comparte este código con quien vas a vincular. Vigente hasta {fechaCorta(expiresAt)}.
-          </Text>
+          </Parrafo>
           {code ? (
             <Text style={styles.codigo}>{code}</Text>
           ) : (

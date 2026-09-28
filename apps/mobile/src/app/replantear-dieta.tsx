@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Card } from "@/components/Card";
+import { Parrafo } from "@/components/Parrafo";
 import { RegenerarMenu } from "@/components/RegenerarMenu";
 import { SectionLabel } from "@/components/SectionLabel";
 import { ErrorState, LoadingState } from "@/components/States";
@@ -135,9 +136,9 @@ export default function ReplantearDietaScreen() {
         </Pressable>
 
         <Text style={styles.title}>Rearmar tu alimentación</Text>
-        <Text style={styles.subtitle}>
+        <Parrafo style={styles.subtitle}>
           Las respuestas que cambian tu menú, todas juntas. Entra con tu siguiente check-in.
-        </Text>
+        </Parrafo>
 
         <Card>
           <SectionLabel>Para qué entrenas</SectionLabel>
@@ -247,10 +248,10 @@ export default function ReplantearDietaScreen() {
             placeholderTextColor={colors.paloRosaLight}
             style={styles.input}
           />
-          <Text style={styles.ayuda}>
+          <Parrafo style={styles.ayuda}>
             Separa con comas. Las alergias no se editan aquí: esas las lleva tu perfil y nunca
             entran, ni por equivalencia.
-          </Text>
+          </Parrafo>
         </Card>
 
         <Pressable
@@ -269,14 +270,14 @@ export default function ReplantearDietaScreen() {
           <Card>
             <SectionLabel>Qué implica</SectionLabel>
             {resultado.lectura.length === 0 ? (
-              <Text style={styles.ayuda}>
+              <Parrafo style={styles.ayuda}>
                 Nada de lo que elegiste tiene letra chica: tu plan sigue el método de siempre.
-              </Text>
+              </Parrafo>
             ) : (
               resultado.lectura.map((linea) => (
-                <Text key={linea} style={styles.lectura}>
+                <Parrafo key={linea} style={styles.lectura}>
                   {linea}
-                </Text>
+                </Parrafo>
               ))
             )}
 

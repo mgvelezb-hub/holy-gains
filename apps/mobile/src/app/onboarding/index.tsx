@@ -6,6 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Card } from "@/components/Card";
 import { Chip } from "@/components/Chip";
 import { InfoTip, TextoInfo } from "@/components/InfoTip";
+import { Parrafo } from "@/components/Parrafo";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { SectionLabel } from "@/components/SectionLabel";
 import { Stepper } from "@/components/Stepper";
@@ -573,9 +574,9 @@ export default function OnboardingScreen() {
                   trackColor={{ true: colors.guinda, false: colors.cardBorder }}
                   thumbColor={colors.marfil}
                 />
-                <Text style={styles.switchLabel}>
+                <Parrafo style={styles.switchLabel}>
                   Autorizo analizar mis fotos con IA para comparar mis cambios semana a semana
-                </Text>
+                </Parrafo>
               </Pressable>
             </Card>
           </>
