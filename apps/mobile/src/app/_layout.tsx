@@ -27,6 +27,22 @@ SplashScreen.preventAutoHideAsync().catch(() => {
   // Puede fallar si ya se ocultó (fast refresh); no es un error real.
 });
 
+/**
+ * Sin handler, expo-notifications DESCARTA en silencio todo aviso local que
+ * se dispara con la app en primer plano: el "tu retroalimentación está lista"
+ * que sonaba mientras la persona seguía en Hoy nunca se veía. Se registra una
+ * vez, a nivel de módulo, antes de que cualquier aviso pueda llegar. En iOS
+ * 17+ `shouldShowAlert` ya no cuenta: son `shouldShowBanner` y `shouldShowList`.
+ */
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
+
 /** Hoy en local, que es la fecha con la que se registra una comida. */
 function hoyISO(): string {
   const ahora = new Date();
