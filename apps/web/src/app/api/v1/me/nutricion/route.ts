@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { apiUser, unauthorized } from "@/lib/api/auth";
+import { conPreferenciaDePreparaciones } from "@/lib/coachy/preparaciones";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -49,6 +50,13 @@ const schema = z
     fastingEndHour: z.number().int().min(0).max(23).nullable().optional(),
     /** Lo que la persona tiene, no lo que le recomendamos comprar. */
     supplements: z.array(z.enum(["WHEY", "CREATINA", "OMEGA3"])).max(3).optional(),
+    /**
+     * Qué platillos compuestos acepta el menú. Se guarda como marcas en los
+     * excluidos (`lib/coachy/preparaciones.ts`): no pisa los demás excluidos.
+     */
+    preparaciones: z
+      .object({ licuados: z.boolean(), sopas: z.boolean(), cremas: z.boolean() })
+      .optional(),
   })
   .refine((value) => Object.keys(value).length > 0, { message: "no hay nada que guardar" })
   .refine(
@@ -92,7 +100,15 @@ export async function PATCH(request: Request): Promise<NextResponse> {
     fastingStartHour,
     fastingEndHour,
     supplements,
+    preparaciones,
   } = parsed.data;
+
+  // Las marcas de preparación viven en los excluidos: se aplican sobre la
+  // lista que llega en esta misma petición, o sobre la guardada si no llega.
+  const excluidos =
+    preparaciones === undefined
+      ? excludedFoods
+      : conPreferenciaDePreparaciones(excludedFoods ?? user.profile.excludedFoods, preparaciones);
 
   const profile = await prisma.profile.update({
     where: { userId: user.id },
@@ -100,7 +116,7 @@ export async function PATCH(request: Request): Promise<NextResponse> {
       ...(budget !== undefined ? { budget } : {}),
       ...(maxPrepMin !== undefined ? { maxPrepMin } : {}),
       ...(favoriteFoods !== undefined ? { favoriteFoods } : {}),
-      ...(excludedFoods !== undefined ? { excludedFoods } : {}),
+      ...(excluidos !== undefined ? { excludedFoods: excluidos } : {}),
       ...(dietStyle !== undefined ? { dietStyle } : {}),
       ...(fastingStartHour !== undefined ? { fastingStartHour } : {}),
       ...(fastingEndHour !== undefined ? { fastingEndHour } : {}),

@@ -31,6 +31,26 @@ export interface MenuItemView {
    */
   display: string | null;
   why: MenuItemWhyView | null;
+  /** El platillo al que pertenece (licuado, sopa); ausente si va suelto. */
+  preparacionId?: string;
+}
+
+/** El platillo de una comida: "Licuado de fresa con avena". */
+export interface PreparacionView {
+  id: string;
+  nombre: string;
+  tipo: "licuado" | "sopa" | "crema" | "caldo";
+}
+
+const TIPOS_DE_PREPARACION = ["licuado", "sopa", "crema", "caldo"] as const;
+
+function toPreparacion(raw: unknown): PreparacionView | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const row = raw as Record<string, unknown>;
+  const tipo = String(row.tipo ?? "");
+  if (typeof row.id !== "string" || typeof row.nombre !== "string") return null;
+  if (!TIPOS_DE_PREPARACION.includes(tipo as PreparacionView["tipo"])) return null;
+  return { id: row.id, nombre: row.nombre, tipo: tipo as PreparacionView["tipo"] };
 }
 
 const MACROS_QUE_CIERRA = ["proteina", "carbo", "grasa", "fibra"] as const;
@@ -54,6 +74,8 @@ export interface MenuMealView {
   timeHint: string;
   allowDenseCarb: boolean;
   items: MenuItemView[];
+  /** El licuado o la sopa de la comida; sus ingredientes traen `preparacionId`. */
+  preparacion?: PreparacionView;
   equivalences: Array<{
     forName: string;
     options: Array<{
@@ -85,6 +107,8 @@ export interface GroceryItemView {
   portion?: string | null;
   /** Ya está en casa: se marca en vez de mandar a comprarlo otra vez. */
   enDespensa?: boolean;
+  /** Los platillos para los que se compra ("Crema de calabacita"). */
+  preparaciones?: string[];
 }
 
 /** El JSON del motor, aplanado a lo que necesita la vista. */
@@ -109,6 +133,7 @@ export function toMenuView(
       const equivalences = Array.isArray(meal.equivalences) ? meal.equivalences : [];
 
       const slot = String(meal.slot ?? "");
+      const preparacion = toPreparacion(meal.preparacion);
 
       return {
         slot,
@@ -128,8 +153,12 @@ export function toMenuView(
             portion: porcionNatural(name, grams),
             display: typeof row.display === "string" ? row.display : null,
             why: toWhy(row.why),
+            ...(preparacion && toPreparacion(row.preparacion)?.id === preparacion.id
+              ? { preparacionId: preparacion.id }
+              : {}),
           };
         }),
+        ...(preparacion ? { preparacion } : {}),
         equivalences: equivalences.map((equivalence) => {
           const row = equivalence as Record<string, unknown>;
           const options = Array.isArray(row.options) ? row.options : [];
@@ -168,6 +197,9 @@ export function toGroceries(json: Prisma.JsonValue): GroceryItemView[] {
       unit: String(item.unit ?? ""),
       portion: porcionNatural(name, grams),
       ...(item.enDespensa === true ? { enDespensa: true } : {}),
+      ...(Array.isArray(item.preparaciones) && item.preparaciones.length > 0
+        ? { preparaciones: item.preparaciones.map(String) }
+        : {}),
     };
   });
 }

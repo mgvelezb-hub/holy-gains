@@ -16,6 +16,8 @@ export interface MenuItemView {
   /** "1 taza de arroz integral cocido (160 g)". `null` en menús viejos. */
   display?: string | null;
   why?: { closes: "proteina" | "carbo" | "grasa" | "fibra" } | null;
+  /** El platillo al que pertenece (licuado, sopa); ausente si va suelto. */
+  preparacionId?: string;
 }
 
 /** Lo que ese alimento viene a cerrar, dicho como lo diría el dueño. */
@@ -32,6 +34,8 @@ export interface MenuMealView {
   timeHint: string;
   allowDenseCarb: boolean;
   items: MenuItemView[];
+  /** El licuado o la sopa de la comida: sus ingredientes se pintan agrupados. */
+  preparacion?: { id: string; nombre: string };
   equivalences: Array<{ forName: string; options: Array<{ name: string; grams: number }> }>;
 }
 
@@ -44,6 +48,23 @@ export interface GroceryItemView {
   name: string;
   grams: number;
   unit: string;
+  /** Los platillos para los que se compra ("Crema de calabacita"). */
+  preparaciones?: string[];
+}
+
+function Item({ item }: { item: MenuItemView }): React.JSX.Element {
+  return (
+    <li className="flex justify-between gap-3">
+      {/* La cantidad se lee en la unidad en que se sirve —"1 taza de
+          arroz (160 g)"—; los gramos siguen ahí, ya no van primero. */}
+      <span title={item.why ? CIERRA[item.why.closes] : undefined}>
+        {item.display ?? item.name}
+      </span>
+      <span className="shrink-0 tabular-nums text-muted-foreground">
+        {item.free ? "libre" : item.display ? "" : `${item.grams} g`}
+      </span>
+    </li>
+  );
 }
 
 function Meal({ meal }: { meal: MenuMealView }): React.JSX.Element {
@@ -55,18 +76,25 @@ function Meal({ meal }: { meal: MenuMealView }): React.JSX.Element {
       </div>
 
       <ul className="space-y-1 text-sm">
-        {meal.items.map((item) => (
-          <li key={item.name} className="flex justify-between gap-3">
-            {/* La cantidad se lee en la unidad en que se sirve —"1 taza de
-                arroz (160 g)"—; los gramos siguen ahí, ya no van primero. */}
-            <span title={item.why ? CIERRA[item.why.closes] : undefined}>
-              {item.display ?? item.name}
-            </span>
-            <span className="shrink-0 tabular-nums text-muted-foreground">
-              {item.free ? "libre" : item.display ? "" : `${item.grams} g`}
-            </span>
+        {/* El platillo va primero, con su nombre y sus ingredientes debajo:
+            "Licuado de fresa con avena" se prepara junto, no por renglón. */}
+        {meal.preparacion ? (
+          <li>
+            <p className="font-medium">{meal.preparacion.nombre}</p>
+            <ul className="mt-1 space-y-1 border-l pl-3">
+              {meal.items
+                .filter((item) => item.preparacionId === meal.preparacion?.id)
+                .map((item) => (
+                  <Item key={item.name} item={item} />
+                ))}
+            </ul>
           </li>
-        ))}
+        ) : null}
+        {meal.items
+          .filter((item) => !meal.preparacion || item.preparacionId !== meal.preparacion.id)
+          .map((item) => (
+            <Item key={item.name} item={item} />
+          ))}
       </ul>
 
       {meal.equivalences.length > 0 ? (
@@ -126,7 +154,15 @@ export function MealPlanView({
         <ul className="space-y-1 text-sm">
           {groceries.map((item) => (
             <li key={item.name} className="flex justify-between gap-3 border-b py-1">
-              <span>{item.name}</span>
+              <span>
+                {item.name}
+                {item.preparaciones && item.preparaciones.length > 0 ? (
+                  <span className="text-xs text-muted-foreground">
+                    {" "}
+                    · para {item.preparaciones.join(", ").toLowerCase()}
+                  </span>
+                ) : null}
+              </span>
               <span className="shrink-0 tabular-nums text-muted-foreground">
                 {item.grams} g {item.unit ? `· ${item.unit}` : ""}
               </span>

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { apiUser, unauthorized } from "@/lib/api/auth";
 import { parsePantry } from "@/lib/coachy/mapping";
+import { preferenciaDePreparaciones } from "@/lib/coachy/preparaciones";
 import { decimalToNumber } from "@/lib/format";
 import { parseDisciplineLoads, parseTimePerDay, parseUnilateralMode } from "@/lib/training/db";
 import { normalizeCustomSplit } from "@/lib/training/split";
@@ -52,6 +53,9 @@ export async function GET(request: Request): Promise<NextResponse> {
           // marcado y el renglón de Ajustes cuenta cuántos alimentos son.
           pantry: parsePantry(profile.pantry),
           excludedFoods: profile.excludedFoods,
+          // Licuados, sopas y cremas: se leen de los excluidos (ver
+          // `lib/coachy/preparaciones.ts`); Ajustes pinta los interruptores.
+          preparaciones: preferenciaDePreparaciones(profile.excludedFoods),
           avoidRepeatGroups: profile.avoidRepeatGroups,
           primaryDiscipline: profile.primaryDiscipline,
           otherDisciplines: parseDisciplineLoads(profile.otherDisciplines),

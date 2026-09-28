@@ -2,6 +2,10 @@ import type { CheckIn, Profile } from "@prisma/client";
 import { DEFAULT_CONFIG, SUPPLEMENTS, loadConfig } from "engine";
 
 import { decimalToNumber } from "@/lib/format";
+import {
+  preferenciaDePreparaciones,
+  sinMarcasDePreparacion,
+} from "@/lib/coachy/preparaciones";
 import { palAdjustment, type ActivityWindow, type PalAdjustment } from "@/lib/health/activity";
 import type { DietStyle } from "@prisma/client";
 import type {
@@ -148,7 +152,12 @@ export function toEngineProfile(profile: Profile, latestWeightKg?: number | null
     // se elige primero, para que la despensa de la semana pasada no quede sin
     // uso cuando el motor rota alimentos.
     pantry: parsePantry(profile.pantry),
-    excludedFoods: [...profile.excludedFoods, ...profile.allergies],
+    // Las marcas de preparación ("licuados") no son alimentos: salen de aquí
+    // y entran como `preparaciones` abajo.
+    excludedFoods: [...sinMarcasDePreparacion(profile.excludedFoods), ...profile.allergies],
+    // Qué platillos compuestos acepta el menú. No hay columna: vive en los
+    // excluidos, donde "no me des licuados" ya significa eso.
+    preparaciones: preferenciaDePreparaciones(profile.excludedFoods),
     allergies: profile.allergies,
     // Tope de tiempo de cocina. El motor lo trata como preferencia: si deja un
     // rol sin candidatos, prefiere darte de comer a respetar el tope.
