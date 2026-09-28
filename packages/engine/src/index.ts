@@ -57,16 +57,20 @@ export { PREPARACIONES } from './preparaciones.js';
 export {
   CATALOGO_SUPLEMENTOS,
   SUPPLEMENTS,
+  dosisCafeinaMg,
   esSuplemento,
   fichaDe,
   pautasDeSuplementos,
   permitePolvos,
+  resumenTomas,
+  tomasDeHoy,
   type AnclaSuplemento,
   type CategoriaSuplemento,
   type FichaSuplemento,
   type ObjetivoSuplemento,
   type PautaSuplemento,
   type Supplement,
+  type TomaDelDia,
 } from './suplementos.js';
 export {
   DIAS_DESCARTE,

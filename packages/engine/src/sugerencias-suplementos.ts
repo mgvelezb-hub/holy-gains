@@ -1,4 +1,4 @@
-import { fichaDe, esSuplemento, type FichaSuplemento, type ObjetivoSuplemento, type Supplement } from './suplementos.js';
+import { dosisCafeinaMg, fichaDe, esSuplemento, type FichaSuplemento, type ObjetivoSuplemento, type Supplement } from './suplementos.js';
 import type { DietStyle, Phase } from './types.js';
 
 /**
@@ -144,9 +144,8 @@ const UMBRAL = {
   cardioLargoMin: 45,
   /** kcal por debajo de las cuales la comida deja huecos de micronutrientes. */
   kcalBaja: 1600,
-  /** FDA: 400 mg/dia de cafeina en adultos sanos. */
+  /** FDA: 400 mg/dia de cafeina en adultos sanos (la dosis sale de `dosisCafeinaMg`). */
   cafeinaTopeMg: 400,
-  cafeinaMgKg: 3,
 };
 
 const LABS_VITAMINA_D = ['vitamina_d', 'vit_d', '25oh', '25_oh', 'calcidiol'];
@@ -490,7 +489,7 @@ export function sugerirSuplementos(input: EntradaSugerencias): ResultadoSugerenc
     });
   }
   if (input.entrenaTemprano && !suenoCorto) {
-    const mg = Math.min(Math.round((UMBRAL.cafeinaMgKg * input.pesoKg) / 10) * 10, UMBRAL.cafeinaTopeMg);
+    const mg = dosisCafeinaMg(input.pesoKg);
     suma({
       supplement: 'CAFEINA',
       prioridad: 30,

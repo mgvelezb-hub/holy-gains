@@ -1,5 +1,5 @@
 import catalogoData from '../data/suplementos.json';
-import type { MacroTargets, Phase, Profile } from './types.js';
+import type { MacroTargets, MealSlotId, Phase, Profile } from './types.js';
 
 /**
  * Los suplementos del dia — logica PURA.
@@ -122,14 +122,21 @@ export function esSuplemento(valor: string): valor is Supplement {
 
 export type PautaSuplemento = {
   supplement: Supplement;
+  categoria: CategoriaSuplemento;
   /** Como se llama en la lista. */
   nombre: string;
+  /** Como se dice en un aviso: "+ omega-3". */
+  corto: string;
   /** Cuanto: "5 g", "1 medida (30 g)". */
   dosis: string;
-  /** Cuando: "cualquier hora", "con la comida", "despues de entrenar". */
+  /** Cuando, dicho: "con la comida", "30 min antes de dormir". */
   momento: string;
+  /** A que comida (o momento) se amarra. */
+  ancla: AnclaSuplemento;
   /** Por que, en una linea. Sin esto es una instruccion sin razon. */
   porque: string;
+  evidencia: string;
+  tope: string;
 };
 
 /**
@@ -149,54 +156,190 @@ const FASES_CON_POLVO: readonly Phase[] = ['CUT', 'CUT_AGRESIVO', 'REFEED'];
  */
 const PROTEINA_ALTA_G = 150;
 
+/** FDA: 400 mg/dia de cafeina en adultos sanos. ISSN: 3-6 mg/kg; se parte del piso. */
+const CAFEINA_TOPE_MG = 400;
+const CAFEINA_MG_KG = 3;
+
+/** mg de cafeina para este peso: 3 mg/kg, redondeado a 10 mg y con tope. */
+export function dosisCafeinaMg(pesoKg: number): number {
+  return Math.min(Math.round((CAFEINA_MG_KG * pesoKg) / 10) * 10, CAFEINA_TOPE_MG);
+}
+
+/**
+ * La pauta de lo que la persona toma: dosis, momento anclado a una comida y
+ * porque. Solo lo declarado o aceptado — lo sugerido vive aparte hasta que la
+ * persona dice que si.
+ *
+ * El orden es el del catalogo, que es estable: la lista no baila entre dias.
+ */
 export function pautasDeSuplementos(input: {
   profile: Profile;
   macros: MacroTargets;
   phase: Phase;
 }): PautaSuplemento[] {
-  const tiene = new Set(input.profile.supplements ?? []);
+  const tiene = new Set<string>(input.profile.supplements ?? []);
   const pautas: PautaSuplemento[] = [];
 
-  if (tiene.has('CREATINA')) {
-    pautas.push({
-      supplement: 'CREATINA',
-      nombre: 'Creatina monohidratada',
-      dosis: '5 g',
-      // La creatina se acumula en el musculo: lo que importa es tomarla todos
-      // los dias, no la hora. Prescribir un horario exacto sugiere una
-      // precision que el suplemento no tiene.
-      momento: 'a cualquier hora, todos los dias',
-      porque: 'Sostiene la fuerza en series largas. Funciona por acumulacion, no por el momento.',
-    });
-  }
+  for (const ficha of CATALOGO_SUPLEMENTOS) {
+    if (!tiene.has(ficha.id)) continue;
 
-  if (tiene.has('OMEGA3')) {
-    pautas.push({
-      supplement: 'OMEGA3',
-      nombre: 'Omega-3 (aceite de pescado)',
-      dosis: '1 a 2 capsulas',
-      momento: 'con una comida que tenga grasa',
-      porque: 'Se absorbe mejor con grasa. En ayunas se aprovecha menos y suele repetir.',
-    });
-  }
+    const base: PautaSuplemento = {
+      supplement: ficha.id,
+      categoria: ficha.categoria,
+      nombre: ficha.nombre,
+      corto: ficha.corto,
+      dosis: ficha.dosisTexto,
+      momento: ficha.momento,
+      ancla: ficha.ancla,
+      porque: ficha.porque,
+      evidencia: ficha.evidencia,
+      tope: ficha.tope,
+    };
 
-  if (tiene.has('WHEY')) {
-    const proteinaAlta = input.macros.proteinG >= PROTEINA_ALTA_G;
-    const faseExigente = FASES_CON_POLVO.includes(input.phase);
-
-    pautas.push({
-      supplement: 'WHEY',
-      nombre: 'Proteina en polvo',
-      dosis: '1 medida (30 g)',
-      momento: faseExigente || proteinaAlta ? 'despues de entrenar' : 'cuando no alcances con comida',
-      porque:
-        faseExigente || proteinaAlta
-          ? `Tu objetivo de ${Math.round(input.macros.proteinG)} g de proteina cuesta llegar solo con comida entera.`
+    if (ficha.id === 'WHEY') {
+      const proteinaAlta = input.macros.proteinG >= PROTEINA_ALTA_G;
+      const faseExigente = FASES_CON_POLVO.includes(input.phase);
+      const exigente = faseExigente || proteinaAlta;
+      pautas.push({
+        ...base,
+        momento: exigente ? 'después de entrenar' : 'cuando no alcances con comida',
+        ancla: exigente ? 'POST_ENTRENO' : 'LIBRE',
+        porque: exigente
+          ? `Tu objetivo de ${Math.round(input.macros.proteinG)} g de proteína cuesta llegar solo con comida entera.`
           : 'Es un recurso, no un requisito: con tu objetivo de hoy la comida entera alcanza.',
-    });
+      });
+      continue;
+    }
+
+    if (ficha.id === 'CAFEINA') {
+      pautas.push({ ...base, dosis: `${dosisCafeinaMg(input.profile.weightKg)} mg (3 mg/kg)` });
+      continue;
+    }
+
+    pautas.push(base);
   }
 
   return pautas;
+}
+
+// ---------------------------------------------------------------------------
+// Tomas de hoy
+// ---------------------------------------------------------------------------
+
+export interface TomaDelDia {
+  supplement: Supplement;
+  categoria: CategoriaSuplemento;
+  nombre: string;
+  corto: string;
+  dosis: string;
+  /** La comida a la que se amarra; `null` si el ancla no es comida (dormir, entreno). */
+  slot: MealSlotId | null;
+  /** Cuando, dicho: "con la comida". */
+  cuando: string;
+  hecho: boolean;
+}
+
+/**
+ * A que comida del dia cae cada ancla.
+ *
+ * Los menus no siempre traen desayuno, comida y cena con esos nombres (quien
+ * entrena de tarde tiene "Cena (post-entreno)" como `POST`), asi que cada
+ * ancla tiene su respaldo: el desayuno es la primera comida, la cena la
+ * ultima, la comida la de en medio.
+ */
+function slotDeAncla(ancla: AnclaSuplemento, slots: readonly MealSlotId[]): MealSlotId | null {
+  if (slots.length === 0) return null;
+  const tiene = (s: MealSlotId) => (slots.includes(s) ? s : null);
+  switch (ancla) {
+    case 'DESAYUNO':
+      return tiene('DESAYUNO') ?? tiene('PRE') ?? slots[0]!;
+    case 'COMIDA':
+      return tiene('COMIDA') ?? slots[Math.floor(slots.length / 2)]!;
+    case 'CENA':
+      return tiene('CENA') ?? slots[slots.length - 1]!;
+    case 'MEDIA_MANANA': {
+      // La segunda comida, si va antes de la comida fuerte.
+      const comida = slots.indexOf('COMIDA');
+      const segunda = slots[1];
+      if (segunda && segunda !== 'COMIDA' && segunda !== 'CENA' && (comida === -1 || comida > 1)) return segunda;
+      return null;
+    }
+    case 'PRE_ENTRENO':
+      return tiene('PRE');
+    case 'POST_ENTRENO':
+      return tiene('POST');
+    default:
+      return null;
+  }
+}
+
+/** Orden en el dia: las comidas por su lugar, dormir al final. */
+function ordenDe(ancla: AnclaSuplemento, slot: MealSlotId | null, slots: readonly MealSlotId[]): number {
+  if (slot) return slots.indexOf(slot) * 10 + 1;
+  switch (ancla) {
+    case 'LIBRE':
+      return 0;
+    case 'PRE_ENTRENO':
+      return 5;
+    case 'ENTRENO':
+      return 12;
+    case 'POST_ENTRENO':
+      return 14;
+    case 'DORMIR':
+      return 1000;
+    default:
+      return 500;
+  }
+}
+
+/**
+ * Las tomas del dia, amarradas a las comidas del menu y con lo ya registrado.
+ *
+ * `slots` va en el orden del dia (el del menu vigente). `logs` son los
+ * `SupplementLog` de hoy.
+ */
+export function tomasDeHoy(input: {
+  pautas: PautaSuplemento[];
+  slots: readonly MealSlotId[];
+  logs: Array<{ supplement: string; taken: boolean }>;
+}): TomaDelDia[] {
+  const hechas = new Set(input.logs.filter((l) => l.taken).map((l) => l.supplement));
+  return input.pautas
+    .map((p, i) => {
+      const slot = slotDeAncla(p.ancla, input.slots);
+      return {
+        orden: ordenDe(p.ancla, slot, input.slots),
+        i,
+        toma: {
+          supplement: p.supplement,
+          categoria: p.categoria,
+          nombre: p.nombre,
+          corto: p.corto,
+          dosis: p.dosis,
+          slot,
+          cuando: p.momento,
+          hecho: hechas.has(p.supplement),
+        } satisfies TomaDelDia,
+      };
+    })
+    .sort((a, b) => a.orden - b.orden || a.i - b.i)
+    .map((x) => x.toma);
+}
+
+/** La linea de la tarjeta de Hoy: "1 de 3 · siguiente: omega-3 con la comida". */
+export function resumenTomas(tomas: TomaDelDia[]): {
+  hechas: number;
+  total: number;
+  siguiente: TomaDelDia | null;
+  linea: string;
+} {
+  const total = tomas.length;
+  const hechas = tomas.filter((t) => t.hecho).length;
+  const siguiente = tomas.find((t) => !t.hecho) ?? null;
+  let linea = 'Sin tomas';
+  if (total > 0 && !siguiente) linea = `${hechas} de ${total} · listo por hoy`;
+  else if (siguiente) linea = `${hechas} de ${total} · siguiente: ${siguiente.corto} ${siguiente.cuando}`;
+  return { hechas, total, siguiente, linea };
 }
 
 /**
