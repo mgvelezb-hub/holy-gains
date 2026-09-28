@@ -29,10 +29,12 @@ import {
 import { iconoDe } from "@/lib/disciplinas";
 import {
   RECORTES,
+  diaDelPlan,
   etiquetaDelDia,
   lineaDelDia,
   nombreDelRecorte,
   ordenarBloquesDelDia,
+  partesDelDia,
   type BloqueDelDia,
 } from "@/lib/entrenamiento";
 import { fonts, radius, spacing, withAlpha, type Palette, type as typeScale } from "@/lib/theme";
@@ -914,6 +916,9 @@ function WeekOverview({
           const daySession = week.sessions.find((entry) => entry.date === date) ?? null;
           const dayOthers = week.otherSessions?.filter((entry) => entry.date === date) ?? [];
           const bloques = ordenarBloquesDelDia(daySession, dayOthers);
+          // I1: la línea del día sale de la semana canónica del servidor —la
+          // misma que el Resumen y Ajustes— con el "+ Cardio" incluido.
+          const delPlan = diaDelPlan(week.plan, date);
           const isToday = date === today;
           const isSelected = date === selectedDate;
           const done = daySession?.completedAt != null;
@@ -936,6 +941,16 @@ function WeekOverview({
               <View style={styles.weekInfo}>
                 {bloques.length === 0 ? (
                   <Text style={styles.weekRest}>Descanso</Text>
+                ) : delPlan?.gym ? (
+                  <>
+                    <Text style={styles.weekMuscle}>{partesDelDia(delPlan).titulo}</Text>
+                    <Text style={styles.weekMeta}>
+                      {partesDelDia(delPlan).detalle}
+                      {daySession?.trimmedMinutes
+                        ? ` · ${nombreDelRecorte(daySession.trimmedMinutes).toLowerCase()}`
+                        : ""}
+                    </Text>
+                  </>
                 ) : bloques.length === 2 ? (
                   // Dos bloques: el título es el orden completo del día
                   // ("Squash → Natación"), y el detalle de cada uno va junto,

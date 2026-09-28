@@ -145,3 +145,18 @@ describe("lineaDelDia: gym + cardio después (H2)", () => {
     expect(lineaDelDia(ordenarBloquesDelDia(GYM, [otra()]))).toBe(etiquetaDelDia(ordenarBloquesDelDia(GYM, [otra()])));
   });
 });
+
+describe("partesDelDia (I1)", () => {
+  it("parte la línea del servidor en título y detalle", async () => {
+    const { partesDelDia, diaDelPlan } = await import("@/lib/entrenamiento");
+    expect(
+      partesDelDia({
+        gym: { muscleGroup: "Pierna · cuádriceps" },
+        linea: "Pierna · cuádriceps · 6 ejercicios · + Cardio HIIT 20 min",
+      }),
+    ).toEqual({ titulo: "Pierna · cuádriceps", detalle: "6 ejercicios · + Cardio HIIT 20 min" });
+    expect(partesDelDia({ gym: null, linea: "Natación 45 min" })).toEqual({ titulo: "Natación 45 min", detalle: "" });
+    expect(diaDelPlan(undefined, "2026-09-28")).toBeNull();
+    expect(diaDelPlan([{ date: "2026-09-28" }], "2026-09-28")).toEqual({ date: "2026-09-28" });
+  });
+});

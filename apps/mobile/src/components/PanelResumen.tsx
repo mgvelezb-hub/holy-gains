@@ -29,6 +29,7 @@ import { Parrafo } from "@/components/Parrafo";
 import { RadarChart, type Eje } from "@/components/RadarChart";
 import { ScoreTile } from "@/components/ScoreTile";
 import { useTheme } from "@/context/theme";
+import { diaDelPlan } from "@/lib/entrenamiento";
 import { iconoDe } from "@/lib/disciplinas";
 import {
   DISCIPLINE_LABELS,
@@ -666,7 +667,9 @@ export function PanelResumen({
                   {sesion.date.slice(8)}/{sesion.date.slice(5, 7)}
                 </Text>
                 <Text style={styles.filaSemanaGrupo} numberOfLines={1}>
-                  {sesion.muscleGroup}
+                  {/* I1: la línea de la semana canónica ("… · 6 ejercicios ·
+                      + Cardio HIIT 20 min"), la misma que Rutinas. */}
+                  {diaDelPlan(datos.week?.plan, sesion.date)?.linea ?? sesion.muscleGroup}
                 </Text>
                 <Text
                   style={[

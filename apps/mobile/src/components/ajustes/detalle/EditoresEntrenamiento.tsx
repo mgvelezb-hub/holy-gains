@@ -275,7 +275,10 @@ export function diasResumenDe(semana: WeekView | null): DiaResumen[] {
     const otrasDia = semana.otherSessions?.filter((otra) => otra.date === date) ?? [];
     const bloques: Array<BloqueDelDia<SessionView>> = ordenarBloquesDelDia(gym, otrasDia);
     if (bloques.length === 0) continue;
-    dias.push({ date, abrev: weekdayAbbrOf(date), etiqueta: lineaDelDia(bloques) });
+    // I1: la línea de la semana canónica del servidor —la misma de Rutinas y
+    // el Resumen—; la armada aquí solo para semanas cacheadas sin `plan`.
+    const delPlan = semana.plan?.find((dia) => dia.date === date);
+    dias.push({ date, abrev: weekdayAbbrOf(date), etiqueta: delPlan?.linea ?? lineaDelDia(bloques) });
   }
   return dias;
 }

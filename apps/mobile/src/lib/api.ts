@@ -771,6 +771,12 @@ export type WeekView = {
    * cacheada antes de la Fase 3 no los trae.
    */
   avisos?: string[];
+  /**
+   * La semana día por día en el formato común (I1): la misma línea en
+   * Rutinas, Ajustes "Tu semana", el Resumen y Hoy. Opcional: una semana
+   * cacheada antes no la trae y cada pantalla cae a su lectura de siempre.
+   */
+  plan?: DiaDelPlan[];
 };
 
 /**
@@ -1341,7 +1347,11 @@ export function postRegenerarMenu(): Promise<NutritionResponse> {
 }
 
 /** Lo que devuelve `POST /api/v1/nutricion/swap`. */
-export type SwapResponse = { menu: Menu };
+export type SwapResponse = {
+  menu: Menu;
+  /** El alimento elegido ya estaba en la comida: se sumó a su renglón (y si se topó). */
+  aviso?: string;
+};
 
 /**
  * Elige una equivalencia y la deja guardada: el item cambia en el menú, y la
@@ -2409,5 +2419,104 @@ export function patchEjercicioPrefs(
   return apiFetch<{ prefs: Record<string, MontajeDeEjercicio> }>("/api/v1/me/ejercicio-prefs", {
     method: "PATCH",
     body: { exerciseId, ...montaje },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// I1 — la semana canónica y el replanteo con vista previa
+// ---------------------------------------------------------------------------
+
+/** Un día de la semana canónica (`diasDelPlan` en la web). */
+export type DiaDelPlan = {
+  date: string;
+  weekday: string;
+  minutosDeclarados: number | null;
+  gym: {
+    dayKind: string;
+    muscleGroup: string;
+    ejercicios: number;
+    minutos: number | null;
+    recortada: number | null;
+  } | null;
+  bloques: Array<{ discipline: Discipline; etiqueta: string; minutes: number; orden: 1 | 2 }>;
+  /** "Pierna · cuádriceps · 6 ejercicios · + Cardio HIIT 20 min", o "Descanso". */
+  linea: string;
+};
+
+export type ModoDisciplina = "DESPUES" | "DIA_PROPIO";
+
+/** Lo que se puede cambiar de una secundaria sin salir del replanteo. */
+export type AccionReplan = {
+  discipline: Discipline;
+  modo: ModoDisciplina;
+  alternativa: { modo: ModoDisciplina; texto: string };
+};
+
+export type ReplanSemanaResponse = ReplanResponse & {
+  /** La semana que queda, día por día. */
+  semana: DiaDelPlan[];
+  acciones: AccionReplan[];
+  /** `true` si fue vista previa: no se guardó nada. */
+  preview?: boolean;
+};
+
+export type EntradaReplanSemana = {
+  tiempo: Record<string, number>;
+  primaria: Discipline;
+  sesionesPrimaria: number;
+  secundarias: Array<{
+    discipline: Discipline;
+    proposito: string;
+    importancia: number;
+    modo?: ModoDisciplina;
+  }>;
+  ageRange?: string | null;
+};
+
+/**
+ * `POST /api/v1/training/replan` con la semana resultante. Con `preview` no
+ * escribe nada: es lo que la pantalla pide en vivo mientras se contesta.
+ */
+export function postReplanSemana(
+  input: EntradaReplanSemana,
+  preview: boolean,
+): Promise<ReplanSemanaResponse> {
+  return apiFetch<ReplanSemanaResponse>(`/api/v1/training/replan${preview ? "?preview=1" : ""}`, {
+    method: "POST",
+    body: input,
+  });
+}
+
+/** Un platillo por el que se puede cambiar el de una comida (sopa por sopa). */
+export type OpcionPlatillo = {
+  id: string;
+  nombre: string;
+  tipo: "licuado" | "sopa" | "crema" | "caldo";
+  /** Los macros con que quedaría la comida completa. */
+  totals: { kcal: number; proteinG: number; carbG: number; fatG: number; fiberG: number };
+};
+
+/** `GET /api/v1/meals/cambiar-preparacion` — las opciones del platillo de esa comida. */
+export function getOpcionesPlatillo(
+  menuNumber: number,
+  slot: string,
+): Promise<{ opciones: OpcionPlatillo[] }> {
+  return apiFetch<{ opciones: OpcionPlatillo[] }>(
+    `/api/v1/meals/cambiar-preparacion?menuNumber=${menuNumber}&slot=${encodeURIComponent(slot)}`,
+  );
+}
+
+/**
+ * `POST /api/v1/meals/cambiar-preparacion` — cambia el platillo entero: todos
+ * sus ingredientes se reemplazan y lo que acompaña ajusta sus gramos.
+ */
+export function postCambiarPlatillo(input: {
+  menuNumber: number;
+  slot: string;
+  preparacionId: string;
+}): Promise<SwapResponse> {
+  return apiFetch<SwapResponse>("/api/v1/meals/cambiar-preparacion", {
+    method: "POST",
+    body: input,
   });
 }

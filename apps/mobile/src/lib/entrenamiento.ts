@@ -319,3 +319,23 @@ export function textoCardio(otra: OtherSessionView): string {
   return `${etiqueta} · ${otra.minutes} min`;
 }
 
+/**
+ * El día de la semana canónica (I1) partido en título y detalle, para las
+ * filas de Rutinas y el Resumen: "Pierna · cuádriceps" / "6 ejercicios · +
+ * Cardio HIIT 20 min". Sale de `linea`, que escribe el servidor, para que
+ * ninguna pantalla vuelva a contar la semana a su manera.
+ */
+export function partesDelDia(dia: { gym: { muscleGroup: string } | null; linea: string }): {
+  titulo: string;
+  detalle: string;
+} {
+  if (!dia.gym) return { titulo: dia.linea, detalle: "" };
+  const prefijo = `${dia.gym.muscleGroup} · `;
+  const detalle = dia.linea.startsWith(prefijo) ? dia.linea.slice(prefijo.length) : dia.linea;
+  return { titulo: dia.gym.muscleGroup, detalle };
+}
+
+/** El día de `plan` para una fecha, si la semana lo trae (las cacheadas viejas no). */
+export function diaDelPlan<T extends { date: string }>(plan: T[] | undefined, date: string): T | null {
+  return plan?.find((dia) => dia.date === date) ?? null;
+}

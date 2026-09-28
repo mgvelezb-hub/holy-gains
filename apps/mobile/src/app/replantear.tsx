@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Check, ChevronLeft } from "lucide-react-native";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -14,10 +14,12 @@ import {
   ApiError,
   DISCIPLINE_LABELS,
   getMe,
-  postReplan,
+  postReplanSemana,
+  type AccionReplan,
   type Discipline,
   type MeResponse,
-  type ReplanResponse,
+  type ModoDisciplina,
+  type ReplanSemanaResponse,
 } from "@/lib/api";
 import { iconoDe } from "@/lib/disciplinas";
 import {
@@ -58,11 +60,16 @@ export default function ReplantearScreen() {
   const [primaria, setPrimaria] = useState<Discipline>("PESAS");
   const [sesionesPrimaria, setSesionesPrimaria] = useState(3);
   const [secundarias, setSecundarias] = useState<
-    Array<{ discipline: Discipline; proposito: Proposito; importancia: number }>
+    Array<{ discipline: Discipline; proposito: Proposito; importancia: number; modo?: ModoDisciplina }>
   >([]);
 
-  const [resultado, setResultado] = useState<ReplanResponse | null>(null);
+  // I1: la semana se ve MIENTRAS se contesta. Cada cambio pide una vista
+  // previa (no escribe nada) y "Guardar" guarda justo eso.
+  const [previa, setPrevia] = useState<ReplanSemanaResponse | null>(null);
+  const [calculando, setCalculando] = useState(false);
+  const [guardada, setGuardada] = useState(false);
   const [guardando, setGuardando] = useState(false);
+  const turno = useRef(0);
 
   const cargar = useCallback(async () => {
     try {
@@ -114,21 +121,55 @@ export default function ReplantearScreen() {
     );
   }
 
-  async function calcular() {
+  function cambiarModo(discipline: Discipline, modo: ModoDisciplina) {
+    setSecundarias((previas) =>
+      previas.map((entrada) => (entrada.discipline === discipline ? { ...entrada, modo } : entrada)),
+    );
+  }
+
+  const totalMinutos = DIAS_SEMANA.reduce((suma, dia) => suma + (tiempo[dia.valor] ?? 0), 0);
+  const respuestas = useMemo(
+    () => ({ tiempo, primaria, sesionesPrimaria, secundarias, ageRange: rangoEdad }),
+    [tiempo, primaria, sesionesPrimaria, secundarias, rangoEdad],
+  );
+
+  // Vista previa en vivo: espera a que se deje de tocar (350 ms) y descarta
+  // respuestas viejas si llegan tarde.
+  useEffect(() => {
+    if (!me || totalMinutos === 0) {
+      setPrevia(null);
+      return;
+    }
+    setGuardada(false);
+    const mio = ++turno.current;
+    const espera = setTimeout(() => {
+      setCalculando(true);
+      postReplanSemana(respuestas, true)
+        .then((respuesta) => {
+          if (mio !== turno.current) return;
+          setPrevia(respuesta);
+          setError(null);
+        })
+        .catch((err: unknown) => {
+          if (mio === turno.current) {
+            setError(err instanceof ApiError ? err.message : "No se pudo calcular tu semana");
+          }
+        })
+        .finally(() => {
+          if (mio === turno.current) setCalculando(false);
+        });
+    }, 350);
+    return () => clearTimeout(espera);
+  }, [me, respuestas, totalMinutos]);
+
+  async function guardar() {
     setGuardando(true);
     setError(null);
     try {
-      setResultado(
-        await postReplan({
-          tiempo,
-          primaria,
-          sesionesPrimaria,
-          secundarias,
-          ageRange: rangoEdad,
-        }),
-      );
+      setPrevia(await postReplanSemana(respuestas, false));
+      setGuardada(true);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "No se pudo armar tu semana");
+      setError(err instanceof ApiError ? err.message : "No se pudo guardar tu semana");
     } finally {
       setGuardando(false);
     }
@@ -138,7 +179,6 @@ export default function ReplantearScreen() {
   if (!me) return <LoadingState label="Cargando tu perfil..." />;
 
   const pideEdad = !me.profile?.heightCm ? false : me.profile?.ageRange === undefined;
-  const totalMinutos = DIAS_SEMANA.reduce((suma, dia) => suma + (tiempo[dia.valor] ?? 0), 0);
 
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
@@ -343,62 +383,86 @@ export default function ReplantearScreen() {
             })}
         </Card>
 
-        <Pressable
-          onPress={calcular}
-          disabled={guardando || totalMinutos === 0}
-          style={[styles.boton, (guardando || totalMinutos === 0) && styles.botonOff]}
-        >
-          <Text style={styles.botonTexto}>
-            {guardando ? "Armando..." : resultado ? "Volver a armar" : "Armar mi semana"}
-          </Text>
-        </Pressable>
-
-        {totalMinutos === 0 && (
-          <Text style={styles.ayuda}>Elige cuánto tiempo tienes antes de armar la semana.</Text>
+        {totalMinutos === 0 ? (
+          <Text style={styles.ayuda}>Elige cuánto tiempo tienes y tu semana aparece aquí.</Text>
+        ) : previa ? (
+          <Resultado
+            resultado={previa}
+            calculando={calculando}
+            guardada={guardada}
+            onAccion={cambiarModo}
+          />
+        ) : (
+          <Text style={styles.ayuda}>Armando tu semana...</Text>
         )}
 
         {error && <Text style={styles.errorTexto}>{error}</Text>}
 
-        {resultado && <Resultado resultado={resultado} onVer={() => router.replace("/rutinas")} />}
+        {previa && !guardada && (
+          <Pressable
+            onPress={guardar}
+            disabled={guardando || calculando}
+            style={[styles.boton, (guardando || calculando) && styles.botonOff]}
+          >
+            <Text style={styles.botonTexto}>{guardando ? "Guardando..." : "Guardar esta semana"}</Text>
+          </Pressable>
+        )}
+
+        {guardada && (
+          <Pressable onPress={() => router.replace("/rutinas")} style={styles.boton}>
+            <Text style={styles.botonTexto}>Ver mis rutinas</Text>
+          </Pressable>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-/** La semana que salió, con lo que no cupo dicho en voz alta. */
+/**
+ * La semana que sale de estas respuestas, en vivo: la misma línea que después
+ * se ve en Rutinas y en el Resumen ("LUN · Pierna · cuádriceps · 6 ejercicios
+ * · + Cardio HIIT 20 min"). Lo que no cupo se dice, y la salida va ahí mismo.
+ */
 function Resultado({
   resultado,
-  onVer,
+  calculando,
+  guardada,
+  onAccion,
 }: {
-  resultado: ReplanResponse;
-  onVer: () => void;
+  resultado: ReplanSemanaResponse;
+  calculando: boolean;
+  guardada: boolean;
+  onAccion: (discipline: Discipline, modo: ModoDisciplina) => void;
 }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const dias = (resultado.semana ?? []).filter((dia) => dia.linea !== "Descanso");
 
   return (
     <Card>
       <View style={styles.sectionHeader}>
-        <SectionLabel>Tu semana</SectionLabel>
+        <SectionLabel>{guardada ? "Tu semana quedó así" : "Así queda tu semana"}</SectionLabel>
         <InfoTip titulo="Qué más se mueve con esto">
           <TextoInfo>
-            Tu alimentación y tu camino al objetivo se recalculan con esta semana en tu siguiente
+            Cada respuesta recalcula esta vista; nada se guarda hasta que lo confirmes. Tu
+            alimentación y tu camino al objetivo se recalculan con esta semana en tu siguiente
             check-in: los dos dependen de cuánto entrenas.
           </TextoInfo>
         </InfoTip>
       </View>
 
-      {resultado.asignadas.length === 0 ? (
+      {dias.length === 0 ? (
         <Text style={styles.ayuda}>No se pudo armar ninguna sesión con ese tiempo.</Text>
       ) : (
-        resultado.asignadas.map((sesion) => {
-          const Icono = iconoDe(sesion.discipline);
+        dias.map((dia) => {
+          const Icono = iconoDe(dia.gym ? "PESAS" : (dia.bloques[0]?.discipline ?? "PESAS"));
           return (
-            <View key={`${sesion.weekday}-${sesion.discipline}`} style={styles.resultadoFila}>
-              <Text style={styles.resultadoDia}>{sesion.weekday}</Text>
+            <View key={dia.date} style={[styles.resultadoFila, calculando && styles.botonOff]}>
+              <Text style={styles.resultadoDia}>{dia.weekday}</Text>
               <Icono size={18} color={colors.champan} strokeWidth={2} />
-              <Text style={styles.resultadoNombre}>{DISCIPLINE_LABELS[sesion.discipline]}</Text>
-              <Text style={styles.resultadoMin}>{sesion.minutos} min</Text>
+              <Text style={styles.resultadoNombre} numberOfLines={1}>
+                {dia.linea}
+              </Text>
             </View>
           );
         })
@@ -412,9 +476,20 @@ function Resultado({
         </Parrafo>
       ))}
 
-      <Pressable onPress={onVer} style={styles.boton}>
-        <Text style={styles.botonTexto}>Ver mis rutinas</Text>
-      </Pressable>
+      {!guardada && (resultado.acciones ?? []).length > 0 && (
+        <View style={styles.chips}>
+          {(resultado.acciones ?? []).map((accion: AccionReplan) => (
+            <Pressable
+              key={accion.discipline}
+              disabled={calculando}
+              onPress={() => onAccion(accion.discipline, accion.alternativa.modo)}
+              style={styles.chip}
+            >
+              <Text style={styles.chipTexto}>{accion.alternativa.texto}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
     </Card>
   );
 }
