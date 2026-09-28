@@ -12,4 +12,6 @@
 export const Platform = { OS: "ios", select: <T,>(opciones: { ios?: T; default?: T }) => opciones.ios ?? opciones.default };
 export const StyleSheet = { create: <T,>(estilos: T): T => estilos };
 export const Vibration = { vibrate: () => {} };
-export default { Platform, StyleSheet, Vibration };
+/** Solo para leer las props de un elemento (`Parrafo`), no para pintarlo. */
+export const Text = "Text";
+export default { Platform, StyleSheet, Vibration, Text };

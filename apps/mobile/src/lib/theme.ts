@@ -228,6 +228,14 @@ export const type = {
 } as const;
 
 /**
+ * El párrafo: todo texto de cuerpo que pueda pasar de dos líneas va
+ * justificado — se lee más formal. Solo alinea: tamaño y color siguen siendo
+ * del estilo con el que se combine. Títulos, etiquetas de una línea, filas de
+ * tarjeta, chips, botones y números NO lo llevan. Se usa vía `<Parrafo>`.
+ */
+export const parrafo = { textAlign: "justify" } as const;
+
+/**
  * Sombras. En iOS levantan la tarjeta del fondo; en Android `elevation` hace
  * el mismo trabajo. Es lo que evita que la pantalla se vea como una lista de
  * rectángulos planos del mismo tono.
@@ -274,4 +282,4 @@ export const fonts = {
   sansBold: "Inter_700Bold",
 } as const;
 
-export const theme = { colors, spacing, radius, type, shadow, fonts } as const;
+export const theme = { colors, spacing, radius, type, parrafo, shadow, fonts } as const;
