@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client";
 import { runCheckinAnalysis } from "@/lib/coachy/analyze";
 import { ComposeError, composeReply, replyToText } from "@/lib/coachy/compose";
 import { MissingAnthropicKeyError, hasAnthropicKey } from "@/lib/coachy/anthropic";
+import { lineasDelPlan, respuestaDeterminista } from "@/lib/coachy/retro";
 import { loadFewShotExamples } from "@/lib/coachy/fewshot";
 import { construyeBloqueMensual, clasificaMensuales, type BloqueMensual } from "@/lib/coachy/mensual";
 import { syncMealPlans } from "@/lib/coachy/menu";
@@ -47,6 +48,9 @@ export { syncMealPlans } from "@/lib/coachy/menu";
 export interface CoachyRunResult {
   decisionId: string;
   status: "ok" | "sin_redaccion";
+  /** Quién escribió el texto: Claude, o nosotros si no hubo llave o falló. */
+  redaccion?: "claude" | "determinista";
+  /** Por qué la redacción fue determinista. */
   reason?: string;
   reply?: CoachyReply;
   mensual?: BloqueMensual;
@@ -144,27 +148,46 @@ export async function runCoachy(checkInId: string): Promise<CoachyRunResult> {
   // el texto. `runEscalationCheck` nunca lanza.
   await runEscalationCheck(user.id);
 
-  if (!hasAnthropicKey()) {
-    return {
-      decisionId: analysis.decision.id,
-      status: "sin_redaccion",
-      reason: new MissingAnthropicKeyError().message,
-      mensual,
+  const menuNuevo =
+    analysis.phaseChanged ||
+    analysis.menuSeedChanged ||
+    analysis.engineDecision.menuRefresh ||
+    esMensual;
+
+  const input: ComposeInput = {
+    ...buildComposeInput(analysis, questions),
+    mensual,
+    plan: lineasDelPlan({
+      targets: analysis.engineDecision.targets,
+      previousKcal: analysis.previousTargets?.kcal ?? null,
+      menuNuevo,
+      esMensual,
       rutina,
-    };
-  }
+    }),
+  };
 
-  const input = buildComposeInput(analysis, questions);
-
+  // Sin llave o si Claude falla, la retro sale igual, escrita por nosotros:
+  // quien envió el check-in está esperando su análisis, y un perfil guiado
+  // por IA no tiene a nadie más que se lo dé.
   let reply: CoachyReply;
-  try {
-    const examples = await loadFewShotExamples(user.id);
-    reply = { ...(await composeReply(input, { examples })), mensual };
-  } catch (error) {
-    const reason =
-      error instanceof ComposeError ? error.message : `No se pudo redactar: ${String(error)}`;
-    return { decisionId: analysis.decision.id, status: "sin_redaccion", reason, mensual, rutina };
+  let redaccion: "claude" | "determinista" = "claude";
+  let reason: string | undefined;
+  if (!hasAnthropicKey()) {
+    reply = respuestaDeterminista(input);
+    redaccion = "determinista";
+    reason = new MissingAnthropicKeyError().message;
+  } else {
+    try {
+      const examples = await loadFewShotExamples(user.id);
+      reply = await composeReply(input, { examples });
+    } catch (error) {
+      reply = respuestaDeterminista(input);
+      redaccion = "determinista";
+      reason =
+        error instanceof ComposeError ? error.message : `No se pudo redactar: ${String(error)}`;
+    }
   }
+  reply = { ...reply, mensual };
 
   const decision = await prisma.decision.update({
     where: { id: analysis.decision.id },
@@ -189,7 +212,7 @@ export async function runCoachy(checkInId: string): Promise<CoachyRunResult> {
     await publishNotification(user.id, user.email, reply);
   }
 
-  return { decisionId: decision.id, status: "ok", reply, mensual, rutina };
+  return { decisionId: decision.id, status: "ok", redaccion, reason, reply, mensual, rutina };
 }
 
 /** Aviso de "ya tienes mensaje de Coachy". También lo usa la aprobación del admin. */
@@ -202,7 +225,9 @@ export async function publishNotification(
     userId,
     email,
     kind: "MENSAJE_COACHY",
-    title: "Holy Gains ya revisó tu semana",
+    title: reply.mensual?.esMensual
+      ? "Tu retroalimentación del mes está lista"
+      : "Holy Gains ya revisó tu semana",
     body: `${reply.celebracion}\n\n${reply.meta}`,
     href: "/app",
   });

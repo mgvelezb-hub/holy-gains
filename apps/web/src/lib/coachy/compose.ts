@@ -1,7 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 
 import { COMPOSE_MODEL, anthropicClient } from "@/lib/coachy/anthropic";
-import type { ComposeInput, CoachyReply, FewShotExample } from "@/lib/coachy/types";
+import type { ComposeInput, CoachyReply, FewShotExample, RetroCheckIn } from "@/lib/coachy/types";
 
 /**
  * Redacción de la respuesta semanal de Holy Gains.
@@ -53,8 +53,29 @@ const REPLY_TOOL: Anthropic.Tool = {
         type: "string",
         description: "Cierre corto con hype. Máximo una frase.",
       },
+      va_bien: {
+        type: "array",
+        items: { type: "string" },
+        description:
+          "Qué va bien en el periodo (la semana, o el mes si es check-in mensual). De 1 a 4 renglones cortos, cada uno con un dato del contexto. Nada genérico.",
+      },
+      hay_que_ajustar: {
+        type: "array",
+        items: { type: "string" },
+        description:
+          "Qué hay que ajustar, dicho como algo que se ajusta y nunca como regaño. De 0 a 4 renglones cortos, solo con datos del contexto.",
+      },
     },
-    required: ["celebracion", "preguntas", "comparacion", "decision_texto", "meta", "cierre"],
+    required: [
+      "celebracion",
+      "preguntas",
+      "comparacion",
+      "decision_texto",
+      "meta",
+      "cierre",
+      "va_bien",
+      "hay_que_ajustar",
+    ],
   },
 };
 
@@ -156,6 +177,35 @@ function renderContext(input: ComposeInput): string {
   }
   if (input.simplifyMenu) lines.push("- Simplificar el menú: menos ingredientes, más repetición.");
 
+  if (input.mensual) {
+    const { mensual } = input;
+    lines.push("");
+    if (mensual.esMensual) {
+      lines.push("## Este es su check-in mensual");
+      lines.push(
+        "Compara el MES: contra el check-in mensual anterior y contra el inicio. Cambios en cm y kg:",
+      );
+      lines.push(JSON.stringify(mensual.deltas, null, 2));
+      if (mensual.fotos && mensual.fotos.zonas.length > 0) {
+        lines.push("Fotos contra su referencia, por zona (solo brecha y tendencia, nunca estética):");
+        lines.push(JSON.stringify(mensual.fotos.zonas, null, 2));
+      }
+    } else {
+      lines.push("## Retro de la semana");
+    }
+    lines.push("Material para va_bien y hay_que_ajustar (redáctalo con tus palabras, no inventes más):");
+    for (const linea of mensual.objetivo.vaBien) lines.push(`- Va bien: ${linea}`);
+    for (const linea of mensual.objetivo.ajustar) lines.push(`- Ajustar: ${linea}`);
+  }
+
+  if (input.plan) {
+    lines.push("");
+    lines.push("## Su plan de aquí en adelante (ya escrito; no lo repitas ni lo cambies)");
+    lines.push(`- Macros: ${input.plan.macros}`);
+    lines.push(`- Menú: ${input.plan.menu}`);
+    lines.push(`- Rutina: ${input.plan.rutina}`);
+  }
+
   lines.push("");
   lines.push("## Preguntas que tienes que hacer esta semana");
   for (const question of input.questions) {
@@ -169,6 +219,43 @@ function renderContext(input: ComposeInput): string {
   );
 
   return lines.join("\n");
+}
+
+/**
+ * Los renglones de "va bien" / "ajustar" que redactó el modelo, sin los que
+ * citan un número "grande" que no aparece en el contexto que se le dio.
+ * Vacío si no mandó nada válido: quien llama cae a la versión determinista.
+ */
+function renglonesVerificados(value: unknown, contexto: string): string[] {
+  if (!Array.isArray(value)) return [];
+  const permitidos = new Set(integersIn(contexto));
+
+  return value
+    .filter((linea): linea is string => typeof linea === "string")
+    .map((linea) => linea.trim())
+    .filter(Boolean)
+    .filter((linea) =>
+      integersIn(linea).every((n) => n <= SAFE_NUMBER_CEILING || permitidos.has(n)),
+    )
+    .slice(0, 4);
+}
+
+function retroDe(raw: Record<string, unknown>, input: ComposeInput, contexto: string): RetroCheckIn | undefined {
+  if (!input.plan) return undefined;
+
+  const vaBien = renglonesVerificados(raw.va_bien, contexto);
+  const ajustar = renglonesVerificados(raw.hay_que_ajustar, contexto);
+
+  return {
+    va_bien: vaBien.length > 0 ? vaBien : (input.mensual?.objetivo.vaBien ?? []),
+    // "Ajustar" puede venir vacío a propósito; solo se rellena si el modelo no
+    // contestó el campo o lo que mandó no pasó el filtro de números.
+    ajustar:
+      ajustar.length > 0 || (Array.isArray(raw.hay_que_ajustar) && raw.hay_que_ajustar.length === 0)
+        ? ajustar
+        : (input.mensual?.objetivo.ajustar ?? []),
+    plan: input.plan,
+  };
 }
 
 /** Enteros que aparecen en un texto. Ignora los que van pegados a letras. */
@@ -258,6 +345,7 @@ export async function composeReply(
 ): Promise<CoachyReply> {
   const client = options.client ?? anthropicClient();
   const examples = options.examples ?? [];
+  const contexto = renderContext(input);
 
   const response = await client.messages.create({
     model: COMPOSE_MODEL,
@@ -274,7 +362,7 @@ export async function composeReply(
     ],
     tools: [REPLY_TOOL],
     tool_choice: { type: "tool", name: REPLY_TOOL_NAME },
-    messages: [{ role: "user", content: renderContext(input) }],
+    messages: [{ role: "user", content: contexto }],
   });
 
   if (response.stop_reason === "refusal") {
@@ -305,7 +393,8 @@ export async function composeReply(
     cierre: raw.cierre.trim(),
   };
 
-  return enforceEngineNumbers(reply, input);
+  const retro = retroDe(raw as unknown as Record<string, unknown>, input, contexto);
+  return { ...enforceEngineNumbers(reply, input), ...(retro ? { retro } : {}) };
 }
 
 /** La respuesta como texto corrido, en el orden de la metodología. Firma incluida. */

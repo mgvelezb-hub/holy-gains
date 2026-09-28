@@ -4,6 +4,7 @@ import type { CheckIn, Decision, DecisionStatus, Photo, Profile, User } from "@p
 import { Prisma } from "@prisma/client";
 import { decide } from "engine";
 
+import { necesitaRevisionHumana } from "@/lib/coachy/aprobacion";
 import { engineConfigForActivity, toEngineCheckIn, toEngineProfile } from "@/lib/coachy/mapping";
 import { activityWindow } from "@/lib/health/db";
 import { puntoCeroDe } from "@/lib/checkins";
@@ -18,8 +19,10 @@ import { requireApproval } from "@/lib/env";
  * Paso 1 del pipeline: el motor decide.
  *
  * Reconstruye el historial del atleta, lo traduce a los tipos del motor, corre
- * `decide()` y guarda la `Decision`. Si `REQUIRE_APPROVAL` está prendido la
- * decisión nace `PENDIENTE` y no se publica hasta que el admin la apruebe.
+ * `decide()` y guarda la `Decision`. Si `REQUIRE_APPROVAL` está prendido y el
+ * perfil tiene un humano revisándolo (`aprobacion.ts`), la decisión nace
+ * `PENDIENTE` y no se publica hasta que el admin la apruebe; sin coach humano
+ * nace `APROBADA` y publicada.
  *
  * Aquí no hay IA que decida nada: la visión solo aporta `photosTrend`, que es
  * una señal más de entrada al motor.
@@ -193,8 +196,21 @@ export async function runCheckinAnalysis(checkInId: string): Promise<AnalysisRes
     orderBy: { checkIn: { date: "desc" } },
   });
 
-  const status: DecisionStatus = requireApproval() ? "PENDIENTE" : "APROBADA";
+  // ¿Espera a un humano? Solo si hay uno revisando a este perfil
+  // (`aprobacion.ts`): sin coach humano, la IA publica sola.
   const now = new Date();
+  const ultimaRevision = await prisma.decision.findFirst({
+    where: { userId: user.id, checkInId: { not: checkIn.id }, approvedAt: { not: null } },
+    orderBy: { approvedAt: "desc" },
+    select: { approvedAt: true },
+  });
+  const status: DecisionStatus = necesitaRevisionHumana({
+    requireApproval: requireApproval(),
+    ultimaRevisionHumana: ultimaRevision?.approvedAt ?? null,
+    ahora: now,
+  })
+    ? "PENDIENTE"
+    : "APROBADA";
 
   const payload = {
     userId: user.id,

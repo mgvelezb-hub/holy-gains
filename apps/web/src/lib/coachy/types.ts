@@ -57,6 +57,24 @@ export interface CoachyReply {
    * Opcional: las respuestas de antes de que existiera no lo traen.
    */
   mensual?: BloqueMensual;
+  /**
+   * La retro en tres partes que ve la app: qué va bien, qué hay que ajustar
+   * y el plan de aquí en adelante. Opcional por lo mismo que `mensual`.
+   */
+  retro?: RetroCheckIn;
+}
+
+/** "Tu plan de aquí en adelante": una línea por pieza, escrita por nosotros. */
+export interface PlanAdelante {
+  macros: string;
+  menu: string;
+  rutina: string;
+}
+
+export interface RetroCheckIn {
+  va_bien: string[];
+  ajustar: string[];
+  plan: PlanAdelante;
 }
 
 export interface FewShotExample {
@@ -120,4 +138,8 @@ export interface ComposeInput {
   electrolyteProtocol: boolean;
   injuryTrainingProtocol: boolean;
   simplifyMenu: boolean;
+  /** El bloque mensual (también en semanal: trae qué va bien / qué ajustar). */
+  mensual?: BloqueMensual;
+  /** El plan de aquí en adelante, ya escrito. Sin él no hay retro. */
+  plan?: PlanAdelante;
 }

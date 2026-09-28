@@ -53,7 +53,8 @@ describe.skipIf(!available)("check-in mensual: el plan de aquí en adelante", ()
 
   beforeAll(async () => {
     delete process.env.ANTHROPIC_API_KEY;
-    process.env.REQUIRE_APPROVAL = "false";
+    // Prendido a propósito: sin coach humano la decisión igual sale publicada.
+    process.env.REQUIRE_APPROVAL = "true";
 
     await prisma.user.create({
       data: { id: userId, email: `mensual-${userId}@coachy.invalid`, role: "ATHLETE" },
@@ -125,6 +126,16 @@ describe.skipIf(!available)("check-in mensual: el plan de aquí en adelante", ()
     expect(decision.status).toBe("APROBADA");
     expect(decision.publishedAt).not.toBeNull();
     expect(decision.mealPlans.length).toBe(2);
+
+    // La retro quedó guardada con el bloque mensual y las tres partes.
+    const reply = decision.replyJson as {
+      mensual?: { esMensual: boolean };
+      retro?: { va_bien: string[]; ajustar: string[]; plan: { menu: string; rutina: string } };
+    };
+    expect(reply.mensual?.esMensual).toBe(true);
+    expect(reply.retro?.va_bien.length).toBeGreaterThan(0);
+    expect(reply.retro?.plan.menu).toMatch(/menú nuevo/i);
+    expect(reply.retro?.plan.rutina).toMatch(/Rutina rearmada/);
 
     const anterior = await prisma.decision.findUniqueOrThrow({
       where: { checkInId: semanal.id },

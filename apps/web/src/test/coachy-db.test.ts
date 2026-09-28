@@ -81,12 +81,13 @@ describe.skipIf(!available)("runCoachy contra la base", () => {
     await prisma.$disconnect();
   });
 
-  it("guarda la decisión del motor aunque no haya API de Anthropic", async () => {
+  it("sin API de Anthropic guarda la decisión y una retro determinista", async () => {
     const checkIn = await persistCheckIn(userId, input());
 
     const result = await runCoachy(checkIn.id);
 
-    expect(result.status).toBe("sin_redaccion");
+    expect(result.status).toBe("ok");
+    expect(result.redaccion).toBe("determinista");
     expect(result.reason).toContain("ANTHROPIC_API_KEY");
 
     const decision = await prisma.decision.findUnique({ where: { checkInId: checkIn.id } });
@@ -94,9 +95,22 @@ describe.skipIf(!available)("runCoachy contra la base", () => {
     expect(decision?.kcal).toBeGreaterThan(1000);
     expect(decision?.proteinG).toBeGreaterThan(0);
     expect(decision?.explanation.length).toBeGreaterThan(0);
+
+    const reply = decision?.replyJson as { retro?: { plan?: { macros?: string } } } | null;
+    expect(reply?.retro?.plan?.macros).toContain(`${decision?.kcal} kcal`);
   });
 
-  it("nace PENDIENTE y sin publicar cuando REQUIRE_APPROVAL está prendido", async () => {
+  it("sin coach humano se publica sola aunque REQUIRE_APPROVAL esté prendido", async () => {
+    // Nadie ha aprobado ni corregido nada de este perfil: lo guía la IA.
+    const decision = await prisma.decision.findFirstOrThrow({ where: { userId } });
+    expect(decision.status).toBe("APROBADA");
+    expect(decision.publishedAt).not.toBeNull();
+  });
+
+  it("nace PENDIENTE y sin publicar si un humano la está revisando", async () => {
+    // Un admin aprobó la decisión anterior: este perfil tiene coach humano.
+    await prisma.decision.updateMany({ where: { userId }, data: { approvedAt: new Date() } });
+
     const checkIn = await persistCheckIn(userId, input({ date: "2026-08-23", waistCm: 89.5 }));
 
     await runCoachy(checkIn.id);
