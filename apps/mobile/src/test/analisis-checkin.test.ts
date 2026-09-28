@@ -9,6 +9,7 @@ import {
   resumenEsteMes,
   resumenFotos,
   textoAnalizando,
+  tocaMensual,
 } from "@/lib/analisis-checkin";
 
 describe("textoAnalizando", () => {
@@ -91,5 +92,24 @@ describe("resumenFotos", () => {
     ).toBe("2 cerca · 1 lejos");
     expect(resumenFotos({ estado: "sin_referencia", zonas: [] })).toBe("Sin fotos de referencia");
     expect(resumenFotos(null)).toBe("Sin lectura de fotos este mes");
+  });
+});
+
+describe("tocaMensual", () => {
+  const proximo = (semanas: number) => ({ semanas, fecha: "2026-10-04", ultimoMensual: "2026-09-06" });
+
+  it("manda el contador del servidor cuando respondió", () => {
+    expect(tocaMensual({ servidor: { proximoMensual: proximo(0) }, diasDesdeUltimaLocal: 3 })).toBe(true);
+    expect(tocaMensual({ servidor: { proximoMensual: proximo(2) }, diasDesdeUltimaLocal: 40 })).toBe(false);
+  });
+
+  it("si el servidor respondió sin dato, abre", () => {
+    expect(tocaMensual({ servidor: { proximoMensual: null }, diasDesdeUltimaLocal: 3 })).toBe(true);
+  });
+
+  it("sin servidor (offline), cae al cálculo local de 28 días", () => {
+    expect(tocaMensual({ servidor: null, diasDesdeUltimaLocal: 28 })).toBe(true);
+    expect(tocaMensual({ servidor: null, diasDesdeUltimaLocal: 10 })).toBe(false);
+    expect(tocaMensual({ servidor: null, diasDesdeUltimaLocal: null })).toBe(false);
   });
 });

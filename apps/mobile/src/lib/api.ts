@@ -357,6 +357,11 @@ export type Symptom = (typeof SYMPTOMS)[number];
 
 export type CheckInPayload = {
   date: string; // yyyy-MM-dd
+  /**
+   * Van a subirse fotos después: el servidor no analiza al guardar y espera
+   * a `postCheckinListo`, para que la lectura use las fotos de este check-in.
+   */
+  fotosPendientes?: boolean;
   waistCm: number;
   weightKg?: number | null;
   legLeftCm?: number | null;
@@ -412,6 +417,16 @@ export function progressPhotoPath(userId: string, checkInId: string, view: Photo
 }
 
 /** Confirma al servidor que la foto ya quedó en Storage y crea su fila. */
+/**
+ * `POST /api/v1/checkins/:id/listo` — las fotos ya subieron (o se intentó):
+ * ahora sí que se analice. Idempotente en el servidor.
+ */
+export function postCheckinListo(checkInId: string): Promise<{ checkInId: string; accion: string }> {
+  return apiFetch<{ checkInId: string; accion: string }>(`/api/v1/checkins/${checkInId}/listo`, {
+    method: "POST",
+  });
+}
+
 export function postCheckinPhoto(
   checkInId: string,
   view: PhotoView,

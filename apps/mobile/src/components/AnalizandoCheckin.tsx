@@ -5,7 +5,7 @@ import { ActivityIndicator, AppState, StyleSheet, Text, View } from "react-nativ
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/context/theme";
 import { AVISO_ANALISIS_SEGUNDOS, SONDEO_MS, alVolver, textoAnalizando } from "@/lib/analisis-checkin";
-import { getDecision } from "@/lib/api";
+import { getDecision, postCheckinListo } from "@/lib/api";
 import { cancelarAvisoAnalisis, pedirPermisoNotificaciones, programarAvisoAnalisis } from "@/lib/recordatorio";
 import { fonts, spacing, type as typeScale, type Palette } from "@/lib/theme";
 
@@ -24,10 +24,17 @@ import { fonts, spacing, type as typeScale, type Palette } from "@/lib/theme";
  */
 export function AnalizandoCheckin({
   checkInId,
+  listoPendiente,
   conFotos,
   esMensual,
 }: {
   checkInId: string;
+  /**
+   * El aviso de "fotos listas" no llegó al servidor (sin señal): se reintenta
+   * en cada sondeo hasta que entre una vez. Solo entonces — reintentar a
+   * ciegas dispararía un segundo análisis mientras el primero corre.
+   */
+  listoPendiente: boolean;
   conFotos: boolean;
   esMensual: boolean;
 }) {
@@ -36,9 +43,16 @@ export function AnalizandoCheckin({
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [enRevision, setEnRevision] = useState(false);
   const terminado = useRef(false);
+  const faltaListo = useRef(listoPendiente);
 
   const revisar = useCallback(async () => {
     if (terminado.current) return;
+    if (faltaListo.current) {
+      faltaListo.current = await postCheckinListo(checkInId).then(
+        () => false,
+        () => true,
+      );
+    }
     try {
       const respuesta = await getDecision(checkInId);
       if (respuesta.enRevisionHumana) {

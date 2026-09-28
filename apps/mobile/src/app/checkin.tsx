@@ -18,12 +18,14 @@ import {
   getMe,
   getActivities,
   getComidasLog,
+  getDecision,
   getHistoryMeasurements,
   getTrainingWeek,
   PHOTO_BUCKET,
   PHOTO_VIEWS,
   PHOTO_VIEW_LABEL,
   postCheckin,
+  postCheckinListo,
   postCheckinPhoto,
   progressPhotoPath,
   SYMPTOMS,
@@ -32,6 +34,7 @@ import {
   type Symptom,
 } from "@/lib/api";
 import { useSession } from "@/context/session";
+import { tocaMensual } from "@/lib/analisis-checkin";
 import { supabase } from "@/lib/supabase";
 import { fonts, radius, spacing, type Palette, type as typeScale } from "@/lib/theme";
 
@@ -58,9 +61,13 @@ export default function CheckinScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   /** El check-in ya se envió: su id, para sondear el análisis. */
-  const [enviado, setEnviado] = useState<{ id: string; conFotos: boolean; esMensual: boolean } | null>(
-    null,
-  );
+  const [enviado, setEnviado] = useState<{
+    id: string;
+    /** `listo` no llegó al servidor: la pantalla de análisis lo reintenta. */
+    listoPendiente: boolean;
+    conFotos: boolean;
+    esMensual: boolean;
+  } | null>(null);
   /**
    * Fotos opcionales, una por vista. Se eligen antes de enviar y se suben
    * DESPUÉS, cuando el check-in ya existe: la ruta en Storage lleva su id, así
@@ -103,36 +110,42 @@ export default function CheckinScreen() {
    */
   const [mostrarMensuales, setMostrarMensuales] = useState(false);
   /** Ya pasó un mes desde brazos/piernas: este check-in es el mensual. */
-  const [tocaMensual, setTocaMensual] = useState(false);
+  const [esMesDeMedidas, setTocaMensual] = useState(false);
   const [ultimaMensual, setUltimaMensual] = useState<string | null>(null);
 
   useEffect(() => {
     let vivo = true;
-    getHistoryMeasurements()
-      .then((historial) => {
-        if (!vivo) return;
-        const conMedidas = [...historial.points]
+    // El contador del servidor manda (`tocaMensual`); el historial local solo
+    // pone la fecha del enlace y sirve de respaldo si no hay señal.
+    Promise.all([
+      getDecision()
+        .then((respuesta) => ({ proximoMensual: respuesta.proximoMensual }))
+        .catch(() => null),
+      getHistoryMeasurements().catch(() => null),
+    ]).then(([servidor, historial]) => {
+      if (!vivo) return;
+
+      const ultima =
+        [...(historial?.points ?? [])]
           .filter((punto) => punto.armLeftCm !== null || punto.legLeftCm !== null)
-          .sort((a, b) => b.date.localeCompare(a.date));
+          .sort((a, b) => b.date.localeCompare(a.date))[0]?.date ?? null;
+      setUltimaMensual(ultima);
 
-        const ultima = conMedidas[0]?.date ?? null;
-        setUltimaMensual(ultima);
-
-        const dias =
-          ultima === null
+      const diasDesdeUltimaLocal =
+        historial === null
+          ? null
+          : ultima === null
             ? Infinity
             : Math.round(
                 (Date.parse(`${todayISO()}T12:00:00.000Z`) - Date.parse(`${ultima}T12:00:00.000Z`)) /
                   86_400_000,
               );
-        if (dias >= 28) {
-          setMostrarMensuales(true);
-          setTocaMensual(true);
-        }
-      })
-      .catch(() => {
-        // Sin historial se queda cerrado y con su enlace, como antes.
-      });
+
+      if (tocaMensual({ servidor, diasDesdeUltimaLocal })) {
+        setMostrarMensuales(true);
+        setTocaMensual(true);
+      }
+    });
     return () => {
       vivo = false;
     };
@@ -289,8 +302,10 @@ export default function CheckinScreen() {
     }
 
     setSubmitting(true);
+    const hayFotos = Object.values(fotos).some(Boolean);
     try {
       const creado = await postCheckin({
+        ...(hayFotos ? { fotosPendientes: true } : {}),
         date: todayISO(),
         waistCm: parseDecimal(waistCm) ?? 0,
         weightKg: parseDecimal(weightKg),
@@ -310,14 +325,24 @@ export default function CheckinScreen() {
         periodStarted,
       });
 
-      const userId = session?.user.id ?? null;
-      if (userId) await subirFotos(creado.id, userId);
+      // Con fotos, el servidor espera a `listo` para analizar con ellas. Si la
+      // subida falla se avisa igual: mejor análisis sin fotos que sin decisión.
+      let listoPendiente = false;
+      if (hayFotos) {
+        const userId = session?.user.id ?? null;
+        if (userId) await subirFotos(creado.id, userId);
+        listoPendiente = await postCheckinListo(creado.id).then(
+          () => false,
+          () => true,
+        );
+      }
 
       const trajoMensuales = [legLeftCm, legRightCm, armLeftCm, armRightCm].some((v) => v.trim() !== "");
       setEnviado({
         id: creado.id,
-        conFotos: Object.values(fotos).some(Boolean),
-        esMensual: trajoMensuales || tocaMensual,
+        listoPendiente,
+        conFotos: hayFotos,
+        esMensual: trajoMensuales || esMesDeMedidas,
       });
     } catch (error) {
       if (error instanceof ApiError && error.status === 422 && error.detalles) {
@@ -351,6 +376,7 @@ export default function CheckinScreen() {
     return (
       <AnalizandoCheckin
         checkInId={enviado.id}
+        listoPendiente={enviado.listoPendiente}
         conFotos={enviado.conFotos}
         esMensual={enviado.esMensual}
       />

@@ -78,3 +78,25 @@ export function resumenFotos(fotos: BloqueMensual["fotos"]): string {
     .map(([brecha, cuantas]) => `${cuantas} ${brecha}`)
     .join(" · ");
 }
+
+/**
+ * ¿Este check-in es el mensual (abrir brazos y piernas solos)?
+ *
+ * Manda el contador del servidor (`proximoMensual`, la misma regla de 28
+ * días con la que decide el análisis): toca con `semanas === 0`, y también
+ * cuando respondió sin dato — sin check-ins no hay contra qué contar.
+ * `servidor: null` = no se pudo preguntar (sin señal): entonces, y solo
+ * entonces, se cuenta localmente desde la última medida de brazos/piernas.
+ * `diasDesdeUltimaLocal: null` = tampoco hay historial local; se deja
+ * cerrado, como antes.
+ */
+export function tocaMensual(entrada: {
+  servidor: { proximoMensual: ProximoMensual | null } | null;
+  diasDesdeUltimaLocal: number | null;
+}): boolean {
+  if (entrada.servidor !== null) {
+    const proximo = entrada.servidor.proximoMensual;
+    return proximo === null || proximo.semanas <= 0;
+  }
+  return entrada.diasDesdeUltimaLocal !== null && entrada.diasDesdeUltimaLocal >= 28;
+}
