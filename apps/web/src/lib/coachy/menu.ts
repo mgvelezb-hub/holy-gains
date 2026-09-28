@@ -32,6 +32,28 @@ export interface SyncMenuOptions {
   menuSeedChanged: boolean;
   /** Peso más reciente del historial; el del perfil puede estar viejo. */
   latestWeightKg?: number | null;
+  /**
+   * Menú nuevo aunque el motor no lo pida (el check-in mensual). Los menús
+   * son de la decisión, no del día, así que lo ya registrado en `MealLog`
+   * no se toca: el menú nuevo manda de hoy en adelante.
+   */
+  forceRefresh?: boolean;
+}
+
+/**
+ * La semilla con la que se arma el menú de la decisión.
+ *
+ * La del motor cambia cada quincena; con la misma semilla sale el mismo
+ * menú. Para forzar alimentos distintos sin esperar la quincena se corre una
+ * posición — solo si la semilla no cambió ya por sí sola, que es cuando el
+ * menú saldría idéntico al anterior. No se guarda en `Decision.menuSeed`: esa
+ * columna es la del motor y es la que dice cuándo toca la siguiente quincena.
+ */
+export function semillaDelMenu(
+  menuSeed: number,
+  options: { forceRefresh?: boolean; menuSeedChanged: boolean },
+): number {
+  return options.forceRefresh && !options.menuSeedChanged ? menuSeed + 1 : menuSeed;
 }
 
 export async function syncMealPlans(
@@ -49,7 +71,8 @@ export async function syncMealPlans(
     existing.length === 0 ||
     options.phaseChanged ||
     options.menuSeedChanged ||
-    engineDecision.menuRefresh;
+    engineDecision.menuRefresh ||
+    options.forceRefresh === true;
 
   if (!needsMenu) return existing;
 
@@ -58,7 +81,7 @@ export async function syncMealPlans(
     engineDecision.meals,
     engineProfile,
     undefined,
-    engineDecision.menuSeed,
+    semillaDelMenu(engineDecision.menuSeed, options),
     { phase: engineDecision.phase, extraFoods: await alimentosPropiosDe(profile.userId) },
   );
 

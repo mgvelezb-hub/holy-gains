@@ -55,6 +55,13 @@ export interface AnalysisResult {
   menuSeedChanged: boolean;
   /** Peso más reciente del historial: el del perfil puede estar viejo. */
   latestWeightKg: number | null;
+  /**
+   * Los check-ins desde el punto cero hasta este, del más viejo al más
+   * nuevo. Es la serie con la que se decide si este check-in es mensual.
+   */
+  history: Array<CheckIn & { photos: Photo[] }>;
+  /** Los números de la decisión anterior, para decir qué cambió. */
+  previousTargets: { kcal: number; phase: string } | null;
 }
 
 /** Cómo quedó la semana de entrenamiento que cierra este check-in. */
@@ -235,5 +242,9 @@ export async function runCheckinAnalysis(checkInId: string): Promise<AnalysisRes
     phaseChanged: previousDecision ? previousDecision.phase !== engineDecision.phase : true,
     menuSeedChanged: previousDecision?.menuSeed !== engineDecision.menuSeed,
     latestWeightKg: latestWeight,
+    history,
+    previousTargets: previousDecision
+      ? { kcal: previousDecision.kcal, phase: previousDecision.phase }
+      : null,
   };
 }

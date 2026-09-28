@@ -630,10 +630,23 @@ export function otherSessionsFor(
  * hoy en adelante, sin series capturadas y sin completar. Un día entrenado es
  * historia, y la historia no se reescribe.
  */
+export interface EnsureWeekOptions {
+  /**
+   * Rearma TODO lo que no se ha entrenado de hoy en adelante, aunque el
+   * horario no haya cambiado. Lo usa el cierre del check-in: con la semana
+   * cerrada hay historial nuevo (cargas, progresión) y quizá una lectura
+   * nueva del objetivo, y el plan de aquí en adelante tiene que salir de
+   * eso. Lo ya vivido sigue intocable: un día con series o completado no se
+   * borra nunca, con o sin `force`.
+   */
+  force?: boolean;
+}
+
 export async function ensureWeekMaterialized(
   userId: string,
   profile: Profile,
   reference: Date,
+  options: EnsureWeekOptions = {},
 ): Promise<Workout[]> {
   const monday = mondayOf(reference);
   const sunday = sundayEndOf(reference);
@@ -653,6 +666,7 @@ export async function ensureWeekMaterialized(
     // Un día futuro sin nada capturado se puede rearmar sin perder nada.
     const intocado = date >= todayISO && workout.completedAt === null && workout._count.sets === 0;
     if (!intocado) return false;
+    if (options.force) return true;
 
     if (!plannedSet.has(date)) return true;
 
