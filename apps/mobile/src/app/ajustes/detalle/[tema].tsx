@@ -72,7 +72,7 @@ const TITULOS: Record<string, string> = {
   dieta: "Tu tipo de dieta",
   presupuesto: "Presupuesto de despensa",
   cocina: "Cuánto quieres cocinar",
-  alacena: "Tu alacena",
+  alacena: "Suplementos",
   gustos: "Lo que sí y lo que no",
   preparaciones: "Licuados, sopas y cremas",
 };

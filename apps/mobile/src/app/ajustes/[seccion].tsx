@@ -48,12 +48,14 @@ import {
   getHorariosComida,
   getMe,
   getPuntoCero,
+  getSuplementos,
   type PuntoCero,
   type MeResponse,
   type TiempoDeComida,
 } from "@/lib/api";
 import { ESTILOS_DIETA, PRESUPUESTOS, avisoDeDieta } from "@/lib/nutricion";
 import { preferenciaDelPerfil, resumenPreparaciones } from "@/lib/preparaciones";
+import { resumenRenglon } from "@/lib/suplementos";
 import { estadoDelReloj } from "@/lib/reloj-nativo";
 import { TIEMPOS_COCINA } from "@/lib/entrenamiento";
 import {
@@ -256,6 +258,27 @@ export default function AjustesDetalleScreen() {
         })
         .catch(() => {
           if (vivo) setDespensa(null);
+        });
+      return () => {
+        vivo = false;
+      };
+    }, [activa]),
+  );
+
+  // Suplementos: solo para el renglón-resumen ("3 tomas · 2 sugerencias").
+  // Las sugerencias las calcula el servidor al pedirlas; se recargan al
+  // volver de la hoja, donde se aceptan o descartan.
+  const [suplementos, setSuplementos] = useState<{ tomas: number; sugerencias: number } | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      if (activa !== "nutricion") return;
+      let vivo = true;
+      getSuplementos()
+        .then((respuesta) => {
+          if (vivo) setSuplementos({ tomas: respuesta.tomas.length, sugerencias: respuesta.sugerencias.length });
+        })
+        .catch(() => {
+          if (vivo) setSuplementos(null);
         });
       return () => {
         vivo = false;
@@ -542,9 +565,13 @@ export default function AjustesDetalleScreen() {
         <ScoreCard
           icon={Package}
           tint={colors.champan}
-          title="Tu alacena"
-          summary={resumenAlacena(me)}
-          onPress={() => router.push("/ajustes/detalle/alacena")}
+          title="Suplementos"
+          summary={
+            suplementos
+              ? resumenRenglon(suplementos.tomas, suplementos.sugerencias)
+              : resumenAlacena(me)
+          }
+          onPress={() => router.push("/ajustes/suplementos")}
         />
 
         <ScoreCard
@@ -883,7 +910,7 @@ function resumenDieta(me: MeResponse | null): string {
   return nombre;
 }
 
-/** Nombres cortos para que la alacena quepa en un renglón. */
+/** Nombres cortos para que los suplementos quepan en un renglón (respaldo sin red). */
 const ALACENA_CORTA: Record<string, string> = {
   WHEY: "Proteína",
   CREATINA: "Creatina",

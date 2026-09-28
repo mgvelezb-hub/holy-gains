@@ -210,7 +210,7 @@ export default function ReplantearDietaScreen() {
         </Card>
 
         <Card>
-          <SectionLabel>Lo que tienes en la alacena</SectionLabel>
+          <SectionLabel>Suplementos</SectionLabel>
           <Opciones
             opciones={SUPLEMENTOS.map((opcion) => ({
               valor: opcion.valor,

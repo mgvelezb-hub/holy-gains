@@ -334,12 +334,12 @@ export function EditorAlacena({ me }: { me: MeResponse | null }) {
   return (
     <Card>
       <View style={styles.sectionHeader}>
-        <SectionLabel>Lo que tienes en la alacena</SectionLabel>
-        <InfoTip titulo="Lo que tienes en la alacena">
+        <SectionLabel>Suplementos</SectionLabel>
+        <InfoTip titulo="Suplementos">
           <TextoInfo>
-            Se pregunta qué tienes, no qué deberías comprar: la app no recomienda productos.
-            Lo que marques entra a tu plan —el polvo como un alimento más del menú, la
-            creatina y el omega como pauta del día— y lo que no, simplemente no aparece.
+            Lo básico que ya tienes: el polvo entra al menú como un alimento más y la creatina
+            y el omega a tu pauta del día. Vitaminas, magnesio e infusiones viven en Ajustes →
+            Suplementos, donde la app sugiere solo con una señal de tus datos y tú decides.
           </TextoInfo>
         </InfoTip>
       </View>
