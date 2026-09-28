@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import { cargaDisciplinaSchema } from "@/lib/training/cargas-schema";
+import { planDisciplines } from "@/lib/training/disciplines";
 import { replanificar, type TiempoPorDia } from "@/lib/training/replan";
-import { WEEK_DAYS } from "@/lib/training/split";
+import { WEEK_DAYS, type WeekDay } from "@/lib/training/split";
+import type { DayKind } from "@/lib/training/types";
 
 /**
  * H2 — el perfil real de Mau: PESAS 5 días (L–V, 90 min), CARDIO como
@@ -19,9 +21,19 @@ import { WEEK_DAYS } from "@/lib/training/split";
  *    perfil.
  */
 
+const MONDAY = new Date("2026-01-05T12:00:00");
+
 const TIEMPO_MAU: TiempoPorDia = Object.fromEntries(
   WEEK_DAYS.map((dia) => [dia, ["SAB", "DOM"].includes(dia) ? 0 : 90]),
 ) as TiempoPorDia;
+
+const GYM_MAU = new Map<WeekDay, DayKind>([
+  ["LUN", "PIERNA_CUADRICEPS"],
+  ["MAR", "PECHO_ESPALDA"],
+  ["MIE", "HOMBRO"],
+  ["JUE", "PIERNA_FEMORAL"],
+  ["VIE", "BRAZO"],
+]);
 
 describe("H2 · el cardio después de pesas de Mau", () => {
   it("Ajustes: la carga conserva modo y preferencias de cardio al validarse", () => {
@@ -72,5 +84,63 @@ describe("H2 · el cardio después de pesas de Mau", () => {
 
     expect(replan.cargas.find((entrada) => entrada.discipline === "CARDIO")).toBeDefined();
     expect(replan.avisos.some((aviso) => aviso.toLowerCase().includes("cardio"))).toBe(true);
+  });
+
+  it("planDisciplines: 5 bloques de 20 min, gym a 70, sin aviso de pierna (cardio ligero)", () => {
+    const plan = planDisciplines({
+      weekStart: MONDAY,
+      otherDisciplines: [
+        {
+          discipline: "CARDIO",
+          sessionsPerWeek: 5,
+          modo: "DESPUES",
+          cardio: { equipo: "CAMINADORA", tipo: "HIIT", nivel: "BASICO", minutos: 20 },
+        },
+      ],
+      gymByDay: GYM_MAU,
+      niveles: {},
+      objetivo: "RECOMPOSICION",
+      isoWeek: 2,
+      timePerDay: TIEMPO_MAU,
+      compactos: true,
+    });
+
+    const cardio = plan.sessions.filter((sesion) => sesion.discipline === "CARDIO");
+    expect(cardio).toHaveLength(5);
+    expect(cardio.every((sesion) => sesion.minutes === 20 && sesion.orden === 2)).toBe(true);
+    expect(Object.values(plan.gymMinutesPorFecha)).toEqual([70, 70, 70, 70, 70]);
+    expect(plan.avisos).toEqual([]);
+  });
+
+  it("planDisciplines: el día de menos de 45 min se avisa con su nombre, no se tira", () => {
+    const plan = planDisciplines({
+      weekStart: MONDAY,
+      otherDisciplines: [{ discipline: "CARDIO", sessionsPerWeek: 5, modo: "DESPUES", cardio: { minutos: 20 } }],
+      gymByDay: GYM_MAU,
+      niveles: {},
+      objetivo: "RECOMPOSICION",
+      isoWeek: 2,
+      timePerDay: { ...TIEMPO_MAU, MAR: 40 },
+    });
+
+    expect(plan.sessions.filter((sesion) => sesion.discipline === "CARDIO")).toHaveLength(4);
+    expect(plan.avisos).toContain("El cardio no cupo el martes: 40 min declarados (pide al menos 45).");
+  });
+
+  it("planDisciplines: HIIT avanzado en día de pierna entra, con aviso de riesgo", () => {
+    const plan = planDisciplines({
+      weekStart: MONDAY,
+      otherDisciplines: [
+        { discipline: "CARDIO", sessionsPerWeek: 5, modo: "DESPUES", cardio: { tipo: "HIIT", nivel: "AVANZADO" } },
+      ],
+      gymByDay: GYM_MAU,
+      niveles: {},
+      objetivo: "RECOMPOSICION",
+      isoWeek: 2,
+      timePerDay: TIEMPO_MAU,
+    });
+
+    expect(plan.sessions.filter((sesion) => sesion.discipline === "CARDIO")).toHaveLength(5);
+    expect(plan.avisos.filter((aviso) => aviso.includes("riesgo de lesión"))).toHaveLength(2);
   });
 });

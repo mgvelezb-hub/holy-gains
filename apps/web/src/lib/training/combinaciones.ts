@@ -1,6 +1,6 @@
 import { gruposFatigados } from "@/lib/training/carga-muscular";
 import { DAY_GROUPS } from "@/lib/training/split";
-import type { DayKind, Discipline, MuscleGroup } from "@/lib/training/types";
+import type { DayKind, Discipline, MuscleGroup, PreferenciasCardio } from "@/lib/training/types";
 
 /**
  * Cómo conviven DOS disciplinas EL MISMO DÍA (Fase 9).
@@ -46,13 +46,60 @@ const MINIMO_OTRO = 25;
  * importar una de la otra acoplaría dos módulos que deben poder cambiar cada
  * uno por su lado.
  */
-const ALTO_IMPACTO: Discipline[] = ["BOX", "SQUASH", "CROSSFIT", "FUNCIONAL", "CARDIO"];
+const ALTO_IMPACTO: Discipline[] = ["BOX", "SQUASH", "CROSSFIT", "FUNCIONAL"];
+
+/** Qué tan duro es un bloque de cardio. HIIT básico cuenta como `media`. */
+export type IntensidadCardio = "baja" | "media" | "alta";
 
 export type BloqueDia = {
   discipline: Discipline;
   /** Solo tiene sentido cuando `discipline === "PESAS"`: qué día del split es. */
   dayKind?: DayKind;
+  /** Solo CARDIO: minutos del bloque, si ya se saben. */
+  minutos?: number;
+  /** Solo CARDIO: intensidad, si la persona declaró tipo y nivel. */
+  intensidad?: IntensidadCardio;
 };
+
+/**
+ * El cardio NO es alto impacto por ser cardio (H2).
+ *
+ * Hasta aquí CARDIO vivía en `ALTO_IMPACTO`, así que pierna + cardio era
+ * `null` y 2 de 5 días de gimnasio no aceptaban ni los 15–20 min de
+ * caminadora que Mau hace al terminar. Quince minutos de HIIT básico en
+ * caminadora no son el footwork del squash: no hay impacto lateral ni
+ * aterrizajes, y con ese volumen la interferencia sobre la pierna es mínima.
+ * Lo que sí compite con una pierna cansada es el cardio largo o intenso, y
+ * solo ese conserva la regla — como aviso, no como prohibición.
+ *
+ * - Ligero: ≤ 25 min, o intensidad baja/media declarada (≤ 30 min).
+ * - Intenso: > 30 min, o intensidad alta.
+ * - Sin datos (el cardio de día propio de siempre, 30 min): intenso, como antes.
+ */
+export function esCardioIntenso(bloque: BloqueDia): boolean {
+  if (bloque.discipline !== "CARDIO") return false;
+  if (bloque.intensidad === "alta") return true;
+  if (bloque.minutos !== undefined && bloque.minutos > 30) return true;
+  if (bloque.intensidad === "baja" || bloque.intensidad === "media") return false;
+  return bloque.minutos === undefined || bloque.minutos > 25;
+}
+
+/**
+ * La intensidad que declaran tipo y nivel de cardio, o `undefined` si no se
+ * declaró ninguno de los dos (entonces deciden los minutos). HIIT básico o
+ * medio es `media`: los intervalos suben el pulso, pero a nivel 6–12 de
+ * caminadora no son un esprint.
+ */
+export function intensidadDeCardio(prefs?: PreferenciasCardio): IntensidadCardio | undefined {
+  if (!prefs || (prefs.tipo === undefined && prefs.nivel === undefined)) return undefined;
+  const avanzado = prefs.nivel === "AVANZADO";
+  if (prefs.tipo === "CONTINUO") return avanzado ? "media" : "baja";
+  return avanzado ? "alta" : "media";
+}
+
+function esAltoImpacto(bloque: BloqueDia): boolean {
+  return ALTO_IMPACTO.includes(bloque.discipline) || esCardioIntenso(bloque);
+}
 
 /** Los grupos musculares que este bloque carga fuerte (nivel 2). */
 function gruposFuertes(bloque: BloqueDia): MuscleGroup[] {
@@ -122,7 +169,8 @@ function redondearA5(minutos: number): number {
  * - **Pierna de gimnasio + alto impacto**: sentadilla o peso muerto dejan la
  *   pierna fatigada, y el footwork de squash/box o el impacto de un metcon
  *   sobre una pierna cansada es el patrón clásico de esguince de tobillo o
- *   dolor de rodilla. No se ofrece en ningún orden.
+ *   dolor de rodilla. No se ofrece en ningún orden. El cardio intenso
+ *   (`esCardioIntenso`) baja a puntaje mínimo con aviso; el ligero no cuenta.
  * - **Squash + Box**: ambas de alto impacto y dominadas por el core — combinar
  *   dos sesiones que ya de por sí piden reservas de sistema nervioso central
  *   deja una de las dos sin calidad real.
@@ -156,11 +204,12 @@ export function compatibilidad(
 ): number | null {
   if (a.discipline === b.discipline) return null;
 
-  if (
-    (esDiaDePierna(a) && ALTO_IMPACTO.includes(b.discipline)) ||
-    (esDiaDePierna(b) && ALTO_IMPACTO.includes(a.discipline))
-  ) {
-    return opts?.explicita ? 10 : null;
+  if ((esDiaDePierna(a) && esAltoImpacto(b)) || (esDiaDePierna(b) && esAltoImpacto(a))) {
+    // El cardio intenso con pierna nunca se cierra en seco: se ofrece al
+    // último y con aviso (`avisoDeRiesgo`). El resto de alto impacto sigue
+    // siendo `null` salvo que la persona lo pidiera explícito.
+    const esCardio = a.discipline === "CARDIO" || b.discipline === "CARDIO";
+    return opts?.explicita || esCardio ? 10 : null;
   }
 
   if (esSquashBox(a, b)) return null;
@@ -332,7 +381,7 @@ export function avisoDeRiesgo(a: BloqueDia, b: BloqueDia): string | null {
   if (!pierna) return null;
 
   const otra = pierna === a ? b : a;
-  if (!ALTO_IMPACTO.includes(otra.discipline)) return null;
+  if (!esAltoImpacto(otra)) return null;
 
   return `Pierna pesada y ${NOMBRES_DISCIPLINA[otra.discipline].toLowerCase()} el mismo día: baja el rendimiento y sube el riesgo de lesión.`;
 }

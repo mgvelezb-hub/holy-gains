@@ -5,6 +5,7 @@ import {
   compatibilidad,
   ordenar,
   porqueDeCombo,
+  repartirCardioDespues,
   repartirMinutos,
   type BloqueDia,
 } from "@/lib/training/combinaciones";
@@ -28,7 +29,7 @@ const CARDIO: BloqueDia = { discipline: "CARDIO" };
 
 describe("compatibilidad: las incompatibilidades duras", () => {
   it("pierna de gimnasio + alto impacto nunca combina, en ningún orden", () => {
-    for (const alto of [SQUASH, BOX, CROSSFIT, { discipline: "FUNCIONAL" as const }, CARDIO]) {
+    for (const alto of [SQUASH, BOX, CROSSFIT, { discipline: "FUNCIONAL" as const }]) {
       expect(compatibilidad(PIERNA, alto), alto.discipline).toBeNull();
       expect(compatibilidad(alto, PIERNA), alto.discipline).toBeNull();
     }
@@ -83,8 +84,9 @@ describe("compatibilidad: el puntaje", () => {
     // Mismo bloque de gimnasio, un lado con natación (bajo impacto, "refresca")
     // y el otro con cardio (grupo compartido: pierna).
     const conNatacion = compatibilidad(TORSO_GYM, NATACION)!;
-    const conCardio = compatibilidad(PIERNA, CARDIO); // esto de hecho es null (pierna+cardio alto impacto)
-    expect(conCardio).toBeNull();
+    // Pierna + cardio sin datos (30 min de siempre) cuenta como intenso: se
+    // ofrece al último, con puntaje mínimo (H2).
+    expect(compatibilidad(PIERNA, CARDIO)).toBe(10);
     // Comparación más justa: torso + cardio (sin bono de natación) vs torso + natación.
     const torsoConCardio = compatibilidad(TORSO_GYM, CARDIO)!;
     expect(conNatacion).toBeGreaterThan(torsoConCardio);
@@ -208,5 +210,40 @@ describe("avisoDeRiesgo", () => {
     expect(avisoDeRiesgo(PIERNA, NATACION)).toBeNull();
     expect(avisoDeRiesgo(TORSO_GYM, SQUASH)).toBeNull();
     expect(avisoDeRiesgo(SQUASH, BOX)).toBeNull();
+  });
+});
+
+describe("cardio ligero vs intenso con pierna (H2)", () => {
+  const LIGERO: BloqueDia = { discipline: "CARDIO", minutos: 20, intensidad: "media" };
+  const CORTO_SIN_DATOS: BloqueDia = { discipline: "CARDIO", minutos: 20 };
+  const LARGO: BloqueDia = { discipline: "CARDIO", minutos: 45, intensidad: "baja" };
+  const HIIT_AVANZADO: BloqueDia = { discipline: "CARDIO", minutos: 20, intensidad: "alta" };
+
+  it("el cardio ligero (≤25 min o intensidad baja/media) combina con pierna sin aviso", () => {
+    for (const ligero of [LIGERO, CORTO_SIN_DATOS]) {
+      expect(compatibilidad(PIERNA, ligero)).toBeGreaterThan(10);
+      expect(avisoDeRiesgo(PIERNA, ligero)).toBeNull();
+    }
+  });
+
+  it("el cardio largo o intenso con pierna se ofrece al último y con aviso, nunca null", () => {
+    for (const intenso of [LARGO, HIIT_AVANZADO, CARDIO]) {
+      expect(compatibilidad(PIERNA, intenso)).toBe(10);
+      expect(avisoDeRiesgo(PIERNA, intenso)).toContain("riesgo de lesión");
+    }
+  });
+});
+
+describe("repartirCardioDespues (H2)", () => {
+  it("el gym cede: 90 min con 20 de cardio son 70 + 20, sin transición", () => {
+    expect(repartirCardioDespues(90, 20)).toEqual({ gym: 70, cardio: 20 });
+  });
+
+  it("si el gym quedaría por debajo de 25, el cardio se encoge", () => {
+    expect(repartirCardioDespues(45, 30)).toEqual({ gym: 25, cardio: 20 });
+  });
+
+  it("un día de menos de 45 min no aguanta los dos", () => {
+    expect(repartirCardioDespues(40, 20)).toBeNull();
   });
 });

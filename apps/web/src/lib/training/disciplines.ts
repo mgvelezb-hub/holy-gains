@@ -1,19 +1,23 @@
 import {
+  MINIMO_DIA_CON_CARDIO,
   avisoDeRiesgo,
   compatibilidad,
+  intensidadDeCardio,
   ordenar,
   porqueDeCombo,
+  repartirCardioDespues,
   repartirMinutos,
   type BloqueDia,
 } from "@/lib/training/combinaciones";
-import { DAY_GROUPS, WEEK_DAYS, type WeekDay } from "@/lib/training/split";
+import { MINUTOS_CARDIO_DESPUES } from "@/lib/training/replan";
+import { DAY_GROUPS, NOMBRES_DE_DIA, WEEK_DAYS, type WeekDay } from "@/lib/training/split";
 import {
   prescribirSesion,
   type NivelDisciplina,
   type ObjetivoAtleta,
   type SesionDisciplina,
 } from "@/lib/training/disciplinas";
-import type { DayKind, Discipline, DisciplineLoad } from "@/lib/training/types";
+import type { DayKind, Discipline, DisciplineLoad, PreferenciasCardio } from "@/lib/training/types";
 
 /**
  * Cómo conviven las disciplinas en una semana (Fase 7, ampliada en Fase 9 con
@@ -307,10 +311,10 @@ function intentarAnexar(
   // a propósito (`opts.explicita`): `compatibilidad` ya la dejó pasar con
   // puntaje bajo en vez de `null`, y aquí se avisa el riesgo — combinar sin
   // decirlo sería tan malo como prohibirlo sin excepción.
-  if (opts?.explicita) {
-    const aviso = avisoDeRiesgo(primero, segundo);
-    if (aviso) avisos.push(aviso);
-  }
+  // `avisoDeRiesgo` solo es no-nulo en esos dos casos (explícita, o cardio
+  // intenso con pierna — H2), así que preguntarle siempre no avisa de más.
+  const aviso = avisoDeRiesgo(primero, segundo);
+  if (aviso) avisos.push(aviso);
   const minutosNuevo = nuevoEsPrimero ? mejor.minutos[0] : mejor.minutos[1];
   const minutosExistente = nuevoEsPrimero ? mejor.minutos[1] : mejor.minutos[0];
 
@@ -332,6 +336,80 @@ function intentarAnexar(
   });
 
   return true;
+}
+
+/**
+ * H2 — el cardio `DESPUES`: 15–20 min al terminar el gym, cada día de pesas.
+ *
+ * No pasa por `intentarAnexar` porque ahí compite por el MEJOR día y se
+ * reparte 60/40; aquí la persona ya dijo qué días (todos los de gimnasio, en
+ * orden, hasta sus sesiones) y cuánto cardio. Lo que se ajusta es el gym: con
+ * `timePerDay` declarado, la sesión de pesas baja a lo que queda
+ * (`gymMinutesPorFecha` → el recorte por prioridad de `generate.ts`). Sin
+ * dato de tiempo, el gym se queda como está y el cardio se suma.
+ *
+ * Nunca en silencio: el día que ni cediendo cabe (< 45 min) se dice con su
+ * nombre y sus minutos.
+ */
+function anexarCardioDespues(
+  sesiones: number,
+  prefs: PreferenciasCardio | undefined,
+  gymByDay: Map<WeekDay, DayKind>,
+  colocaciones: Colocacion[],
+  dobles: Set<WeekDay>,
+  gymMinutesPorFecha: Record<string, number>,
+  weekStart: Date,
+  timePerDay: Partial<Record<WeekDay, number>> | null | undefined,
+  avisos: string[],
+): void {
+  const pedidos = prefs?.minutos ?? MINUTOS_CARDIO_DESPUES;
+  const diasGym = WEEK_DAYS.filter((day) => gymByDay.has(day));
+  let colocadas = 0;
+
+  for (const weekday of diasGym) {
+    if (colocadas >= sesiones) break;
+    if (dobles.has(weekday)) continue;
+
+    const total = timePerDay?.[weekday];
+    let minutosCardio = pedidos;
+    if (total !== undefined) {
+      const reparto = repartirCardioDespues(total, pedidos);
+      if (!reparto) {
+        avisos.push(
+          `El cardio no cupo el ${NOMBRES_DE_DIA[weekday]}: ${total} min declarados (pide al menos ${MINIMO_DIA_CON_CARDIO}).`,
+        );
+        continue;
+      }
+      minutosCardio = reparto.cardio;
+      gymMinutesPorFecha[dateOf(weekStart, weekday)] = reparto.gym;
+    }
+
+    const gym: BloqueDia = { discipline: "PESAS", dayKind: gymByDay.get(weekday) };
+    const cardio: BloqueDia = {
+      discipline: "CARDIO",
+      minutos: minutosCardio,
+      intensidad: intensidadDeCardio(prefs),
+    };
+    const aviso = avisoDeRiesgo(gym, cardio);
+    if (aviso) avisos.push(aviso);
+
+    dobles.add(weekday);
+    colocaciones.push({
+      weekday,
+      discipline: "CARDIO",
+      orden: 2,
+      minutes: minutosCardio,
+      sharesDayWithGym: true,
+      note: porqueDeCombo(gym, cardio),
+    });
+    colocadas += 1;
+  }
+
+  if (colocadas < sesiones && diasGym.length < sesiones) {
+    avisos.push(
+      `Cardio después de pesas: pediste ${sesiones} y solo hay ${diasGym.length} ${diasGym.length === 1 ? "día" : "días"} de gimnasio.`,
+    );
+  }
 }
 
 /**
@@ -465,6 +543,7 @@ function intentarCompactar(
   gymMinutesPorFecha: Record<string, number>,
   weekStart: Date,
   timePerDay: Partial<Record<WeekDay, number>> | null | undefined,
+  avisos: string[],
 ): void {
   for (;;) {
     const candidatos = candidatosCompactables(gymByDay, colocaciones);
@@ -516,6 +595,9 @@ function intentarCompactar(
 
     const [primero] = mejor.orden;
     const explicacion = porqueDeCombo(mejor.orden[0], mejor.orden[1]);
+    // Cardio intenso con pierna sí se compacta, pero diciéndolo (H2).
+    const riesgo = avisoDeRiesgo(mejor.orden[0], mejor.orden[1]);
+    if (riesgo) avisos.push(riesgo);
     const discDestino = mejor.destino.esGym ? "PESAS" : mejor.destino.colocacion!.discipline;
     const destinoEsPrimero = primero.discipline === discDestino;
     const minutosDestino = destinoEsPrimero ? mejor.minutos[0] : mejor.minutos[1];
@@ -636,8 +718,24 @@ export function planDisciplines(input: {
   // días de gimnasio (`soloGym`). `explicita` deja que, si de plano el único
   // gym de la semana es de pierna, la combinación con squash/box se acepte
   // con aviso en vez de cerrarse en seco — la persona ya lo pidió así.
+  // El cardio `DESPUES` va antes que nada y por su propio camino (H2): no
+  // busca el mejor día, va en cada día de gimnasio y el gym le cede minutos.
+  for (const load of cargaDespues.filter((carga) => carga.discipline === "CARDIO")) {
+    anexarCardioDespues(
+      Math.max(0, Math.min(7, Math.trunc(load.sessionsPerWeek))),
+      load.cardio,
+      gymByDay,
+      colocaciones,
+      dobles,
+      gymMinutesPorFecha,
+      weekStart,
+      timePerDay,
+      avisos,
+    );
+  }
+
   const noColocadas: Discipline[] = [];
-  for (const discipline of queueDespues) {
+  for (const discipline of queueDespues.filter((disciplina) => disciplina !== "CARDIO")) {
     const anexada = intentarAnexar(
       discipline,
       gymByDay,
@@ -679,7 +777,7 @@ export function planDisciplines(input: {
 
   // FASE 4 — compactar por gusto, esté o no la semana llena. ----------------
   if (compactos) {
-    intentarCompactar(gymByDay, colocaciones, gymMinutesPorFecha, weekStart, timePerDay);
+    intentarCompactar(gymByDay, colocaciones, gymMinutesPorFecha, weekStart, timePerDay, avisos);
   }
 
   // Construcción final: el ordinal de cada disciplina sale de su orden
