@@ -2238,3 +2238,18 @@ export function deleteAlimentoPropio(id: string): Promise<{ borrado: boolean }> 
     method: "DELETE",
   });
 }
+
+/**
+ * `PATCH /api/v1/me/nutricion` — qué platillos compuestos acepta el menú
+ * (licuados, sopas y caldos, cremas). Entra en el siguiente menú que se arme.
+ */
+export function patchPreparaciones(preparaciones: {
+  licuados: boolean;
+  sopas: boolean;
+  cremas: boolean;
+}): Promise<PreferenciasNutricionResponse> {
+  return apiFetch<PreferenciasNutricionResponse>("/api/v1/me/nutricion", {
+    method: "PATCH",
+    body: { preparaciones },
+  });
+}

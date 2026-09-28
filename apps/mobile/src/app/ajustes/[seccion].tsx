@@ -5,6 +5,7 @@ import {
   Check,
   ChefHat,
   Clock,
+  Soup,
   Heart,
   Package,
   RotateCcw,
@@ -52,6 +53,7 @@ import {
   type TiempoDeComida,
 } from "@/lib/api";
 import { ESTILOS_DIETA, PRESUPUESTOS, avisoDeDieta } from "@/lib/nutricion";
+import { preferenciaDelPerfil, resumenPreparaciones } from "@/lib/preparaciones";
 import { estadoDelReloj } from "@/lib/reloj-nativo";
 import { TIEMPOS_COCINA } from "@/lib/entrenamiento";
 import {
@@ -519,6 +521,14 @@ export default function AjustesDetalleScreen() {
               ?.nombre ?? "Sin restricción"
           }
           onPress={() => router.push("/ajustes/detalle/cocina")}
+        />
+
+        <ScoreCard
+          icon={Soup}
+          tint={colors.champan}
+          title="Preparaciones: licuados, sopas y cremas"
+          summary={resumenPreparaciones(preferenciaDelPerfil(me?.profile ?? null))}
+          onPress={() => router.push("/ajustes/detalle/preparaciones")}
         />
 
         <ScoreCard

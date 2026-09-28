@@ -35,6 +35,7 @@ import {
   EditorCocina,
   EditorDieta,
   EditorGustos,
+  EditorPreparaciones,
   EditorPresupuesto,
 } from "@/components/ajustes/detalle/EditoresNutricion";
 import { useTheme } from "@/context/theme";
@@ -73,6 +74,7 @@ const TITULOS: Record<string, string> = {
   cocina: "Cuánto quieres cocinar",
   alacena: "Tu alacena",
   gustos: "Lo que sí y lo que no",
+  preparaciones: "Licuados, sopas y cremas",
 };
 
 /** Temas que se pintan sin esperar `/me` (cargan lo suyo por su cuenta). */
@@ -161,6 +163,7 @@ export default function AjustesDetalleScreen() {
           {me && tema === "cocina" && <EditorCocina me={me} />}
           {me && tema === "alacena" && <EditorAlacena me={me} />}
           {me && tema === "gustos" && <EditorGustos me={me} />}
+          {me && tema === "preparaciones" && <EditorPreparaciones me={me} />}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

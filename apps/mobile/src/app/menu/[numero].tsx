@@ -18,6 +18,7 @@ import { Parrafo } from "@/components/Parrafo";
 import { EmptyState, ErrorState, LoadingState } from "@/components/States";
 import { useTheme } from "@/context/theme";
 import { ApiError, getNutrition, postSwap, type Menu, type MenuItem, type MenuMeal } from "@/lib/api";
+import { agruparComida } from "@/lib/preparaciones";
 import { fonts, radius, spacing, type as typeScale, type Palette } from "@/lib/theme";
 
 /**
@@ -34,6 +35,13 @@ type ItemDelMenu = MenuItem & {
     unitLabel: string;
     note?: string;
   } | null;
+  /** El platillo al que pertenece (licuado, sopa); ausente si va suelto. */
+  preparacionId?: string;
+};
+
+/** La comida con su platillo, que `api.ts` todavía no declara. */
+type ComidaConPlatillo = MenuMeal & {
+  preparacion?: { id: string; nombre: string; tipo: string };
 };
 
 /**
@@ -167,102 +175,121 @@ function ComidaDelMenu({
     }
   }
 
+  const grupo = agruparComida(
+    meal.items as ItemDelMenu[],
+    (meal as ComidaConPlatillo).preparacion,
+  );
+
+  function renglon(item: ItemDelMenu) {
+    const equivalencia = equivalenciaDe(item.name);
+    const expandido = abierto === item.name;
+    // El motor ya escribe la cantidad como se sirve —"2 cditas"—; si el
+    // menú es viejo, se cae a la porción por pieza y luego a los gramos.
+    const cantidad =
+      item.why && item.why.unitLabel !== "g"
+        ? `${item.display?.split(" de ")[0] ?? ""}`.trim()
+        : (item.portion ?? "");
+
+    return (
+      <View key={item.name}>
+        <Pressable
+          onPress={() => {
+            if (!equivalencia) return;
+            setErrorCambio(null);
+            setAbierto(expandido ? null : item.name);
+          }}
+          disabled={!equivalencia}
+          style={styles.itemFila}
+        >
+          <View style={styles.itemNombre}>
+            <Text style={styles.item}>
+              {item.name}
+              {item.free ? " · libre" : ""}
+            </Text>
+          </View>
+
+          <View style={styles.itemCantidad}>
+            {cantidad ? (
+              <Text style={styles.itemPorcion} numberOfLines={2}>
+                {cantidad}
+              </Text>
+            ) : !item.free ? (
+              <Text style={styles.itemPorcion}>{item.grams} g</Text>
+            ) : null}
+            {cantidad && !item.free ? (
+              <Text style={styles.itemGramos}>{item.grams} g</Text>
+            ) : null}
+          </View>
+
+          {equivalencia ? (
+            <Text style={styles.itemCambio}>{expandido ? "−" : "cambiar"}</Text>
+          ) : null}
+        </Pressable>
+
+        {expandido && equivalencia && (
+          <View style={styles.equivalenciaWrap}>
+            {equivalencia.aproximada ? (
+              <Parrafo style={styles.equivalenciaAviso}>
+                Cambio aproximado: los macros no quedan idénticos, pero es lo más cercano de tu
+                catálogo. Se queda guardado.
+              </Parrafo>
+            ) : (
+              <InfoTip titulo="Sobre este cambio">
+                <TextoInfo>El cambio se queda: tu menú, tu widget y tu día lo muestran así.</TextoInfo>
+              </InfoTip>
+            )}
+            <ScrollView
+              style={styles.equivalenciaLista}
+              nestedScrollEnabled
+              keyboardShouldPersistTaps="handled"
+            >
+              {equivalencia.options.map((opcion) => {
+                const aplicando = cambiando === opcion.name;
+                return (
+                  <Pressable
+                    key={opcion.name}
+                    onPress={() => cambiar(equivalencia.forName, opcion.name)}
+                    disabled={cambiando !== null}
+                    style={[styles.equivalenciaOpcion, aplicando && styles.equivalenciaOpcionOn]}
+                  >
+                    <Text style={styles.equivalenciaOpcionTexto} numberOfLines={2}>
+                      {opcion.portion ?? `${opcion.name} (${opcion.grams} g)`}
+                    </Text>
+                    {aplicando ? (
+                      <ActivityIndicator size="small" color={colors.champan} />
+                    ) : opcion.aproximada ? (
+                      <Text style={styles.equivalenciaAprox}>aprox.</Text>
+                    ) : null}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            {errorCambio && <Text style={styles.equivalenciaError}>{errorCambio}</Text>}
+          </View>
+        )}
+      </View>
+    );
+  }
+
   return (
     <View style={styles.meal}>
       <Text style={styles.mealLabel}>
         {meal.label} · {meal.timeHint}
       </Text>
 
-      {(meal.items as ItemDelMenu[]).map((item) => {
-        const equivalencia = equivalenciaDe(item.name);
-        const expandido = abierto === item.name;
-        // El motor ya escribe la cantidad como se sirve —"2 cditas"—; si el
-        // menú es viejo, se cae a la porción por pieza y luego a los gramos.
-        const cantidad =
-          item.why && item.why.unitLabel !== "g"
-            ? `${item.display?.split(" de ")[0] ?? ""}`.trim()
-            : (item.portion ?? "");
-
-        return (
-          <View key={item.name}>
-            <Pressable
-              onPress={() => {
-                if (!equivalencia) return;
-                setErrorCambio(null);
-                setAbierto(expandido ? null : item.name);
-              }}
-              disabled={!equivalencia}
-              style={styles.itemFila}
-            >
-              <View style={styles.itemNombre}>
-                <Text style={styles.item}>
-                  {item.name}
-                  {item.free ? " · libre" : ""}
-                </Text>
-              </View>
-
-              <View style={styles.itemCantidad}>
-                {cantidad ? (
-                  <Text style={styles.itemPorcion} numberOfLines={2}>
-                    {cantidad}
-                  </Text>
-                ) : !item.free ? (
-                  <Text style={styles.itemPorcion}>{item.grams} g</Text>
-                ) : null}
-                {cantidad && !item.free ? (
-                  <Text style={styles.itemGramos}>{item.grams} g</Text>
-                ) : null}
-              </View>
-
-              {equivalencia ? (
-                <Text style={styles.itemCambio}>{expandido ? "−" : "cambiar"}</Text>
-              ) : null}
-            </Pressable>
-
-            {expandido && equivalencia && (
-              <View style={styles.equivalenciaWrap}>
-                {equivalencia.aproximada ? (
-                  <Parrafo style={styles.equivalenciaAviso}>
-                    Cambio aproximado: los macros no quedan idénticos, pero es lo más cercano de tu
-                    catálogo. Se queda guardado.
-                  </Parrafo>
-                ) : (
-                  <InfoTip titulo="Sobre este cambio">
-                    <TextoInfo>El cambio se queda: tu menú, tu widget y tu día lo muestran así.</TextoInfo>
-                  </InfoTip>
-                )}
-                <ScrollView
-                  style={styles.equivalenciaLista}
-                  nestedScrollEnabled
-                  keyboardShouldPersistTaps="handled"
-                >
-                  {equivalencia.options.map((opcion) => {
-                    const aplicando = cambiando === opcion.name;
-                    return (
-                      <Pressable
-                        key={opcion.name}
-                        onPress={() => cambiar(equivalencia.forName, opcion.name)}
-                        disabled={cambiando !== null}
-                        style={[styles.equivalenciaOpcion, aplicando && styles.equivalenciaOpcionOn]}
-                      >
-                        <Text style={styles.equivalenciaOpcionTexto} numberOfLines={2}>
-                          {opcion.portion ?? `${opcion.name} (${opcion.grams} g)`}
-                        </Text>
-                        {aplicando ? (
-                          <ActivityIndicator size="small" color={colors.champan} />
-                        ) : opcion.aproximada ? (
-                          <Text style={styles.equivalenciaAprox}>aprox.</Text>
-                        ) : null}
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
-                {errorCambio && <Text style={styles.equivalenciaError}>{errorCambio}</Text>}
-              </View>
-            )}
+      {/* El platillo va primero: su nombre en una línea y sus ingredientes
+          debajo, uno por renglón —sin acordeón—. Lo suelto sigue después. */}
+      {grupo.platillo ? (
+        <>
+          <Text style={styles.platillo} numberOfLines={2}>
+            {grupo.platillo.nombre}
+          </Text>
+          <View style={styles.platilloIngredientes}>
+            {grupo.ingredientes.map((item) => renglon(item))}
           </View>
-        );
-      })}
+        </>
+      ) : null}
+      {grupo.sueltos.map((item) => renglon(item))}
     </View>
   );
 }
@@ -287,6 +314,17 @@ const makeStyles = (colors: Palette) =>
     },
     meal: {
       gap: 2,
+    },
+    platillo: {
+      fontFamily: fonts.sansSemiBold,
+      ...typeScale.body,
+      color: colors.marfil,
+      paddingTop: 5,
+    },
+    platilloIngredientes: {
+      paddingLeft: spacing.md,
+      borderLeftWidth: 1,
+      borderLeftColor: colors.cardBorder,
     },
     mealLabel: {
       fontFamily: fonts.sansSemiBold,

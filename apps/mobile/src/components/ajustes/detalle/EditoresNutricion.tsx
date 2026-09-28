@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 
 import { Card } from "@/components/Card";
 import { InfoTip, TextoInfo } from "@/components/InfoTip";
@@ -8,6 +8,7 @@ import { useTheme } from "@/context/theme";
 import {
   ApiError,
   patchNutricion,
+  patchPreparaciones,
   patchPresupuesto,
   type DietStyle,
   type MeResponse,
@@ -20,6 +21,12 @@ import {
   avisoDeDieta,
 } from "@/lib/nutricion";
 import { TIEMPOS_COCINA, listaDeAlimentos } from "@/lib/entrenamiento";
+import {
+  PREPARACIONES_TODAS,
+  TIPOS_DE_PREPARACION,
+  preferenciaDelPerfil,
+  type PreferenciaPreparaciones,
+} from "@/lib/preparaciones";
 import { fonts, radius, spacing, type as typeScale, type Palette } from "@/lib/theme";
 
 /**
@@ -362,6 +369,74 @@ export function EditorAlacena({ me }: { me: MeResponse | null }) {
 }
 
 /**
+ * Licuados, sopas y cremas: tres interruptores, uno por renglón. Apagar uno
+ * no quita alimentos del menú —el motor los sirve sueltos—, solo deja de
+ * agruparlos en ese platillo.
+ */
+export function EditorPreparaciones({ me }: { me: MeResponse | null }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  const [preferencia, setPreferencia] = useState<PreferenciaPreparaciones>(PREPARACIONES_TODAS);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!me?.profile) return;
+    setPreferencia(preferenciaDelPerfil(me.profile));
+  }, [me]);
+
+  async function alternar(clave: keyof PreferenciaPreparaciones, valor: boolean) {
+    const anterior = preferencia;
+    const siguiente = { ...preferencia, [clave]: valor };
+    setPreferencia(siguiente);
+    setMsg(null);
+    try {
+      await patchPreparaciones(siguiente);
+      setMsg("Guardado — regenera tu menú en Nutrición para verlo hoy, o espera a tu siguiente check-in.");
+    } catch (error) {
+      setPreferencia(anterior);
+      setMsg(error instanceof ApiError ? error.message : "No se pudo guardar");
+    }
+  }
+
+  return (
+    <Card>
+      <View style={styles.sectionHeader}>
+        <SectionLabel>Platillos en tu menú</SectionLabel>
+        <InfoTip titulo="Licuados, sopas y cremas">
+          <TextoInfo>
+            El menú puede juntar alimentos en un platillo: el licuado del desayuno, la sopa de la
+            comida. Se arman con los mismos alimentos y las mismas porciones de tu plan, así que
+            los macros no cambian. Si apagas uno, esos alimentos siguen llegando sueltos.
+          </TextoInfo>
+        </InfoTip>
+      </View>
+
+      <View style={styles.lista}>
+        {TIPOS_DE_PREPARACION.map((tipo) => (
+          <View key={tipo.clave} style={styles.interruptor}>
+            <Text style={styles.interruptorNombre} numberOfLines={1}>
+              {tipo.nombre}
+            </Text>
+            <InfoTip titulo={tipo.nombre}>
+              <TextoInfo>{tipo.detalle}</TextoInfo>
+            </InfoTip>
+            <Switch
+              value={preferencia[tipo.clave]}
+              onValueChange={(valor) => alternar(tipo.clave, valor)}
+              trackColor={{ true: colors.guinda, false: colors.cardBorder }}
+              thumbColor={colors.marfil}
+            />
+          </View>
+        ))}
+      </View>
+
+      {msg && <Text style={styles.msg}>{msg}</Text>}
+    </Card>
+  );
+}
+
+/**
  * Lo que sí y lo que no: los favoritos pesan en la elección del menú y los
  * excluidos salen de él y de la lista de súper.
  */
@@ -454,6 +529,18 @@ const makeStyles = (colors: Palette) =>
     filaNombre: { fontFamily: fonts.sansSemiBold, ...typeScale.body, color: colors.marfil },
     filaNombreOn: { color: colors.pergamino },
     filaDetalle: { fontFamily: fonts.sans, ...typeScale.bodySm, color: colors.paloRosa },
+    interruptor: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+      minHeight: 44,
+    },
+    interruptorNombre: {
+      flexShrink: 1,
+      fontFamily: fonts.sansMedium,
+      ...typeScale.body,
+      color: colors.marfil,
+    },
     subLabel: {
       fontFamily: fonts.sansSemiBold,
       ...typeScale.label,
