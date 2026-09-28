@@ -442,7 +442,92 @@
     "prepMin": 1,
     "tags": [
       "rapido",
-      "vegetariano"
+      "vegetariano",
+      "leche"
+    ],
+    "servingG": 250,
+    "unit": "ml",
+    "maxG": 300,
+    "serving": {
+      "unit": "taza",
+      "gramsPerUnit": 240,
+      "minUnits": 0.5,
+      "maxUnits": 1.25,
+      "step": 0.25
+    }
+  },
+  {
+    "id": "leche_entera",
+    "name": "Leche entera",
+    "role": "proteina_magra",
+    "proteinPer100": 3.2,
+    "carbPer100": 4.8,
+    "fatPer100": 3.3,
+    "fiberPer100": 0,
+    "kcalPer100": 61.7,
+    "gi": 31,
+    "costRel": 1,
+    "prepMin": 1,
+    "tags": [
+      "rapido",
+      "vegetariano",
+      "leche"
+    ],
+    "servingG": 250,
+    "unit": "ml",
+    "maxG": 300,
+    "serving": {
+      "unit": "taza",
+      "gramsPerUnit": 240,
+      "minUnits": 0.5,
+      "maxUnits": 1.25,
+      "step": 0.25
+    }
+  },
+  {
+    "id": "leche_deslactosada",
+    "name": "Leche deslactosada",
+    "role": "proteina_magra",
+    "proteinPer100": 3.2,
+    "carbPer100": 4.8,
+    "fatPer100": 3.2,
+    "fiberPer100": 0,
+    "kcalPer100": 60.8,
+    "gi": 31,
+    "costRel": 1,
+    "prepMin": 1,
+    "tags": [
+      "rapido",
+      "vegetariano",
+      "leche"
+    ],
+    "servingG": 250,
+    "unit": "ml",
+    "maxG": 300,
+    "serving": {
+      "unit": "taza",
+      "gramsPerUnit": 240,
+      "minUnits": 0.5,
+      "maxUnits": 1.25,
+      "step": 0.25
+    }
+  },
+  {
+    "id": "leche_deslactosada_light",
+    "name": "Leche deslactosada light",
+    "role": "proteina_magra",
+    "proteinPer100": 3.3,
+    "carbPer100": 4.9,
+    "fatPer100": 1.6,
+    "fiberPer100": 0,
+    "kcalPer100": 47.2,
+    "gi": 32,
+    "costRel": 1,
+    "prepMin": 1,
+    "tags": [
+      "rapido",
+      "vegetariano",
+      "leche"
     ],
     "servingG": 250,
     "unit": "ml",
