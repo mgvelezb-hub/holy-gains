@@ -19,6 +19,8 @@ export interface MenuItemWhyView {
 }
 
 export interface MenuItemView {
+  /** Id del catálogo (o `custom:<id>` de un alimento propio); ausente en menús viejos. */
+  foodId?: string;
   name: string;
   grams: number;
   free: boolean;
@@ -145,6 +147,7 @@ export function toMenuView(
           const name = String(row.name ?? "");
           const grams = Number(row.grams ?? 0);
           return {
+            ...(typeof row.foodId === "string" ? { foodId: row.foodId } : {}),
             name,
             grams,
             free: row.free === true,

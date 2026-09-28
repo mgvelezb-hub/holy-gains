@@ -5,13 +5,14 @@ import { Prisma } from "@prisma/client";
 import { decide } from "engine";
 
 import { necesitaRevisionHumana } from "@/lib/coachy/aprobacion";
-import { engineConfigForActivity, toEngineCheckIn, toEngineProfile } from "@/lib/coachy/mapping";
+import { engineConfigForActivity, toEngineCheckIn } from "@/lib/coachy/mapping";
+import { perfilDelMotor } from "@/lib/coachy/perfil-motor";
 import { activityWindow } from "@/lib/health/db";
 import { puntoCeroDe } from "@/lib/checkins";
 import type { VisionAnalysis, WeekSignals } from "@/lib/coachy/types";
 import { analyzePhotos } from "@/lib/coachy/vision";
 import type { EngineDecision } from "@/lib/engine-types";
-import { decimalToNumber } from "@/lib/format";
+import { decimalToNumber, isoFromDateColumn } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 import { requireApproval } from "@/lib/env";
 
@@ -171,7 +172,12 @@ export async function runCheckinAnalysis(checkInId: string): Promise<AnalysisRes
     [...history].reverse().map((row) => decimalToNumber(row.weightKg)).find((w) => w !== null) ??
     null;
 
-  const engineProfile = toEngineProfile(profile, latestWeight);
+  // El perfil sale del mismo lugar que el menú: los estudios del último año
+  // cuentan (una glucosa en ayuno alta sube el piso de fibra de la decisión).
+  const { engineProfile } = await perfilDelMotor(user.id, profile, {
+    latestWeightKg: latestWeight,
+    hoy: isoFromDateColumn(checkIn.date),
+  });
   const activeInjury = profile.conditions
     .map((condition) => condition.toLowerCase())
     .includes("lesion_activa");

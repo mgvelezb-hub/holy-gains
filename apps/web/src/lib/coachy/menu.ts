@@ -5,11 +5,10 @@ import type { Prisma } from "@prisma/client";
 import { catalogoCon, distribute, generateMenu, listaDeSuper } from "engine";
 import type { Food } from "engine";
 
-import { alimentosPropiosDe } from "@/lib/coachy/alimentos-propios-db";
 import { rellenaEquivalencias } from "@/lib/coachy/equivalencias-backfill";
 import { toGroceries } from "@/lib/coachy/menu-view";
+import { perfilDelMotor } from "@/lib/coachy/perfil-motor";
 import { porcionNatural } from "@/lib/coachy/porciones";
-import { toEngineProfile } from "@/lib/coachy/mapping";
 import type { EngineDecision } from "@/lib/engine-types";
 import { prisma } from "@/lib/prisma";
 
@@ -76,15 +75,28 @@ export async function syncMealPlans(
 
   if (!needsMenu) return existing;
 
-  const engineProfile = toEngineProfile(profile, options.latestWeightKg ?? null);
+  // El mismo perfil que el resto de los caminos: estudios y alimentos
+  // propios incluidos (`perfil-motor.ts`).
+  const { engineProfile, extraFoods } = await perfilDelMotor(profile.userId, profile, {
+    latestWeightKg: options.latestWeightKg ?? null,
+  });
   const plan = generateMenu(
     engineDecision.meals,
     engineProfile,
     undefined,
     semillaDelMenu(engineDecision.menuSeed, options),
-    { phase: engineDecision.phase, extraFoods: await alimentosPropiosDe(profile.userId) },
+    { phase: engineDecision.phase, extraFoods },
   );
 
+  return guardaMenus(decisionId, plan, true);
+}
+
+/** Guarda los dos menús de un plan del motor. `overwrite: false` deja intactos los que ya existen. */
+async function guardaMenus(
+  decisionId: string,
+  plan: ReturnType<typeof generateMenu>,
+  overwrite: boolean,
+): Promise<MealPlan[]> {
   const saved: MealPlan[] = [];
 
   for (const menu of plan.menus) {
@@ -102,7 +114,7 @@ export async function syncMealPlans(
       await prisma.mealPlan.upsert({
         where: { decisionId_menuNumber: { decisionId, menuNumber: menu.id } },
         create: { decisionId, menuNumber: menu.id, ...data },
-        update: data,
+        update: overwrite ? data : {},
       }),
     );
   }
@@ -164,7 +176,9 @@ export async function materializeMealPlans(
   profile: Profile,
   options: MaterializeOptions,
 ): Promise<MealPlan[]> {
-  const engineProfile = toEngineProfile(profile, options.latestWeightKg ?? null);
+  const { engineProfile, extraFoods } = await perfilDelMotor(profile.userId, profile, {
+    latestWeightKg: options.latestWeightKg ?? null,
+  });
   const targets = {
     kcal: decision.kcal,
     proteinG: decision.proteinG,
@@ -180,32 +194,10 @@ export async function materializeMealPlans(
     phase: decision.phase as EngineDecision["phase"],
     // Los alimentos que dio de alta la persona entran por el mismo camino que
     // el catálogo: sin esto, darlos de alta no cambiaba nada del menú.
-    extraFoods: await alimentosPropiosDe(profile.userId),
+    extraFoods,
   });
 
-  const saved: MealPlan[] = [];
-
-  for (const menu of plan.menus) {
-    const equivalences = menu.meals.flatMap((meal) =>
-      meal.equivalences.map((equivalence) => ({ slot: meal.slot, ...equivalence })),
-    );
-
-    const data = {
-      mealsJson: menu.meals as unknown as Prisma.InputJsonValue,
-      equivalencesJson: equivalences as unknown as Prisma.InputJsonValue,
-      groceryListJson: plan.shoppingList as unknown as Prisma.InputJsonValue,
-    };
-
-    saved.push(
-      await prisma.mealPlan.upsert({
-        where: { decisionId_menuNumber: { decisionId: decision.id, menuNumber: menu.id } },
-        create: { decisionId: decision.id, menuNumber: menu.id, ...data },
-        update: options.overwrite ? data : {},
-      }),
-    );
-  }
-
-  return saved;
+  return guardaMenus(decision.id, plan, options.overwrite);
 }
 
 /**
@@ -264,7 +256,7 @@ async function rellenaEquivalenciasGuardadas(
   profile: Profile,
 ): Promise<MealPlan[]> {
   try {
-    const engineProfile = toEngineProfile(profile, null);
+    const { engineProfile } = await perfilDelMotor(profile.userId, profile);
     const salida: MealPlan[] = [];
 
     for (const plan of plans) {
@@ -347,11 +339,18 @@ export function listaDeSuperDe(
   }));
 }
 
-export async function currentMealPlan(
+/**
+ * La decisión que rige el plan: la última publicada; si nada se publicó, la
+ * última aprobada o corregida.
+ *
+ * Una sola regla para todos: antes "regenerar", la despensa y la leche
+ * buscaban la última APROBADA mientras la pantalla leía la última publicada,
+ * y con una decisión corregida cada uno rearmaba un menú distinto.
+ */
+export async function decisionVigente(
   userId: string,
-  profile: Profile,
-): Promise<CurrentMealPlan | null> {
-  const decision =
+): Promise<(Decision & { checkIn: { date: Date } | null }) | null> {
+  return (
     (await prisma.decision.findFirst({
       where: { userId, publishedAt: { not: null } },
       orderBy: { publishedAt: "desc" },
@@ -361,7 +360,15 @@ export async function currentMealPlan(
       where: { userId, status: { in: ["APROBADA", "CORREGIDA"] } },
       orderBy: { checkIn: { date: "desc" } },
       include: { checkIn: { select: { date: true } } },
-    }));
+    }))
+  );
+}
+
+export async function currentMealPlan(
+  userId: string,
+  profile: Profile,
+): Promise<CurrentMealPlan | null> {
+  const decision = await decisionVigente(userId);
 
   if (decision === null) return null;
 
