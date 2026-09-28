@@ -25,6 +25,11 @@ final class Conectividad: NSObject, ObservableObject, WCSessionDelegate {
     @Published var sesion: SesionEnVivo?
     @Published var resumen: ResumenDelDia?
     @Published var alcanzable = false
+    /// El teléfono acaba de terminar la sesión ("Terminar aquí" o se cerró la
+    /// última serie). La vista lo usa para enseñar "Sesión terminada" antes de
+    /// volver a inicio — sin este aviso, `sesion` se ponía en `nil` de golpe y
+    /// la pantalla saltaba directo a `esperando`, como si nada hubiera pasado.
+    @Published var finalizadaPorTelefono = false
 
     private override init() {
         super.init()
@@ -64,13 +69,26 @@ final class Conectividad: NSObject, ObservableObject, WCSessionDelegate {
     /// El contexto trae las dos cosas por separado y cada una se aplica sola:
     /// un resumen mal formado no puede dejar sin sesión a quien está a media
     /// serie.
+    ///
+    /// Antes de eso se revisa si lo que llegó es el aviso de fin de sesión:
+    /// `{"tipo": "fin"}` plano (por `sendMessage`, a media sesión) o
+    /// `"sesion": "null"` dentro del contexto (el teléfono manda `nil` como
+    /// sesión al terminar). Los dos caminos cierran igual.
     private func aplicar(contexto: [String: Any]) {
+        if let tipo = contexto["tipo"] as? String, tipo == "fin" {
+            finalizar()
+            return
+        }
+
         let decodificador = JSONDecoder()
 
-        if let json = contexto["sesion"] as? String,
-           let data = json.data(using: .utf8),
-           let sesion = try? decodificador.decode(SesionEnVivo.self, from: data) {
-            self.sesion = sesion
+        if let json = contexto["sesion"] as? String {
+            if json == "null" {
+                finalizar()
+            } else if let data = json.data(using: .utf8),
+                      let sesion = try? decodificador.decode(SesionEnVivo.self, from: data) {
+                self.sesion = sesion
+            }
         }
 
         if let json = contexto["resumen"] as? String,
@@ -81,6 +99,13 @@ final class Conectividad: NSObject, ObservableObject, WCSessionDelegate {
             // dejarle el dato por escrito.
             Compartido.guardar(resumen)
         }
+    }
+
+    /// El teléfono terminó la sesión. La vista se encarga de detener el
+    /// entrenamiento y el contador; aquí solo se refleja el estado.
+    private func finalizar() {
+        sesion = nil
+        finalizadaPorTelefono = true
     }
 
     // MARK: - Mandar al teléfono
@@ -119,5 +144,23 @@ final class Conectividad: NSObject, ObservableObject, WCSessionDelegate {
 
         // Cola garantizada: llega aunque el teléfono esté fuera de alcance.
         WCSession.default.transferUserInfo(["serieCerrada": json])
+    }
+
+    /**
+     Manda el pulso al teléfono mientras dura el descanso.
+
+     Solo por `sendMessage`, nunca por cola: es una lectura que se repite cada
+     pocos segundos, así que si esta se pierde porque el teléfono está fuera de
+     alcance no pasa nada — la siguiente la reemplaza. Ponerla en
+     `transferUserInfo` acumularía lecturas viejas en la cola para nada.
+     */
+    func mandarFC(bpm: Int) {
+        guard WCSession.isSupported(), WCSession.default.isReachable else { return }
+        let mensaje: [String: Any] = [
+            "tipo": "fc",
+            "bpm": bpm,
+            "t": Date().timeIntervalSince1970,
+        ]
+        WCSession.default.sendMessage(mensaje, replyHandler: nil, errorHandler: nil)
     }
 }

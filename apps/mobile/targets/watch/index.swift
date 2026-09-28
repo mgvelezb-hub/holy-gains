@@ -56,7 +56,13 @@ struct SesionView: View {
 
     var body: some View {
         Group {
-            if let sesion = conectividad.sesion, let pendiente = sesion.pendiente {
+            // Primero el aviso del teléfono: si acaba de terminar la sesión,
+            // no importa qué traiga `sesion` — ya se puso en `nil`, pero el
+            // aviso merece su propia pantalla y no un salto directo a
+            // `esperando`.
+            if conectividad.finalizadaPorTelefono {
+                terminadaPorTelefono
+            } else if let sesion = conectividad.sesion, let pendiente = sesion.pendiente {
                 enCurso(sesion: sesion, pendiente: pendiente)
             } else if conectividad.sesion != nil {
                 terminada
@@ -168,6 +174,32 @@ struct SesionView: View {
         }
     }
 
+    /**
+     El teléfono terminó la sesión de golpe ("Terminar aquí" o se acabó el
+     último ejercicio con el reloj mirando otra pantalla).
+
+     Se cierra igual que `terminada` —entrenamiento, descanso, contador— y
+     además, a los 3 segundos, apaga el aviso para que la siguiente vez que
+     `body` se evalúe caiga en `esperando` sin que nadie tenga que tocar nada.
+     */
+    private var terminadaPorTelefono: some View {
+        VStack(spacing: 6) {
+            Text("Sesión terminada")
+                .font(.headline)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
+        }
+        .padding()
+        .onAppear {
+            entrenamiento.terminar()
+            descanso.saltar()
+            contador.limpiar()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                conectividad.finalizadaPorTelefono = false
+            }
+        }
+    }
+
     private func enCurso(sesion: SesionEnVivo, pendiente: (ejercicio: Int, serie: Int)) -> some View {
         let ejercicio = sesion.ejercicios[pendiente.ejercicio]
         let serie = ejercicio.series[pendiente.serie]
@@ -178,10 +210,15 @@ struct SesionView: View {
                 Text(ejercicio.nombre)
                     .font(.headline)
                     .lineLimit(2)
+                    .minimumScaleFactor(0.7)
+                    .truncationMode(.tail)
 
                 Text("Serie \(pendiente.serie + 1) de \(ejercicio.series.count)\(serie.calentamiento ? " · calentamiento" : "")")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                    .truncationMode(.tail)
 
                 if let restante = descanso.restante {
                     descansando(restante: restante)
@@ -191,13 +228,15 @@ struct SesionView: View {
                     }
                 }
 
-                HStack(spacing: 10) {
-                    Text("\(avance.hechas)/\(avance.total) series")
-                    if let pulso = entrenamiento.pulso {
-                        Label("\(pulso)", systemImage: "heart.fill")
+                // En 45 mm cabe en una fila; en 41/40 mm se apila para que
+                // nada se corte a la mitad — tres datos con símbolo pueden
+                // pasar del ancho de la pantalla chica sin esto.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 10) {
+                        resumenDeAvance(avance: avance)
                     }
-                    if let kcal = entrenamiento.kcal {
-                        Label("\(kcal)", systemImage: "flame.fill")
+                    VStack(alignment: .leading, spacing: 2) {
+                        resumenDeAvance(avance: avance)
                     }
                 }
                 .font(.caption2)
@@ -217,6 +256,8 @@ struct SesionView: View {
                     } label: {
                         Text("Terminar entrenamiento")
                             .font(.caption2)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     }
                     .buttonStyle(.bordered)
                 }
@@ -230,6 +271,38 @@ struct SesionView: View {
         }
         .onChange(of: pendiente.serie) { avanzar(a: pendiente, ejercicio: ejercicio, serie: serie) }
         .onChange(of: pendiente.ejercicio) { avanzar(a: pendiente, ejercicio: ejercicio, serie: serie) }
+        // El teléfono recalcula el descanso por esfuerzo, pulso o RPE y
+        // reenvía la sesión — sin que cambie la serie pendiente, así que los
+        // dos `onChange` de arriba no se enteran. Si ya se está descansando,
+        // se corre el fin por la diferencia; si no, no hace falta nada: la
+        // próxima vez que arranque un descanso, `avanzar()` ya lee este valor.
+        .onChange(of: ejercicio.descansoSeg) { anterior, nuevo in
+            guard descanso.restante != nil, ejercicioPrevio == pendiente.ejercicio else { return }
+            descanso.sumar(nuevo - anterior)
+        }
+        // Cada ~5 s durante el descanso, para que el teléfono sepa cómo vas
+        // bajando el pulso sin que nadie tenga que mirar el reloj y avisar.
+        .onReceive(Timer.publish(every: 5, on: .main, in: .common).autoconnect()) { _ in
+            guard descanso.restante != nil, let pulso = entrenamiento.pulso else { return }
+            conectividad.mandarFC(bpm: pulso)
+        }
+    }
+
+    /// Los tres datos del avance, en el orden que sea — HStack o VStack los
+    /// pintan igual porque cada uno ya es una fila completa (`Label` incluye
+    /// su texto e ícono juntos).
+    @ViewBuilder
+    private func resumenDeAvance(avance: (hechas: Int, total: Int)) -> some View {
+        Text("\(avance.hechas)/\(avance.total) series")
+            .lineLimit(1)
+        if let pulso = entrenamiento.pulso {
+            Label("\(pulso)", systemImage: "heart.fill")
+                .lineLimit(1)
+        }
+        if let kcal = entrenamiento.kcal {
+            Label("\(kcal)", systemImage: "flame.fill")
+                .lineLimit(1)
+        }
     }
 
     // MARK: - Subvistas
@@ -260,6 +333,8 @@ struct SesionView: View {
                 Text("\(Int(reps))")
                     .font(.system(size: 34, weight: .bold, design: .rounded))
                     .frame(maxWidth: .infinity)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
                     .focusable()
                     .digitalCrownRotation($reps, from: 0, through: 100, by: 1, sensitivity: .low, isContinuous: false)
 
@@ -270,42 +345,35 @@ struct SesionView: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
 
             HStack {
                 Button { ajustarPeso(-paso) } label: { Image(systemName: "minus") }
                     .buttonStyle(.bordered)
 
+                // Peso de 3 dígitos en lb (p.ej. "225") sigue cabiendo gracias
+                // al `minimumScaleFactor`: sin él, un peso pesado en la unidad
+                // que estira más el texto se cortaba contra los botones.
                 Text(pesoPintado)
                     .font(.system(size: 30, weight: .semibold, design: .rounded))
                     .frame(maxWidth: .infinity)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
 
                 Button { ajustarPeso(paso) } label: { Image(systemName: "plus") }
                     .buttonStyle(.bordered)
             }
 
-            // El salto y la unidad, en una sola fila: la barra sube de 2.5 en
-            // 2.5 pero la mancuerna de 0.5, y hay gimnasios con los discos en
-            // libras. Mismos controles que el teléfono, tamaño muñeca.
-            HStack(spacing: 3) {
-                ForEach([0.5, 1.0, 2.5], id: \.self) { opcion in
-                    Button {
-                        paso = opcion
-                    } label: {
-                        Text(opcion == 0.5 ? "±.5" : String(format: "±%.0f", opcion))
-                            .font(.system(size: 11, weight: paso == opcion ? .bold : .regular))
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(paso == opcion ? .green : .gray)
+            // El salto y la unidad, en una sola fila cuando cabe (45 mm); en
+            // 41/40 mm se parte en dos filas — cuatro botones en una sola fila
+            // angosta terminaban encimados o con el texto cortado.
+            ViewThatFits(in: .horizontal) {
+                pasoYUnidad
+                VStack(spacing: 3) {
+                    HStack(spacing: 3) { pasoChips }
+                    HStack(spacing: 3) { botonUnidad }
                 }
-
-                Button {
-                    enLibras.toggle()
-                } label: {
-                    Text(enLibras ? "lb" : "kg")
-                        .font(.system(size: 11, weight: .bold))
-                }
-                .buttonStyle(.bordered)
-                .tint(.orange)
             }
 
             if contador.calibrado(indiceEjercicio) {
@@ -334,6 +402,8 @@ struct SesionView: View {
             Text(automatico ? "\(contador.reps)" : "\(Int(reps))")
                 .font(.system(size: 44, weight: .bold, design: .rounded))
                 .frame(maxWidth: .infinity)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
                 .focusable()
                 .digitalCrownRotation($reps, from: 0, through: 100, by: 1, sensitivity: .low, isContinuous: false)
 
@@ -341,6 +411,9 @@ struct SesionView: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .truncationMode(.tail)
 
             Button(action: alCerrar) {
                 Label("Serie hecha", systemImage: "checkmark")
@@ -350,18 +423,85 @@ struct SesionView: View {
         }
     }
 
+    /// Los chips de paso (±.5 / ±1 / ±2.5) — piezas sueltas para poder
+    /// pintarlos en una fila (45 mm) o en dos (41/40 mm) sin repetir código.
+    @ViewBuilder
+    private var pasoChips: some View {
+        ForEach([0.5, 1.0, 2.5], id: \.self) { opcion in
+            Button {
+                paso = opcion
+            } label: {
+                Text(opcion == 0.5 ? "±.5" : String(format: "±%.0f", opcion))
+                    .font(.system(size: 11, weight: paso == opcion ? .bold : .regular))
+                    .lineLimit(1)
+            }
+            .buttonStyle(.bordered)
+            .tint(paso == opcion ? .green : .gray)
+        }
+    }
+
+    /// El botón kg/lb, suelto por la misma razón que `pasoChips`.
+    @ViewBuilder
+    private var botonUnidad: some View {
+        Button {
+            enLibras.toggle()
+        } label: {
+            Text(enLibras ? "lb" : "kg")
+                .font(.system(size: 11, weight: .bold))
+                .lineLimit(1)
+        }
+        .buttonStyle(.bordered)
+        .tint(.orange)
+    }
+
+    /// El salto y la unidad en una sola fila (45 mm y más anchas).
+    private var pasoYUnidad: some View {
+        HStack(spacing: 3) {
+            pasoChips
+            botonUnidad
+        }
+    }
+
     /// El descanso, que ocupa el lugar del contador mientras corre.
     @ViewBuilder
     private func descansando(restante: Int) -> some View {
         Text(Descanso.formato(restante))
             .font(.system(size: 40, weight: .bold, design: .rounded))
             .frame(maxWidth: .infinity)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
             .monospacedDigit()
 
         Text("de descanso")
             .font(.caption2)
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity)
+
+        // El peso de la SIGUIENTE serie, ajustable aquí mismo — es el rato en
+        // que sí hay tiempo de pensarlo, a diferencia de "Empezar" que llega
+        // con la barra ya en la mano. `peso` es el mismo estado que "Paso 1"
+        // va a mostrar después y el que viaja al teléfono cuando esa serie se
+        // cierre (`SerieCerrada.pesoKg`): no hace falta un mensaje nuevo.
+        VStack(spacing: 2) {
+            Text("Siguiente: \(pesoPintado) \(enLibras ? "lb" : "kg")")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .truncationMode(.tail)
+
+            HStack {
+                Button { ajustarPeso(-paso) } label: { Image(systemName: "minus") }
+                    .buttonStyle(.bordered)
+                Text(pesoPintado)
+                    .font(.system(size: 20, weight: .semibold, design: .rounded))
+                    .frame(maxWidth: .infinity)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                Button { ajustarPeso(paso) } label: { Image(systemName: "plus") }
+                    .buttonStyle(.bordered)
+            }
+        }
 
         HStack {
             Button("+30 s") { descanso.sumar(30) }
@@ -370,6 +510,8 @@ struct SesionView: View {
                 .buttonStyle(.borderedProminent)
         }
         .font(.caption2)
+        .lineLimit(1)
+        .minimumScaleFactor(0.85)
     }
 
     // MARK: - Acciones
@@ -468,6 +610,12 @@ struct SesionView: View {
         }
 
         WKInterfaceDevice.current().play(.success)
+
+        // La última lectura de pulso de la serie, antes de que arranque el
+        // descanso (o el próximo timer de 5 s la reemplace).
+        if let pulso = entrenamiento.pulso {
+            conectividad.mandarFC(bpm: pulso)
+        }
 
         conectividad.cerrar(
             serie: SerieCerrada(

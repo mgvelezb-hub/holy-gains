@@ -20,8 +20,27 @@ struct SerieEnVivo: Codable, Identifiable {
 struct EjercicioEnVivo: Codable, Identifiable {
     var id: String { nombre }
     let nombre: String
+    /// El teléfono lo recalcula por esfuerzo, pulso y RPE, y reenvía la sesión
+    /// cada vez que cambia — no es fijo por ejercicio. Un descanso ya
+    /// corriendo se ajusta a este valor sin reiniciarse (ver el
+    /// `.onChange(of: ejercicio.descansoSeg)` en `index.swift`, que llama a
+    /// `Descanso.sumar` con la diferencia); el que arranca de cero siempre
+    /// usa el más reciente porque `avanzar()` lo lee del mensaje que acaba de
+    /// llegar.
     let descansoSeg: Int
     var series: [SerieEnVivo]
+    /// Índices de `series` que el teléfono dejó sin hacer. Llegan con
+    /// `hechas: nil` para siempre, así que sin esta lista el reloj se
+    /// quedaría esperando una serie que nadie va a cerrar. Opcional a
+    /// propósito: una sesión vieja o sin recorte no trae la llave, y entonces
+    /// no se omite nada.
+    var omitidas: [Int]? = nil
+
+    /// `true` si el índice está en `omitidas` — el reloj no la espera ni
+    /// ofrece cerrarla.
+    func omitida(_ indice: Int) -> Bool {
+        omitidas?.contains(indice) ?? false
+    }
 }
 
 struct SesionEnVivo: Codable {
@@ -29,10 +48,12 @@ struct SesionEnVivo: Codable {
     let titulo: String
     var ejercicios: [EjercicioEnVivo]
 
-    /// La primera serie sin cerrar, en el orden en que se entrena.
+    /// La primera serie sin cerrar y no omitida, en el orden en que se
+    /// entrena.
     var pendiente: (ejercicio: Int, serie: Int)? {
         for (e, ejercicio) in ejercicios.enumerated() {
-            for (s, serie) in ejercicio.series.enumerated() where serie.hechas == nil {
+            for (s, serie) in ejercicio.series.enumerated()
+            where serie.hechas == nil && !ejercicio.omitida(s) {
                 return (e, s)
             }
         }
@@ -43,7 +64,10 @@ struct SesionEnVivo: Codable {
         var hechas = 0
         var total = 0
         for ejercicio in ejercicios {
-            for serie in ejercicio.series {
+            for (s, serie) in ejercicio.series.enumerated() {
+                // Una serie omitida no cuenta ni como pendiente ni como
+                // hecha: para el avance es como si no existiera.
+                guard !ejercicio.omitida(s) else { continue }
                 total += 1
                 if serie.hechas != nil { hechas += 1 }
             }
