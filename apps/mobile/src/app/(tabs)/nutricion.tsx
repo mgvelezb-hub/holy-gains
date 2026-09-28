@@ -20,6 +20,7 @@ import { useScrollTop } from "@/lib/scroll-top";
 import {
   ApiError,
   getHorariosComidaCompleto,
+  getSuplementos,
   getNutrition,
   ONBOARDING_WEEK_DAYS,
   putMenuPreferido,
@@ -28,6 +29,7 @@ import {
   type NutritionResponse,
 } from "@/lib/api";
 import { programarComidas, type ComidaAviso } from "@/lib/recordatorio";
+import { extrasPorSlot } from "@/lib/suplementos";
 import { fonts, radius, spacing, type as typeScale, type Palette } from "@/lib/theme";
 import { actualizarComidaEnElReloj } from "@/lib/reloj-nativo";
 import { formatMealItem, pickNextMeal, syncWidgetData } from "@/lib/widget";
@@ -134,14 +136,18 @@ export default function NutricionScreen() {
       if (comidas.length === 0) return;
 
       let vivo = true;
-      getHorariosComidaCompleto()
-        .then((respuesta) => {
+      // Las tomas amarradas a cada comida viajan en su "Prepárate" ("+
+      // omega-3"). Si no se pueden leer, el aviso sale igual, sin ellas.
+      Promise.all([getHorariosComidaCompleto(), getSuplementos().catch(() => null)])
+        .then(([respuesta, suplementos]) => {
           if (!vivo) return;
           const horariosPorDia = respuesta.horariosPorDia ?? {};
+          const extras = extrasPorSlot(suplementos?.tomas ?? [], { soloPendientes: false });
 
           const avisos: ComidaAviso[] = comidas.map((comida) => ({
             slot: comida.slot,
             label: comida.label,
+            extras: extras[comida.slot] ?? [],
             menuNumber,
             items: comida.items.map((item) => ({ name: item.name })),
             horaPorDia: Object.fromEntries(

@@ -5,6 +5,7 @@ import {
   Flame,
   Footprints,
   Moon,
+  Pill,
   Plus,
   Ruler,
   UtensilsCrossed,
@@ -24,6 +25,7 @@ import {
   getMe,
   getNotifications,
   getNutrition,
+  getSuplementos,
   getTrainingToday,
   getTrainingWeek,
   markNotificationsRead,
@@ -104,6 +106,8 @@ type HomeData = {
   healthDays: HealthDayPayload[];
   checkIns: CheckInRow[];
   activities: Activity[];
+  /** "1 de 3 · siguiente: omega-3 con la comida"; `null` si no toma nada o falló. */
+  suplementos: { total: number; linea: string } | null;
 };
 
 /** true si el error de API es "onboarding incompleto" (403): no es una falla real. */
@@ -145,7 +149,7 @@ export default function HoyScreen() {
 
   const load = useCallback(async () => {
     try {
-      const [me, decisionRes, notificationsRes, nutrition, today, week, history, checkinsRes, healthRes, activitiesRes] =
+      const [me, decisionRes, notificationsRes, nutrition, today, week, history, checkinsRes, healthRes, activitiesRes, suplementosRes] =
         await Promise.all([
           getMe(),
           getDecision(),
@@ -167,6 +171,8 @@ export default function HoyScreen() {
           getCheckins().catch(() => null),
           getHealthDays().catch(() => null),
           getActivities().catch(() => null),
+          // Las tomas del día: tolerante a fallar, como la racha.
+          getSuplementos().catch(() => null),
         ]);
 
       const sources = {
@@ -196,6 +202,9 @@ export default function HoyScreen() {
         healthDays: healthRes?.dias ?? [],
         checkIns: checkinsRes?.checkIns ?? [],
         activities: activitiesRes?.actividades ?? [],
+        suplementos: suplementosRes
+          ? { total: suplementosRes.resumen.total, linea: suplementosRes.resumen.linea }
+          : null,
       });
       setError(null);
 
@@ -342,6 +351,17 @@ export default function HoyScreen() {
       </View>
 
       <ComidaDeHoy nutrition={nutrition} onPress={() => router.push("/comida-hoy")} />
+
+      {/* Las tomas del día en una línea; el marcado vive en su hoja. */}
+      {data.suplementos && data.suplementos.total > 0 && (
+        <ScoreCard
+          icon={Pill}
+          tint={colors.champan}
+          title="Suplementos"
+          summary={data.suplementos.linea}
+          onPress={() => router.push("/suplementos-hoy")}
+        />
+      )}
 
       <DecisionCard decision={decision} onPress={() => router.push("/decision")} />
 

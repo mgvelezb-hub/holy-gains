@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { Camera, ChevronLeft, Route, Ruler, ThumbsUp, Wrench } from "lucide-react-native";
+import { Camera, ChevronLeft, Pill, Route, Ruler, ThumbsUp, Wrench } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -14,11 +14,13 @@ import {
   ApiError,
   getDecision,
   type BloqueMensual,
-  type Decision,
+  type DecisionConSuplementos,
   type LecturaZona,
   type MetricaMensual,
 } from "@/lib/api";
 import { cancelarAvisoAnalisis } from "@/lib/recordatorio";
+import { lineaSugerencia, motivoCorto } from "@/lib/suplementos";
+import { ListaRenglones } from "@/components/suplementos/HojaSuplementos";
 import { fonts, radius, spacing, type as typeScale, type Palette } from "@/lib/theme";
 
 /**
@@ -30,7 +32,7 @@ import { fonts, radius, spacing, type as typeScale, type Palette } from "@/lib/t
  * fotos" (zonas contra la referencia).
  */
 
-type Hoja = "mes" | "fotos" | "bien" | "ajustar" | "plan" | null;
+type Hoja = "mes" | "fotos" | "bien" | "ajustar" | "plan" | "suplementos" | null;
 
 const METRICA_LABEL: Record<MetricaMensual, string> = {
   cintura: "Cintura",
@@ -69,7 +71,7 @@ export default function DecisionScreen() {
   // `undefined` = todavía no contestó el servidor; `null` = contestó y no hay
   // decisión publicada. Sin la distinción, un `null` inicial se leería igual
   // que "ya se sabe que no hay decisión" antes de que la llamada regrese.
-  const [decision, setDecision] = useState<Decision | null | undefined>(undefined);
+  const [decision, setDecision] = useState<DecisionConSuplementos | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [hoja, setHoja] = useState<Hoja>(null);
@@ -77,7 +79,7 @@ export default function DecisionScreen() {
   const load = useCallback(async () => {
     try {
       const res = await getDecision();
-      setDecision(res.decision);
+      setDecision(res.decision as DecisionConSuplementos | null);
       setError(null);
       // Ya la está viendo: el aviso de "tu análisis está listo" sobra.
       if (res.estado === "lista") void cancelarAvisoAnalisis();
@@ -101,6 +103,7 @@ export default function DecisionScreen() {
 
   const mensual = decision?.mensual?.esMensual ? decision.mensual : null;
   const retro = decision?.retro ?? null;
+  const sugeridos = decision?.suplementos?.sugerencias ?? [];
 
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
@@ -178,6 +181,15 @@ export default function DecisionScreen() {
                     onPress={retro.ajustar.length > 0 ? () => setHoja("ajustar") : undefined}
                   />
                 )}
+                {sugeridos.length > 0 && (
+                  <ScoreCard
+                    icon={Pill}
+                    tint={colors.champan}
+                    title={`Suplementos sugeridos · ${sugeridos.length}`}
+                    summary={lineaSugerencia(sugeridos[0]!)}
+                    onPress={() => setHoja("suplementos")}
+                  />
+                )}
                 {retro && (
                   <ScoreCard
                     icon={Route}
@@ -209,6 +221,17 @@ export default function DecisionScreen() {
         {hoja === "fotos" && mensual && <DetalleFotos fotos={mensual.fotos} />}
         {hoja === "bien" && retro && <Lista renglones={retro.va_bien} />}
         {hoja === "ajustar" && retro && <Lista renglones={retro.ajustar} />}
+        {hoja === "suplementos" && (
+          <ListaRenglones
+            renglones={sugeridos.map((s) => ({ id: s.supplement, titulo: s.nombre, detalle: motivoCorto(s.motivo) }))}
+            onPress={(id) => {
+              // La decisión (Acepto / Ya lo tomo / No quiero) vive en la hoja de
+              // Ajustes → Suplementos: un solo lugar donde se elige.
+              setHoja(null);
+              router.push(`/ajustes/suplementos?s=${id}`);
+            }}
+          />
+        )}
         {hoja === "plan" && retro && (
           <View style={styles.hojaCuerpo}>
             <Lista renglones={[retro.plan.macros, retro.plan.menu, retro.plan.rutina]} />
@@ -245,6 +268,8 @@ function tituloDe(hoja: Hoja): string {
       return "Hay que ajustar";
     case "plan":
       return "Tu plan de aquí en adelante";
+    case "suplementos":
+      return "Suplementos sugeridos";
     default:
       return "";
   }
