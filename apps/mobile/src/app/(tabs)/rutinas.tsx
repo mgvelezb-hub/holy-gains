@@ -29,6 +29,7 @@ import { iconoDe } from "@/lib/disciplinas";
 import {
   RECORTES,
   etiquetaDelDia,
+  lineaDelDia,
   nombreDelRecorte,
   ordenarBloquesDelDia,
   type BloqueDelDia,
@@ -939,7 +940,7 @@ function WeekOverview({
                   // ("Squash → Natación"), y el detalle de cada uno va junto,
                   // en el mismo orden.
                   <>
-                    <Text style={styles.weekMuscle}>{etiquetaDelDia(bloques)}</Text>
+                    <Text style={styles.weekMuscle}>{lineaDelDia(bloques)}</Text>
                     <Text style={styles.weekMeta}>
                       {bloques.map((bloque) => detalleDeBloque(bloque)).join(" · ")}
                     </Text>
@@ -1011,7 +1012,7 @@ function OrdenDelDia({ bloques }: { bloques: Array<BloqueDelDia<SessionView>> })
 
   return (
     <View style={styles.ordenDelDia}>
-      <Text style={styles.ordenDelDiaTitulo}>Hoy en este orden: {etiquetaDelDia(bloques)}</Text>
+      <Text style={styles.ordenDelDiaTitulo}>Hoy en este orden: {lineaDelDia(bloques)}</Text>
       {notas.map((nota) => (
         <Text key={nota} style={styles.ordenDelDiaNota}>
           {nota}

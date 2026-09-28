@@ -130,6 +130,12 @@ export type OtherSession = {
    * tercero — `combinaciones.ts` trabaja siempre en pares.
    */
   orden: 1 | 2;
+  /**
+   * Los minutos que le quedaron al gym ese día cuando cedió tiempo a este
+   * bloque (H2: "Gym · 70 min + Cardio HIIT caminadora · 20 min"). Ausente si
+   * el gym no se redimensionó.
+   */
+  gymMinutes?: number;
 };
 
 export type DisciplinePlan = {
@@ -801,8 +807,11 @@ export function planDisciplines(input: {
     const enOrden = [...lista].sort((a, b) => WEEK_DAYS.indexOf(a.weekday) - WEEK_DAYS.indexOf(b.weekday));
     enOrden.forEach((colocacion, index) => {
       const ordinal = index + 1;
+      const fecha = dateOf(weekStart, colocacion.weekday);
+      const gymMinutes = colocacion.sharesDayWithGym ? gymMinutesPorFecha[fecha] : undefined;
       sessions.push({
-        date: dateOf(weekStart, colocacion.weekday),
+        ...(gymMinutes !== undefined ? { gymMinutes } : {}),
+        date: fecha,
         weekday: colocacion.weekday,
         discipline,
         minutes: colocacion.minutes,

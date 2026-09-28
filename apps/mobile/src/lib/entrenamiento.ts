@@ -293,3 +293,29 @@ export function etiquetaDelDia<T extends { muscleGroup: string }>(
 ): string {
   return bloques.map(etiquetaBloque).join(" → ");
 }
+
+/**
+ * La línea de un día para "Mi semana" y el detalle del día.
+ *
+ * Gym + cardio después de pesas (H2) se lee con sus minutos, que es lo que
+ * Mau quiere ver de un vistazo: "Gym · 70 min + Cardio HIIT caminadora · 20
+ * min". Cualquier otro día es la etiqueta de siempre ("Squash → Natación").
+ */
+export function lineaDelDia<T extends { muscleGroup: string }>(bloques: Array<BloqueDelDia<T>>): string {
+  const gym = bloques.find((bloque) => bloque.tipo === "gym");
+  const cardio = bloques.find(
+    (bloque): bloque is { tipo: "otra"; data: OtherSessionView } =>
+      bloque.tipo === "otra" && bloque.data.discipline === "CARDIO" && bloque.data.sesion?.cardio !== undefined,
+  );
+  if (!gym || !cardio) return etiquetaDelDia(bloques);
+
+  const gymTexto = cardio.data.gymMinutes !== undefined ? `Gym · ${cardio.data.gymMinutes} min` : "Gym";
+  return `${gymTexto} + ${textoCardio(cardio.data)}`;
+}
+
+/** "Cardio HIIT caminadora · 20 min" — el bloque de cardio en una línea. */
+export function textoCardio(otra: OtherSessionView): string {
+  const etiqueta = otra.sesion?.cardio?.etiqueta ?? DISCIPLINE_LABELS[otra.discipline];
+  return `${etiqueta} · ${otra.minutes} min`;
+}
+

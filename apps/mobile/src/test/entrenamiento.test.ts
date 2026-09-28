@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { OtherSessionView } from "@/lib/api";
-import { etiquetaDelDia, ordenarBloquesDelDia } from "@/lib/entrenamiento";
+import { etiquetaDelDia, lineaDelDia, ordenarBloquesDelDia } from "@/lib/entrenamiento";
 
 /**
  * Orden de los bloques de un día combinado (Fase 7).
@@ -99,5 +99,49 @@ describe("etiquetaDelDia", () => {
         { tipo: "otra", data: natacion },
       ]),
     ).toBe("Pierna → Natación");
+  });
+});
+
+describe("lineaDelDia: gym + cardio después (H2)", () => {
+  const CARDIO = otra({
+    discipline: "CARDIO",
+    minutes: 20,
+    gymMinutes: 70,
+    sesion: {
+      discipline: "CARDIO",
+      nivel: "PRINCIPIANTE",
+      focus: "HIIT",
+      unidad: "min",
+      cargaTotal: 19,
+      minutes: 20,
+      blocks: [],
+      deload: false,
+      notes: [],
+      cardio: {
+        equipo: "CAMINADORA",
+        tipo: "HIIT",
+        nivelMaquina: 8,
+        etiqueta: "Cardio HIIT caminadora",
+        intervalos: { rondas: 7, fuerteSeg: 60, suaveSeg: 60, nivelFuerte: 8, nivelSuave: 3 },
+        calentamientoSeg: 180,
+        enfriamientoSeg: 120,
+      },
+    },
+  });
+
+  it("se lee 'Gym · 70 min + Cardio HIIT caminadora · 20 min'", () => {
+    expect(lineaDelDia(ordenarBloquesDelDia(GYM, [CARDIO]))).toBe(
+      "Gym · 70 min + Cardio HIIT caminadora · 20 min",
+    );
+  });
+
+  it("sin minutos de gym recortados, el gym va sin número", () => {
+    expect(lineaDelDia(ordenarBloquesDelDia(GYM, [{ ...CARDIO, gymMinutes: undefined }]))).toBe(
+      "Gym + Cardio HIIT caminadora · 20 min",
+    );
+  });
+
+  it("fuera de gym + cardio, es la etiqueta de siempre", () => {
+    expect(lineaDelDia(ordenarBloquesDelDia(GYM, [otra()]))).toBe(etiquetaDelDia(ordenarBloquesDelDia(GYM, [otra()])));
   });
 });

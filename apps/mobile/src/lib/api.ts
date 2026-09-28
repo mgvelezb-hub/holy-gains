@@ -695,6 +695,38 @@ export type SesionDisciplina = {
   blocks: BloqueSesion[];
   deload: boolean;
   notes: string[];
+  /** Solo el cardio en máquina (H2): lo que pinta la tarjeta y corre el timer. */
+  cardio?: DetalleCardio;
+};
+
+export type EquipoCardio = "CAMINADORA" | "ESCALERA" | "BICI" | "ELIPTICA" | "LIBRE";
+export type TipoCardio = "HIIT" | "CONTINUO";
+export type NivelCardio = "BASICO" | "MEDIO" | "AVANZADO";
+
+/** Igual que `DetalleCardio` en apps/web/src/lib/training/disciplinas/tipos.ts. */
+export type DetalleCardio = {
+  equipo: EquipoCardio;
+  tipo: TipoCardio;
+  nivelMaquina: number;
+  /** "Cardio HIIT caminadora". */
+  etiqueta: string;
+  intervalos: {
+    rondas: number;
+    fuerteSeg: number;
+    suaveSeg: number;
+    nivelFuerte: number;
+    nivelSuave: number;
+  } | null;
+  calentamientoSeg: number;
+  enfriamientoSeg: number;
+};
+
+/** Preferencias de cardio dentro de `otherDisciplines` (sin columna propia). */
+export type PreferenciasCardio = {
+  equipo?: EquipoCardio;
+  tipo?: TipoCardio;
+  nivel?: NivelCardio;
+  minutos?: number;
 };
 
 /**
@@ -717,6 +749,8 @@ export type OtherSessionView = {
    * gimnasio no declara `orden`: ocupa la posición que la otra no usa.
    */
   orden: 1 | 2;
+  /** Minutos que le quedaron al gym ese día al cederle tiempo a este bloque (H2). */
+  gymMinutes?: number;
 };
 
 export const SWIM_LEVELS = ["PRINCIPIANTE", "INTERMEDIO", "AVANZADO"] as const;

@@ -35,7 +35,7 @@ import {
   NIVELES_POR_DISCIPLINA,
   type BloqueDelDia,
   diasDeGimnasio,
-  etiquetaDelDia,
+  lineaDelDia,
   ordenarBloquesDelDia,
 } from "@/lib/entrenamiento";
 import { DIAS_SEMANA, PROPOSITOS, TIEMPOS_DIA, type Proposito, type WeekDay } from "@/lib/replantear";
@@ -266,7 +266,7 @@ export function diasResumenDe(semana: WeekView | null): DiaResumen[] {
     const otrasDia = semana.otherSessions?.filter((otra) => otra.date === date) ?? [];
     const bloques: Array<BloqueDelDia<SessionView>> = ordenarBloquesDelDia(gym, otrasDia);
     if (bloques.length === 0) continue;
-    dias.push({ date, abrev: weekdayAbbrOf(date), etiqueta: etiquetaDelDia(bloques) });
+    dias.push({ date, abrev: weekdayAbbrOf(date), etiqueta: lineaDelDia(bloques) });
   }
   return dias;
 }

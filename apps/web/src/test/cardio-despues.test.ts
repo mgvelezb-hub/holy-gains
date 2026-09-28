@@ -112,6 +112,8 @@ describe("H2 · el cardio después de pesas de Mau", () => {
     expect(plan.avisos).toEqual([]);
     // Y trae su prescripción de máquina, no la de correr.
     expect(cardio[0]!.sesion?.cardio?.etiqueta).toBe("Cardio HIIT caminadora");
+    // La vista arma "Gym · 70 min + Cardio HIIT caminadora · 20 min" con esto.
+    expect(cardio.every((sesion) => sesion.gymMinutes === 70)).toBe(true);
   });
 
   it("planDisciplines: el día de menos de 45 min se avisa con su nombre, no se tira", () => {
