@@ -34,11 +34,30 @@ export type SerieViva = {
   intensidad?: "normal" | "fallo" | "dropset";
   /** Con qué lado va, en los ejercicios de un lado a la vez. */
   lado?: "IZQ" | "DER" | "AMBOS";
+  /**
+   * El peso que traía el plan, antes de que la persona lo cambiara. Es lo que
+   * permite leer la tendencia: si en la primera cargó 5 kg más de lo sugerido,
+   * la siguiente se sugiere también 5 kg arriba.
+   */
+  pesoPlanKg?: number | null;
+  /** RPE de la serie (1–10), si se capturó. */
+  rpe?: number | null;
+  /**
+   * La persona dio el ejercicio por terminado antes de esta serie: se queda
+   * SIN registrar (no en cero) y ya no cuenta como pendiente.
+   */
+  omitida?: boolean;
 };
 
 export type EjercicioVivo = {
   indice: number;
   nombre: string;
+  /** Id del catálogo, cuando lo hay: con él se sabe si dos ejercicios son el mismo. */
+  exerciseId?: string | null;
+  /** Rol del ejercicio en el catálogo ("cuadriceps_compuesto"): de ahí sale el descanso. */
+  poolRole?: string;
+  /** Esquema de series ("FUERZA", "PIRAMIDAL"...): fuerza descansa más que metabólico. */
+  esquema?: string;
   /**
    * A qué se puede cambiar si la máquina está ocupada. Viaja con la sesión
    * —y por lo tanto al teléfono— para que el cambio funcione sin señal.
@@ -76,6 +95,13 @@ export type EstadoSesion = {
    * fondo, con la pantalla apagada o tras un reinicio de la pantalla.
    */
   descansoHasta: number | null;
+  /**
+   * De qué serie es el descanso en curso y cuándo empezó. Es lo que deja que
+   * la frecuencia cardiaca del reloj mueva el término: hace falta saber cuánto
+   * lleva descansando y cuánto costó la serie. `manual` = la persona ya lo
+   * movió con "+30 s" y la FC deja de tocarlo.
+   */
+  descanso?: { desde: number; ejercicio: number; serie: number; manual: boolean } | null;
   /** La sesión ya no tiene series pendientes. */
   terminada: boolean;
 };
@@ -98,7 +124,8 @@ export function primeraPendiente(
   for (let e = 0; e < ejercicios.length; e += 1) {
     const series = ejercicios[e]!.series;
     for (let s = 0; s < series.length; s += 1) {
-      if (series[s]!.hechas === null) return { ejercicio: e, serie: s };
+      const serie = series[s]!;
+      if (serie.hechas === null && serie.omitida !== true) return { ejercicio: e, serie: s };
     }
   }
   return null;
@@ -130,7 +157,7 @@ export function cerrarSerie(
   const pendiente = primeraPendiente(ejercicios);
   if (pendiente === null) {
     return {
-      estado: { ...estado, ejercicios, descansoHasta: null, terminada: true },
+      estado: { ...estado, ejercicios, descansoHasta: null, descanso: null, terminada: true },
       siguiente: "fin",
     };
   }
@@ -144,7 +171,10 @@ export function cerrarSerie(
   const siguienteEsDropset =
     !cambiaEjercicio &&
     ejercicios[pendiente.ejercicio]?.series[pendiente.serie]?.intensidad === "dropset";
-  const descanso = siguienteEsDropset ? 0 : (ejercicios[estado.ejercicioActual]?.descansoSeg ?? 0);
+  const actual = ejercicios[estado.ejercicioActual];
+  const cerrada = actual?.series[estado.serieActual];
+  const descanso =
+    siguienteEsDropset || !actual || !cerrada ? 0 : descansoPara(cerrada, actual).segundos;
 
   return {
     estado: {
@@ -162,6 +192,10 @@ export function cerrarSerie(
       // "Ya estoy", que cuesta un toque; adivinar por la persona costaba una
       // serie mal descansada.
       descansoHasta: descanso > 0 ? ahora + descanso * 1000 : null,
+      descanso:
+        descanso > 0
+          ? { desde: ahora, ejercicio: estado.ejercicioActual, serie: estado.serieActual, manual: false }
+          : null,
       terminada: false,
     },
     siguiente: cambiaEjercicio ? "otro_ejercicio" : "descanso",
@@ -217,7 +251,7 @@ export function descansoTermino(estado: EstadoSesion, ahora: number = Date.now()
 
 /** Apaga el descanso agotado. Se llama al detectar que llegó a cero. */
 export function cerrarDescanso(estado: EstadoSesion): EstadoSesion {
-  return { ...estado, descansoHasta: null };
+  return { ...estado, descansoHasta: null, descanso: null };
 }
 
 /** Suma (o resta) segundos al descanso en curso, moviendo su hora de término. */
@@ -228,11 +262,16 @@ export function ajustarDescanso(
 ): EstadoSesion {
   if (estado.descansoHasta === null) return estado;
   const hasta = estado.descansoHasta + segundos * 1000;
-  return { ...estado, descansoHasta: hasta > ahora ? hasta : null };
+  if (hasta <= ahora) return { ...estado, descansoHasta: null, descanso: null };
+  return {
+    ...estado,
+    descansoHasta: hasta,
+    descanso: estado.descanso ? { ...estado.descanso, manual: true } : estado.descanso,
+  };
 }
 
 export function saltarDescanso(estado: EstadoSesion): EstadoSesion {
-  return { ...estado, descansoHasta: null };
+  return { ...estado, descansoHasta: null, descanso: null };
 }
 
 /** Cuántas series de la sesión ya se cerraron, y cuántas hay. */
@@ -241,6 +280,9 @@ export function progreso(estado: EstadoSesion): { hechas: number; total: number 
   let total = 0;
   for (const ejercicio of estado.ejercicios) {
     for (const serie of ejercicio.series) {
+      // Las que se dejaron al terminar el ejercicio antes no son deuda: la
+      // barra se llena con lo que la persona decidió hacer.
+      if (serie.omitida === true && serie.hechas === null) continue;
       total += 1;
       if (serie.hechas !== null) hechas += 1;
     }
@@ -329,4 +371,467 @@ export function etiquetaDeSerie(ejercicio: EjercicioVivo, indice: number): strin
   const posicion = ejercicio.series.slice(0, indice + 1).filter((otra) => otra.lado === lado).length;
 
   return `${NOMBRE_DE_LADO[lado]} · serie ${posicion} de ${delLado.length}${sufijo}`;
+}
+
+// ---------------------------------------------------------------------------
+// Descanso por esfuerzo (I2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Cómo se clasifica un ejercicio para el descanso.
+ *
+ * - `compuesto`: varias articulaciones y mucha masa muscular (sentadilla,
+ *   press, remo, jalón, peso muerto). Es lo que más cansa al sistema nervioso
+ *   y lo que más tarda en recuperar la fosfocreatina.
+ * - `aislado`: una articulación (curl, extensión, elevación lateral).
+ * - `accesorio`: lo de en medio (unilaterales, empujes cerrados, dominadas
+ *   asistidas de bíceps).
+ */
+export type TipoDeEjercicio = "compuesto" | "accesorio" | "aislado";
+
+const ROLES_COMPUESTOS = new Set([
+  "cuadriceps_compuesto",
+  "cadena_posterior",
+  "empuje_horizontal",
+  "empuje_inclinado",
+  "empuje_vertical",
+  "jalon_horizontal",
+  "jalon_vertical",
+  "complejo",
+  "gluteo",
+]);
+
+const ROLES_AISLADOS = new Set([
+  "apertura",
+  "deltoide_lateral",
+  "deltoide_posterior",
+  "deltoide_frontal",
+  "extension_polea",
+  "extension_maquina",
+  "extension_libre",
+  "abductor",
+  "aductor",
+  "aductor_gluteo",
+  "pantorrilla",
+  "flexion_tronco",
+  "flexion_cadera",
+  "antiextension",
+  "trapecio",
+  "braquial",
+  "femoral",
+  "calentamiento_empuje",
+]);
+
+/** `null` cuando la sesión no trae el rol (sesiones cacheadas antes de I2). */
+export function tipoDeEjercicio(poolRole: string | undefined): TipoDeEjercicio | null {
+  if (!poolRole) return null;
+  if (ROLES_COMPUESTOS.has(poolRole)) return "compuesto";
+  if (ROLES_AISLADOS.has(poolRole) || poolRole.endsWith("_aislado")) return "aislado";
+  return "accesorio";
+}
+
+type Objetivo = "fuerza" | "hipertrofia" | "metabolico";
+
+function objetivoDeEsquema(esquema: string | undefined): Objetivo {
+  if (esquema === "FUERZA") return "fuerza";
+  if (esquema === "METABOLICO" || esquema === "REHAB") return "metabolico";
+  return "hipertrofia";
+}
+
+/**
+ * La base en segundos por tipo de ejercicio y esquema.
+ *
+ * Compuesto pesado 120–180 s, accesorio 60–90 s, aislado 45–60 s; dentro de
+ * cada rango, fuerza arriba y metabólico abajo.
+ *
+ * Referencias: de Salles et al. 2009 (Sports Med 39:765, "Rest interval
+ * between sets in strength training": 3–5 min para fuerza máxima, 1–2 min
+ * para hipertrofia); ACSM Position Stand 2009 (Med Sci Sports Exerc 41:687:
+ * 2–3 min en los multiarticulares pesados, 1–2 min en los demás); Grgic et
+ * al. 2017 (Eur J Sport Sci 17:983: descansos largos en los compuestos no
+ * frenan la hipertrofia y sí sostienen el volumen).
+ */
+const BASE_SEG: Record<TipoDeEjercicio, Record<Objetivo, number>> = {
+  compuesto: { fuerza: 180, hipertrofia: 150, metabolico: 120 },
+  accesorio: { fuerza: 90, hipertrofia: 75, metabolico: 60 },
+  aislado: { fuerza: 60, hipertrofia: 50, metabolico: 45 },
+};
+
+/** Lo que el reloj sabe del pulso mientras se descansa. */
+export type FcEnDescanso = {
+  /** Latidos por minuto ahora. */
+  bpm: number;
+  /** Segundos desde que cerró la serie. */
+  transcurridoSeg: number;
+  /** FC en reposo de la persona, si Salud la tiene. */
+  reposo: number | null;
+  /** Edad en años, para estimar la FC máxima. */
+  edad: number | null;
+};
+
+export type Descanso = {
+  segundos: number;
+  /** La base del ejercicio, antes de ajustar por esfuerzo. */
+  baseSeg: number;
+  /** Nunca menos que esto aunque la FC ya haya bajado (70 % de la base). */
+  pisoSeg: number;
+  /** Nunca más que esto aunque la FC no baje (150 % de la base). */
+  techoSeg: number;
+  /** A cuántos lpm hay que bajar para darse por recuperada. `null` sin FC. */
+  fcObjetivo: number | null;
+  /** Ya bajó al objetivo. `null` cuando no hay FC. */
+  recuperado: boolean | null;
+};
+
+function redondeaA5(segundos: number): number {
+  return Math.round(segundos / 5) * 5;
+}
+
+/**
+ * A cuántos latidos hay que bajar para arrancar la siguiente serie:
+ * `max(FC reposo + 30, 55 % de la FC máxima)`, con la FC máxima de Tanaka
+ * (208 − 0.7·edad; Tanaka et al. 2001, J Am Coll Cardiol 37:153). Con solo
+ * uno de los dos datos se usa ese; sin ninguno no hay objetivo.
+ */
+export function fcDeRecuperacion(reposo: number | null, edad: number | null): number | null {
+  const porReposo = reposo !== null && reposo > 0 ? reposo + 30 : null;
+  const porMaxima = edad !== null && edad > 0 ? Math.round(0.55 * (208 - 0.7 * edad)) : null;
+  if (porReposo === null) return porMaxima;
+  if (porMaxima === null) return porReposo;
+  return Math.max(porReposo, porMaxima);
+}
+
+/**
+ * Cuánto descansar después de `serie`.
+ *
+ * 1. La base sale del ejercicio (tipo + esquema). Sin rol conocido se usa el
+ *    descanso que trae el plan.
+ * 2. Se ajusta por lo que costó la serie: al fallo, RPE 9–10 o quedarse
+ *    corto del objetivo → +30 %; si sobraron 3 reps o más, o RPE ≤ 6 → −20 %.
+ * 3. Con FC del reloj, el descanso termina cuando el pulso baja al objetivo
+ *    (`fcDeRecuperacion`), nunca antes del 70 % de la base ni después del
+ *    150 %. Si todavía no baja, se estira de 15 en 15 segundos.
+ *
+ * Una serie de calentamiento no cansa: descansa lo justo para cambiar discos.
+ */
+export function descansoPara(serie: SerieViva, ejercicio: EjercicioVivo, fc?: FcEnDescanso): Descanso {
+  const tipo = tipoDeEjercicio(ejercicio.poolRole);
+  const baseSeg = tipo ? BASE_SEG[tipo][objetivoDeEsquema(ejercicio.esquema)] : ejercicio.descansoSeg;
+  const pisoSeg = redondeaA5(baseSeg * 0.7);
+  const techoSeg = redondeaA5(baseSeg * 1.5);
+
+  if (serie.calentamiento) {
+    return { segundos: Math.min(baseSeg, 45), baseSeg, pisoSeg, techoSeg, fcObjetivo: null, recuperado: null };
+  }
+
+  const rpe = serie.rpe ?? null;
+  const hechas = serie.hechas;
+  // Un dropset termina al fallo por definición: cuenta como serie dura.
+  const duro =
+    serie.intensidad === "fallo" ||
+    serie.intensidad === "dropset" ||
+    (rpe !== null && rpe >= 9) ||
+    (hechas !== null && hechas < serie.objetivo);
+  const sobro =
+    !duro && ((rpe !== null && rpe <= 6) || (hechas !== null && hechas >= serie.objetivo + 3));
+  const porReglas = redondeaA5(baseSeg * (duro ? 1.3 : sobro ? 0.8 : 1));
+
+  const fcObjetivo = fc ? fcDeRecuperacion(fc.reposo, fc.edad) : null;
+  if (!fc || fcObjetivo === null) {
+    return { segundos: porReglas, baseSeg, pisoSeg, techoSeg, fcObjetivo: null, recuperado: null };
+  }
+
+  const recuperado = fc.bpm <= fcObjetivo;
+  const deseado = recuperado ? fc.transcurridoSeg : Math.max(porReglas, fc.transcurridoSeg + 15);
+  const segundos = Math.round(Math.min(techoSeg, Math.max(pisoSeg, deseado)));
+  return { segundos, baseSeg, pisoSeg, techoSeg, fcObjetivo, recuperado };
+}
+
+/**
+ * Llega una lectura de pulso del reloj durante el descanso: mueve la hora de
+ * término según `descansoPara`. Si la persona ya movió el descanso a mano, o
+ * no hay descanso en curso, el estado no cambia (el pulso se sigue enseñando).
+ */
+export function conFrecuencia(
+  estado: EstadoSesion,
+  bpm: number,
+  perfil: { reposo: number | null; edad: number | null },
+  ahora: number = Date.now(),
+): { estado: EstadoSesion; descanso: Descanso | null } {
+  const enCurso = estado.descanso;
+  if (!enCurso || estado.descansoHasta === null) return { estado, descanso: null };
+  const ejercicio = estado.ejercicios[enCurso.ejercicio];
+  const serie = ejercicio?.series[enCurso.serie];
+  if (!ejercicio || !serie) return { estado, descanso: null };
+
+  const descanso = descansoPara(serie, ejercicio, {
+    bpm,
+    transcurridoSeg: Math.max(0, Math.round((ahora - enCurso.desde) / 1000)),
+    ...perfil,
+  });
+  if (enCurso.manual) return { estado, descanso };
+
+  const hasta = Math.max(ahora, enCurso.desde + descanso.segundos * 1000);
+  return { estado: { ...estado, descansoHasta: hasta }, descanso };
+}
+
+// ---------------------------------------------------------------------------
+// El peso de la serie que sigue (I2)
+// ---------------------------------------------------------------------------
+
+function redondeaPeso(kilos: number): number {
+  return kilos >= 10 ? Math.round(kilos / 2.5) * 2.5 : Math.round(kilos * 2) / 2;
+}
+
+/**
+ * El peso con el que conviene salir del descanso a la serie `indice`.
+ *
+ * - Dropset: 20 % abajo del peso REAL de la anterior.
+ * - Si el plan trae peso y la anterior se cargó distinto a lo sugerido, la
+ *   diferencia se arrastra: quien subió 5 kg en la primera no quiere que la
+ *   segunda le vuelva a sugerir el número viejo.
+ * - Sin peso del plan, el de la anterior ajustado por reps con Epley
+ *   (pirámide: menos reps, más kilos).
+ */
+export function pesoSugerido(ejercicio: EjercicioVivo, indice: number): number | null {
+  const siguiente = ejercicio.series[indice];
+  if (!siguiente) return null;
+  const plan = siguiente.pesoPlanKg !== undefined ? siguiente.pesoPlanKg : siguiente.pesoKg;
+  if (siguiente.calentamiento) return plan;
+
+  let anterior: SerieViva | null = null;
+  for (let s = indice - 1; s >= 0; s -= 1) {
+    const candidata = ejercicio.series[s]!;
+    if (candidata.hechas !== null && candidata.pesoKg !== null && !candidata.calentamiento) {
+      anterior = candidata;
+      break;
+    }
+  }
+
+  if (siguiente.intensidad === "dropset") {
+    return anterior ? pesoDeDropset(anterior.pesoKg) : plan;
+  }
+  if (!anterior || anterior.pesoKg === null) return plan;
+
+  if (plan !== null && plan !== undefined) {
+    const planAnterior = anterior.pesoPlanKg;
+    if (planAnterior === null || planAnterior === undefined) return plan;
+    return Math.max(0, redondeaPeso(plan + (anterior.pesoKg - planAnterior)));
+  }
+
+  const repsAnterior = anterior.hechas ?? anterior.objetivo;
+  const estimado = (anterior.pesoKg * (1 + repsAnterior / 30)) / (1 + siguiente.objetivo / 30);
+  return redondeaPeso(estimado);
+}
+
+// ---------------------------------------------------------------------------
+// Carga por lado (I2)
+// ---------------------------------------------------------------------------
+
+/** Cómo está montado un ejercicio: se guarda en `Profile.exercisePrefs`. */
+export type Montaje = { cargaPorLado: boolean; barraKg: number };
+
+/** Lo que se registra: los dos lados más la barra (o el carro). */
+export function totalDesdeLado(ladoKg: number, barraKg: number): number {
+  return ladoKg * 2 + barraKg;
+}
+
+/** Lo que va en cada lado para llegar a `totalKg`. */
+export function ladoDesdeTotal(totalKg: number, barraKg: number): number {
+  return Math.max(0, (totalKg - barraKg) / 2);
+}
+
+const CON_DISCOS =
+  /\b(barra|prensa|smith|hack|sentadilla|peso muerto|press de banca|press banca|hip thrust|remo en t|t-bar|landmine|pendulo|belt squat|discos)\b/;
+
+const SIN_DISCOS = /\b(mancuerna|mancuernas|polea|cable|liga|kettlebell|pesa rusa|peso corporal)\b/;
+
+function sinAcentos(texto: string): string {
+  return texto.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
+/**
+ * ¿Vale preguntar "¿se carga por lado?" en este ejercicio? Solo en barras y
+ * máquinas de discos; en mancuernas y poleas la pregunta es ruido.
+ */
+export function preguntarMontaje(nombre: string): boolean {
+  const limpio = sinAcentos(nombre);
+  if (SIN_DISCOS.test(limpio)) return false;
+  return CON_DISCOS.test(limpio);
+}
+
+/**
+ * Lo que pesa la barra si la persona no sabe: olímpica 20 kg (45 lb en
+ * gimnasios de libras); el carro de prensa, hack o péndulo, 0.
+ */
+export function barraPorDefecto(nombre: string, unidad: "kg" | "lb"): number {
+  const limpio = sinAcentos(nombre);
+  if (/\b(prensa|hack|pendulo|belt squat)\b/.test(limpio)) return 0;
+  return unidad === "kg" ? 20 : 45 / 2.2046226218;
+}
+
+// ---------------------------------------------------------------------------
+// Terminar un ejercicio (I2)
+// ---------------------------------------------------------------------------
+
+/**
+ * "Terminar este ejercicio": pasa al siguiente y deja las series que faltan
+ * SIN registrar (no en cero). En el último ejercicio termina la sesión.
+ *
+ * El descanso que ya corría se respeta: la serie que acaba de cerrar sí
+ * costó, y el traslado a la otra máquina no la descansa sola.
+ */
+export function terminarEjercicio(estado: EstadoSesion): {
+  estado: EstadoSesion;
+  siguiente: "otro_ejercicio" | "fin";
+} {
+  const ejercicios = estado.ejercicios.map((ejercicio, e) =>
+    e !== estado.ejercicioActual
+      ? ejercicio
+      : {
+          ...ejercicio,
+          series: ejercicio.series.map((serie) =>
+            serie.hechas === null ? { ...serie, omitida: true } : serie,
+          ),
+        },
+  );
+
+  const pendiente = primeraPendiente(ejercicios);
+  if (pendiente === null) {
+    return {
+      estado: { ...estado, ejercicios, descansoHasta: null, descanso: null, terminada: true },
+      siguiente: "fin",
+    };
+  }
+
+  return {
+    estado: {
+      ...estado,
+      ejercicios,
+      ejercicioActual: pendiente.ejercicio,
+      serieActual: pendiente.serie,
+    },
+    siguiente: "otro_ejercicio",
+  };
+}
+
+/**
+ * Al retomar una sesión con el cursor ya en un ejercicio posterior, lo que
+ * quedó sin cerrar atrás se da por terminado: es lo que pasó con "Terminar
+ * este ejercicio", y sin esto la siguiente serie regresaba al ejercicio que
+ * la persona ya había dejado.
+ */
+export function omitirSaltadas(estado: EstadoSesion): EstadoSesion {
+  return {
+    ...estado,
+    ejercicios: estado.ejercicios.map((ejercicio, e) =>
+      e >= estado.ejercicioActual
+        ? ejercicio
+        : {
+            ...ejercicio,
+            series: ejercicio.series.map((serie) =>
+              serie.hechas === null ? { ...serie, omitida: true } : serie,
+            ),
+          },
+    ),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Cambiar un ejercicio sin repetir (I2)
+// ---------------------------------------------------------------------------
+
+type Alternativa = NonNullable<EjercicioVivo["alternativas"]>[number];
+
+function claveDeNombre(nombre: string): string {
+  return sinAcentos(nombre).replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function esElMismo(
+  a: { exerciseId?: string | null; nombre: string },
+  b: { exerciseId: string; name: string },
+): boolean {
+  if (a.exerciseId && a.exerciseId === b.exerciseId) return true;
+  return claveDeNombre(a.nombre) === claveDeNombre(b.name);
+}
+
+/**
+ * Las alternativas de `indice` que no están ya en la sesión.
+ *
+ * La lista viaja congelada con la semana; un cambio hecho a media sesión (o
+ * un plan que cambió después) podía dejar ofrecido justo lo que tocaba dos
+ * ejercicios más abajo. Aquí se filtra contra la sesión TAL COMO VA.
+ */
+export function alternativasLibres(estado: EstadoSesion, indice: number): Alternativa[] {
+  const ejercicio = estado.ejercicios[indice];
+  if (!ejercicio) return [];
+  const otros = estado.ejercicios.filter((_, e) => e !== indice);
+  return (ejercicio.alternativas ?? []).filter(
+    (opcion) => !esElMismo(ejercicio, opcion) && !otros.some((otro) => esElMismo(otro, opcion)),
+  );
+}
+
+function conAlternativa(ejercicio: EjercicioVivo, alternativa: Alternativa): EjercicioVivo {
+  return {
+    ...ejercicio,
+    exerciseId: alternativa.exerciseId,
+    nombre: alternativa.name,
+    // Lo capturado se va con la máquina anterior: la carga de la prensa no
+    // es la del hack squat.
+    series: ejercicio.series.map((serie) => ({
+      ...serie,
+      hechas: null,
+      pesoKg: null,
+      pesoPlanKg: null,
+      omitida: false,
+    })),
+  };
+}
+
+/**
+ * Cambia el ejercicio `indice` por `alternativa` y, si esa alternativa ya
+ * estaba más abajo en la sesión, cambia ESE por otra de sus alternativas que
+ * no esté en la sesión (ni sea la máquina que se acaba de dejar, que está
+ * ocupada). Si no hay con qué, el de abajo se queda como estaba.
+ *
+ * Devuelve cada cambio aplicado, en orden, para encolarlos al servidor.
+ */
+export function sustituirEnSesion(
+  estado: EstadoSesion,
+  indice: number,
+  alternativa: Alternativa,
+): { estado: EstadoSesion; cambios: Array<{ indice: number; alternativa: Alternativa }> } {
+  const original = estado.ejercicios[indice];
+  if (!original) return { estado, cambios: [] };
+
+  const ejercicios = [...estado.ejercicios];
+  ejercicios[indice] = conAlternativa(original, alternativa);
+  const cambios = [{ indice, alternativa }];
+
+  for (let j = indice + 1; j < ejercicios.length; j += 1) {
+    const abajo = ejercicios[j]!;
+    if (!esElMismo(abajo, alternativa)) continue;
+
+    const reemplazo = (abajo.alternativas ?? []).find(
+      (opcion) =>
+        !esElMismo(original, opcion) &&
+        !ejercicios.some((otro, e) => e !== j && esElMismo(otro, opcion)) &&
+        !esElMismo(abajo, opcion),
+    );
+    if (!reemplazo) continue;
+    ejercicios[j] = conAlternativa(abajo, reemplazo);
+    cambios.push({ indice: j, alternativa: reemplazo });
+  }
+
+  const esActual = indice === estado.ejercicioActual;
+  return {
+    estado: {
+      ...estado,
+      ejercicios,
+      serieActual: esActual ? 0 : estado.serieActual,
+      descansoHasta: esActual ? null : estado.descansoHasta,
+      descanso: esActual ? null : estado.descanso,
+    },
+    cambios,
+  };
 }

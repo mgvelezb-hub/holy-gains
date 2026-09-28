@@ -87,6 +87,8 @@ describe("el dropset no descansa", () => {
     ]);
     const { estado: siguiente } = cerrarSerie(estado, { reps: 8, pesoKg: 32 }, AHORA);
 
-    expect(siguiente.descansoHasta).toBe(AHORA + 90 * 1000);
+    // Y descansa de más (I2): un dropset deja el músculo al fallo, así que
+    // cuenta como serie dura y se lleva el +30 % (90 → 115 s).
+    expect(siguiente.descansoHasta).toBe(AHORA + 115 * 1000);
   });
 });
