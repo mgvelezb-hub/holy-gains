@@ -783,6 +783,12 @@ export function planDisciplines(input: {
   // Construcción final: el ordinal de cada disciplina sale de su orden
   // cronológico, no del orden en que se procesó la cola — con combos, ese
   // orden de proceso ya no coincide con la fecha final.
+  // CARDIO con preferencias, o "después de pesas", se prescribe como cardio
+  // en máquina (`disciplinas/cardio.ts`), no como correr (H2).
+  const cargaCardio = otherDisciplines.find((load) => load.discipline === "CARDIO");
+  const prefsCardio =
+    cargaCardio?.cardio ?? (cargaCardio?.modo === "DESPUES" ? {} : undefined);
+
   const porDisciplina = new Map<Discipline, Colocacion[]>();
   for (const colocacion of colocaciones) {
     const lista = porDisciplina.get(colocacion.discipline) ?? [];
@@ -807,6 +813,7 @@ export function planDisciplines(input: {
           ordinal,
           minutes: colocacion.minutes,
           objetivo,
+          ...(discipline === "CARDIO" && prefsCardio ? { cardio: prefsCardio } : {}),
         }),
         note: colocacion.note,
         sharesDayWithGym: colocacion.sharesDayWithGym,

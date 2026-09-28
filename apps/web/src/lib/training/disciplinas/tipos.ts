@@ -67,6 +67,30 @@ export type SesionDisciplina = {
   /** Semana de descarga del ciclo. */
   deload: boolean;
   notes: string[];
+  /**
+   * Solo el cardio en máquina (`disciplinas/cardio.ts`): máquina, tipo, nivel
+   * sugerido y, si es HIIT, los intervalos que corre el timer de la sesión en
+   * vivo.
+   */
+  cardio?: DetalleCardio;
+};
+
+export type DetalleCardio = {
+  equipo: "CAMINADORA" | "ESCALERA" | "BICI" | "ELIPTICA" | "LIBRE";
+  tipo: "HIIT" | "CONTINUO";
+  /** El nivel de la máquina del bloque principal (el "fuerte" en HIIT). */
+  nivelMaquina: number;
+  /** "Cardio HIIT caminadora". */
+  etiqueta: string;
+  intervalos: {
+    rondas: number;
+    fuerteSeg: number;
+    suaveSeg: number;
+    nivelFuerte: number;
+    nivelSuave: number;
+  } | null;
+  calentamientoSeg: number;
+  enfriamientoSeg: number;
 };
 
 export type PrescripcionInput = {

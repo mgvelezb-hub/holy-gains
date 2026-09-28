@@ -1,4 +1,5 @@
 import { BOX } from "@/lib/training/disciplinas/box";
+import { prescribirCardio } from "@/lib/training/disciplinas/cardio";
 import { CROSSFIT } from "@/lib/training/disciplinas/crossfit";
 import { FUNCIONAL } from "@/lib/training/disciplinas/funcional";
 import { GOLF } from "@/lib/training/disciplinas/golf";
@@ -11,7 +12,7 @@ import type {
   Prescriptor,
   SesionDisciplina,
 } from "@/lib/training/disciplinas/tipos";
-import type { Discipline } from "@/lib/training/types";
+import type { Discipline, PreferenciasCardio } from "@/lib/training/types";
 
 /**
  * El registro de disciplinas que la app sabe prescribir.
@@ -57,7 +58,23 @@ export function prescribirSesion(input: {
   ordinal: number;
   minutes: number;
   objetivo: ObjetivoAtleta;
+  /**
+   * Solo CARDIO: con preferencias (aunque vengan vacías) se prescribe el
+   * cardio en máquina de `cardio.ts` en vez de correr (`running.ts`). Es lo
+   * que pasa con el cardio "después de pesas" (H2).
+   */
+  cardio?: PreferenciasCardio;
 }): SesionDisciplina | null {
+  if (input.discipline === "CARDIO" && input.cardio) {
+    return prescribirCardio({
+      minutes: input.minutes,
+      isoWeek: input.isoWeek,
+      objetivo: input.objetivo,
+      prefs: input.cardio,
+      nivelDisciplina: input.nivel,
+    });
+  }
+
   const prescriptor = prescriptorDe(input.discipline);
   if (!prescriptor) return null;
 
@@ -72,4 +89,4 @@ export function prescribirSesion(input: {
 
 export type { NivelDisciplina, ObjetivoAtleta, SesionDisciplina };
 export { AVISO_DISCIPLINA, NIVELES } from "@/lib/training/disciplinas/tipos";
-export type { BloqueSesion } from "@/lib/training/disciplinas/tipos";
+export type { BloqueSesion, DetalleCardio } from "@/lib/training/disciplinas/tipos";
