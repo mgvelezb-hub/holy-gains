@@ -2883,5 +2883,33 @@
     "servingG": 30,
     "unit": "g",
     "maxG": 30
+  },
+  {
+    "id": "agua",
+    "name": "Agua",
+    "role": "vegetal_libre",
+    "proteinPer100": 0,
+    "carbPer100": 0,
+    "fatPer100": 0,
+    "fiberPer100": 0,
+    "kcalPer100": 0,
+    "gi": null,
+    "costRel": 1,
+    "prepMin": 0,
+    "tags": [
+      "base_agua",
+      "rapido",
+      "sin_cocinar",
+      "vegetariano"
+    ],
+    "servingG": 240,
+    "unit": "ml",
+    "serving": {
+      "unit": "taza",
+      "gramsPerUnit": 240,
+      "minUnits": 1,
+      "maxUnits": 1,
+      "step": 1
+    }
   }
 ]

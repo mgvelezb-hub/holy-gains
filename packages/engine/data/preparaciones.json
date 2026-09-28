@@ -44,10 +44,10 @@
         "maxUnits": 60
       },
       {
-        "tag": "leche",
-        "minUnits": 0.5,
-        "maxUnits": 1,
-        "opcional": true
+        "tag": "base",
+        "fijo": true,
+        "minUnits": 1,
+        "maxUnits": 1
       }
     ],
     "prepMin": 5,
@@ -85,10 +85,10 @@
         "foodId": "crema_cacahuate"
       },
       {
-        "tag": "leche",
-        "minUnits": 0.5,
-        "maxUnits": 1,
-        "opcional": true
+        "tag": "base",
+        "fijo": true,
+        "minUnits": 1,
+        "maxUnits": 1
       }
     ],
     "prepMin": 5,
@@ -131,6 +131,12 @@
           "proteina_vegetal",
           "yogur_griego_0"
         ]
+      },
+      {
+        "tag": "base",
+        "fijo": true,
+        "minUnits": 1,
+        "maxUnits": 1
       }
     ],
     "prepMin": 5,
@@ -169,10 +175,10 @@
         "maxUnits": 60
       },
       {
-        "tag": "leche",
-        "minUnits": 0.5,
-        "maxUnits": 1,
-        "opcional": true
+        "tag": "base",
+        "fijo": true,
+        "minUnits": 1,
+        "maxUnits": 1
       }
     ],
     "prepMin": 5,
@@ -209,6 +215,12 @@
         ],
         "maxUnits": 60,
         "opcional": true
+      },
+      {
+        "tag": "base",
+        "fijo": true,
+        "minUnits": 1,
+        "maxUnits": 1
       }
     ],
     "prepMin": 5,

@@ -413,8 +413,11 @@ export interface IngredientePreparacion {
    * `leche`: la leche que la persona eligio (`Profile.tipoLeche`). No es una
    * lista de opciones: quien compra deslactosada no quiere que el licuado
    * salga con entera.
+   * `base`: el liquido del licuado —esa leche si la persona la admite, si no
+   * agua—. Una taza, fija: un licuado se licua con leche o con agua, nunca
+   * con yogur de base.
    */
-  tag?: 'leche';
+  tag?: 'leche' | 'base';
   rolePool?: FoodRole[];
   opciones?: string[];
   /** Cotas de porcion propias del platillo, dentro de la medida casera del alimento. */
@@ -495,6 +498,12 @@ export interface Menu {
   totals: MacroTargets;
   /** Desviacion porcentual vs target por macro. */
   deviationPct: { kcal: number; proteinG: number; carbG: number; fatG: number };
+  /**
+   * Aviso interno: la proteina principal o el cereal que se repitio en dos
+   * comidas del dia porque el catalogo elegible de ese rol quedo vacio (la
+   * despensa corta). Ausente cuando no hubo que repetir nada.
+   */
+  repeticiones?: Array<{ familia: string; slots: MealSlotId[] }>;
 }
 
 export interface ShoppingItem {

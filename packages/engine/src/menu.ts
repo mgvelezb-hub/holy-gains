@@ -3,6 +3,7 @@ import { permitePolvos } from './suplementos.js';
 import { roundTo } from './calc.js';
 import { FOODS, catalogoCon, esLeche, lecheDe, matchesAny, normalize } from './foods.js';
 import { PREPARACIONES } from './preparaciones.js';
+import { familiaDe } from './familias.js';
 import type {
   Equivalence,
   Food,
@@ -179,6 +180,35 @@ export function prepMinDelDia(food: Food): number {
   return Math.min(food.prepMin, MINUTOS_CALENTAR);
 }
 
+/** Tag del agua que sirve de base al licuado cuando no va leche. */
+const BASE_AGUA = 'base_agua';
+
+/** true si esa familia ya salio en otra comida del dia. */
+function repiteFamilia(food: Food, familias: ReadonlySet<string>): boolean {
+  const familia = familiaDe(food);
+  return familia !== undefined && familias.has(familia);
+}
+
+/**
+ * Los candidatos que no repiten proteina principal ni cereal del dia. Si
+ * TODOS repiten —la despensa corta: el unico cereal de desayuno en casa es la
+ * avena— se devuelve vacio y quien llama decide si afloja.
+ */
+function sinRepetir(candidatos: Food[], familias: ReadonlySet<string>): Food[] {
+  return candidatos.filter((f) => !repiteFamilia(f, familias));
+}
+
+/** Las familias de un grupo de comidas, para saber que ya salio en el dia. */
+function familiasDe(slots: Slot[]): Set<string> {
+  const salida = new Set<string>();
+  for (const s of slots) {
+    if (s.grams <= 0) continue;
+    const familia = familiaDe(s.food);
+    if (familia) salida.add(familia);
+  }
+  return salida;
+}
+
 function eligible(
   pool: Food[],
   profile: Profile,
@@ -189,6 +219,9 @@ function eligible(
   const excluded = [...(profile.excludedFoods ?? []), ...(profile.allergies ?? [])];
   const pasa = (food: Food, conPlantilla: boolean): boolean => {
     if (food.role !== role) return false;
+    // El agua del licuado no es un vegetal que se sirva: solo entra como base
+    // de un licuado, nunca por sorteo.
+    if (food.tags.includes(BASE_AGUA)) return false;
     if (options.freeVegetable && food.carbPer100 > config.freeVegetableMaxCarbPer100) return false;
     if (options.noSupplements && food.tags.includes('suplemento')) return false;
     // Un menú que pide 30 g de whey a quien no tiene whey es un menú que no se
@@ -205,7 +238,11 @@ function eligible(
     // Escalera de precio: bajo = solo lo más barato, medio = hasta el
     // intermedio, alto = sin tope.
     const topeDeCosto = profile.budget === 'bajo' ? 1 : profile.budget === 'medio' ? 2 : 3;
-    if (food.costRel > topeDeCosto) return false;
+    // El polvo que la persona declaro ya esta comprado: el presupuesto no lo
+    // saca. Sin esto, quien tiene whey y presupuesto medio nunca lo veia en su
+    // licuado y el yogur hacia de proteina dos veces al dia.
+    const yaLoTiene = food.tags.includes('suplemento') && permitePolvos(profile);
+    if (food.costRel > topeDeCosto && !yaLoTiene) return false;
     if (conPlantilla) {
       if (options.sinGrasaAnadida && food.tags.includes('grasa_anadida')) return false;
       if (options.desayuno === true && food.tags.includes('no_desayuno')) return false;
@@ -347,6 +384,13 @@ interface Slot {
   requeridosDelPlatillo?: number;
   /** Los alimentos por los que se puede cambiar sin dejar de ser el platillo. */
   permitidos?: string[];
+  /**
+   * Lo que la PERSONA puede elegir en su lugar dentro del platillo: la lista
+   * de `permitidos` mas los hermanos del mismo rol (lenteja por frijol o
+   * garbanzo, una verdura por otra). La reparacion del dia no los usa: ella no
+   * cambia el platillo que da nombre a la comida, la persona si puede.
+   */
+  intercambiables?: string[];
   /** Cotas de porcion propias del platillo (la taza exacta de leche). */
   cotas?: { minUnits?: number; maxUnits?: number };
 }
@@ -491,6 +535,23 @@ function error(slots: Slot[], target: { p: number; c: number; f: number }): numb
   return p * p * 2 + c * c + f * f * 1.5;
 }
 
+/**
+ * El error del DIA: el mismo, mas un castigo cuando la proteina se sale de
+ * +-4 %. Con cuatro comidas de 20 g de piso cada una, el error cuadratico
+ * aceptaba 5 g de proteina de mas a cambio de cuadrar el carbohidrato al
+ * gramo, y la promesa del plan es la proteina.
+ */
+const HOLGURA_PROTEINA = 0.04;
+const CASTIGO_PROTEINA = 100;
+
+function errorDelDia(slots: Slot[], target: { p: number; c: number; f: number }): number {
+  const base = error(slots, target);
+  if (target.p <= 0) return base;
+  const desvio = Math.abs(sum(slots, 'p') - target.p) / target.p;
+  const exceso = Math.max(0, desvio - HOLGURA_PROTEINA);
+  return base + exceso * exceso * CASTIGO_PROTEINA;
+}
+
 /** Plural de la unidad casera, como se dice en la cocina. */
 const UNIDADES: Record<ServingUnit, [string, string]> = {
   cdita: ['cdita', 'cditas'],
@@ -577,7 +638,10 @@ function describirPorcion(
   };
 }
 
-function toItem(slot: Slot, free: boolean): MenuItem {
+function toItem(slot: Slot, libre: boolean): MenuItem {
+  // El agua del licuado es fija y sin macros, pero no es "libre": es la taza
+  // que lleva la receta.
+  const free = libre && !slot.food.tags.includes(BASE_AGUA);
   const m = macrosOf(slot);
   const gramos = Math.round(slot.grams);
   const { display, why } = describirPorcion(slot.food, gramos, free, slot.role);
@@ -612,27 +676,29 @@ function equivalencesFor(
   pool: Food[],
   profile: Profile,
   config: EngineConfig,
+  /**
+   * Familias que ya estan en OTRA comida del dia: cambiar el pollo de la cena
+   * por el atun de la comida es servir atun dos veces. La familia del propio
+   * alimento no cuenta: cambiar arroz blanco por integral no repite nada.
+   */
+  evitar: ReadonlySet<string> = new Set(),
 ): Equivalence | null {
+  const propia = familiaDe(slot.food);
+  const fuera = new Set([...evitar].filter((f) => f !== propia));
   // Los suplementos no tienen equivalente honesto: la creatina es un compuesto,
   // no un alimento, y ofrecer "canela en vez de psyllium" seria fingir que son
   // intercambiables. Se quedan sin opciones a proposito.
   if (slot.food.role === 'suplemento') return null;
 
   // El ingrediente de un platillo solo se cambia por otro del mismo platillo:
-  // la crema de calabacita no admite "cambia la calabacita por jicama".
-  if (slot.permitidos !== undefined) {
-    const permitidos = slot.permitidos;
-    const base = equivalencesFor({ ...slot, permitidos: undefined }, pool, profile, config);
-    if (!base) return null;
-    const options = base.options.filter((o) => permitidos.includes(o.foodId));
-    if (options.length === 0) return null;
-    const { aproximada: _aproximada, ...resto } = base;
-    return {
-      ...resto,
-      options,
-      ...(options.some((o) => o.aproximada) ? { aproximada: true } : {}),
-    };
-  }
+  // la lenteja de la sopa por frijol o garbanzo, nunca por arroz suelto. El
+  // filtro va ANTES de recortar la lista: recortada primero, las cinco mas
+  // parecidas en macro eran cereales y la sopa se quedaba sin ninguna.
+  const soloEntre =
+    slot.intercambiables !== undefined || slot.permitidos !== undefined
+      ? new Set(slot.intercambiables ?? slot.permitidos)
+      : undefined;
+  const dentro = (f: Food): boolean => soloEntre === undefined || soloEntre.has(f.id);
 
   // Los vegetales libres SI tienen equivalencias — y son las mas faciles de
   // dar: "libre" significa que la cantidad no esta contada, asi que cualquier
@@ -640,7 +706,7 @@ function equivalencesFor(
   // cual, con los mismos gramos sugeridos. No hay macro que cuadrar.
   if (slot.food.role === 'vegetal_libre') {
     const opciones = eligible(pool, profile, config, 'vegetal_libre', { freeVegetable: true })
-      .filter((f) => f.id !== slot.food.id)
+      .filter((f) => f.id !== slot.food.id && dentro(f))
       .sort((a, b) => {
         // Los favoritos del perfil primero; el resto alfabetico, para que la
         // lista sea estable entre generaciones.
@@ -664,6 +730,7 @@ function equivalencesFor(
   /** Candidatos ya con gramos redondeados y su desviacion real, de menor a mayor. */
   const candidatos = eligible(pool, profile, config, slot.food.role)
     .filter((f) => f.id !== slot.food.id && f[key] > 0)
+    .filter((f) => !repiteFamilia(f, fuera) && dentro(f))
     .map((f) => {
       const paso = roundingFor(f, config);
       const ideal = quantize((slot.grams * base) / f[key], f, config);
@@ -739,12 +806,36 @@ export function equivalenciasDeAlimento(
   profile: Profile,
   config: EngineConfig = DEFAULT_CONFIG,
   pool: Food[] = FOODS,
+  opciones: {
+    /** Lo que ya esta en las OTRAS comidas del dia (nombres o ids). */
+    enElDia?: string[];
+    /** El platillo al que pertenece: entonces solo se cambia dentro de el. */
+    preparacionId?: string;
+  } = {},
 ): Equivalence | null {
   const buscado = normalize(nombre);
   const food = pool.find((f) => normalize(f.name) === buscado || normalize(f.id) === buscado);
   if (food === undefined || gramos <= 0) return null;
 
-  return equivalencesFor({ food, grams: gramos, fixed: false }, pool, profile, config);
+  const evitar = new Set<string>();
+  for (const otro of opciones.enElDia ?? []) {
+    const n = normalize(otro);
+    const encontrado = pool.find((f) => normalize(f.name) === n || normalize(f.id) === n);
+    const familia = encontrado ? familiaDe(encontrado) : undefined;
+    if (familia) evitar.add(familia);
+  }
+
+  const slot: Slot = { food, grams: gramos, fixed: false };
+  if (opciones.preparacionId !== undefined) {
+    const prep = PREPARACIONES.find((p) => p.id === opciones.preparacionId);
+    // Un platillo que ya no existe en el catalogo no ofrece nada: mejor sin
+    // cambio que un cambio que saca al alimento del platillo.
+    if (!prep) return null;
+    const permitidos = permitidosEnPlatillo(prep, food, profile, pool);
+    if (permitidos === undefined) return null;
+    slot.permitidos = permitidos;
+  }
+  return equivalencesFor(slot, pool, profile, config, evitar);
 }
 
 /**
@@ -1102,6 +1193,7 @@ function ajustarPorciones(
   random: () => number,
   avoid: Set<string>,
   plantilla: Plantilla,
+  familiasDelDia: ReadonlySet<string> = new Set(),
 ): void {
   // Un macro se refuerza a lo mucho dos veces. Sin freno, cada pasada metia
   // otro alimento del mismo rol y la comida terminaba con tres leguminosas: la
@@ -1192,6 +1284,9 @@ function ajustarPorciones(
         // La afinidad es dura para el refuerzo: `eligible` la afloja si deja
         // el rol vacio, y asi entraba aguacate junto a la crema de cacahuate.
         .filter((f) => !slots.some((s) => incompatibles(f, s.food, config)))
+        // El refuerzo es opcional: nunca repite la proteina ni el cereal del
+        // dia, ni los de esta misma comida.
+        .filter((f) => !repiteFamilia(f, familiasDelDia) && !repiteFamilia(f, familiasDe(slots)))
         .filter(
         // El segundo alimento tiene que CABER en el hueco: si su porcion
         // minima ya se pasa de lo que falta, meterlo cambia un plato corto por
@@ -1306,7 +1401,97 @@ function preparacionesPara(slot: MealSlot, profile: Profile): Preparacion[] {
 function idsDeIngrediente(ing: IngredientePreparacion, profile: Profile): string[] {
   if (ing.foodId) return [ing.foodId];
   if (ing.tag === 'leche') return [lecheDe(profile)];
+  // La base del licuado: la leche de la persona, y si no, agua.
+  if (ing.tag === 'base') return [lecheDe(profile), AGUA_ID];
   return ing.opciones ?? [];
+}
+
+/** Los ids del catalogo base: lo demas del pool lo dio de alta la persona. */
+const IDS_DEL_CATALOGO = new Set(FOODS.map((f) => f.id));
+
+/**
+ * La lista corta de la receta mas los alimentos propios de la misma familia:
+ * el licuado pide yogur griego y la persona tiene SU yogur en la despensa.
+ * Sin esto, el licuado se llevaba el yogur del catalogo, el del dia ya salia
+ * y el propio se quedaba en el refri.
+ */
+function conPropios(ids: string[], ing: IngredientePreparacion, pool: Food[]): string[] {
+  if (ing.opciones === undefined && ing.foodId === undefined) return ids;
+  const moldes = ids
+    .map((id) => pool.find((f) => f.id === id))
+    .filter((f): f is Food => f !== undefined);
+  const familias = new Set(moldes.map((f) => familiaDe(f)).filter((f) => f !== undefined));
+  if (familias.size === 0) return ids;
+  const propios = pool.filter(
+    (f) =>
+      !IDS_DEL_CATALOGO.has(f.id) &&
+      !ids.includes(f.id) &&
+      moldes.some((m) => m.role === f.role && familiaDe(m) === familiaDe(f)),
+  );
+  return [...ids, ...propios.map((f) => f.id)];
+}
+
+/** El agua del catalogo: la base del licuado cuando no va leche. */
+const AGUA_ID = 'agua';
+
+/**
+ * Por que se puede cambiar un ingrediente sin salirse del platillo.
+ *
+ * La lista corta de la receta manda cuando existe (la proteina del licuado).
+ * Si el ingrediente es uno fijo, sus hermanos son los del mismo rol en la
+ * cocina: la lenteja de la sopa por frijol o garbanzo, la zanahoria por
+ * otra verdura. La verdura que da nombre al platillo no se cambia: la crema
+ * de calabacita con jicama ya es otra crema. La base (leche o agua) y la
+ * leche de la crema tampoco: esas se deciden en Ajustes.
+ */
+function intercambiablesDe(
+  ing: IngredientePreparacion,
+  food: Food,
+  prep: Preparacion,
+  profile: Profile,
+  pool: Food[],
+): string[] {
+  const ids = idsDeIngrediente(ing, profile);
+  if (ing.tag !== undefined || ing.opciones !== undefined) return ids;
+  if (food.tags.includes('leguminosa')) {
+    return [
+      food.id,
+      ...pool
+        .filter((f) => f.id !== food.id && f.role === food.role && f.tags.includes('leguminosa'))
+        .map((f) => f.id),
+    ];
+  }
+  if (food.role === 'vegetal_libre') {
+    const nombre = normalize(prep.nombre);
+    const primera = normalize(food.name).split(/\s+/)[0] ?? '';
+    if (primera.length > 2 && nombre.includes(primera)) return ids;
+    return [
+      food.id,
+      ...pool
+        .filter((f) => f.id !== food.id && f.role === 'vegetal_libre' && !f.tags.includes(BASE_AGUA))
+        .map((f) => f.id),
+    ];
+  }
+  return ids;
+}
+
+/**
+ * Los alimentos por los que se puede cambiar `food` dentro de ese platillo,
+ * o `undefined` si `food` no es de ese platillo. Para los menus guardados, que
+ * solo traen el id del platillo y el nombre del alimento.
+ */
+function permitidosEnPlatillo(
+  prep: Preparacion,
+  food: Food,
+  profile: Profile,
+  pool: Food[],
+): string[] | undefined {
+  for (const ing of prep.ingredientes) {
+    const molde = ing.foodId ? pool.find((f) => f.id === ing.foodId) : undefined;
+    const lista = intercambiablesDe(ing, molde ?? food, prep, profile, pool);
+    if (lista.includes(food.id)) return lista;
+  }
+  return undefined;
 }
 
 /** El platillo de la comida, si toca uno. */
@@ -1335,18 +1520,26 @@ function resolverPreparacion(
   vaCarbohidrato: boolean,
   random: () => number,
   avoid: Set<string>,
+  /** Proteina principal y cereal que ya salieron hoy: el platillo no los repite. */
+  familiasDelDia: ReadonlySet<string> = new Set(),
 ): PlatilloResuelto | undefined {
   const ref: PreparacionRef = { id: prep.id, nombre: prep.nombre, tipo: prep.tipo };
   const slots: Slot[] = [];
   const cubre = { proteina: false, carbo: false, grasa: false, fruta: false, verdura: false };
 
   const admisible = (food: Food): boolean => {
+    // El agua no pasa por las reglas de un alimento: no tiene macros, no se
+    // compra y solo existe como base del licuado.
+    if (food.tags.includes(BASE_AGUA)) return true;
     const esCarbo = DENSE_CARB_ROLES.includes(food.role);
     const pasa =
       eligible([food], profile, config, food.role, {
         ...filters,
         quickOnly: false,
         estricto: true,
+        // El polvo en el licuado del desayuno es la receta, no un suplemento
+        // suelto en el plato: ahi si entra (si la persona lo tiene).
+        ...(prep.tipo === 'licuado' ? { noSupplements: false } : {}),
         ...(esCarbo ? { subtipos: plantilla.subtipos } : {}),
       }).length === 1;
     return pasa && !slots.some((s) => incompatibles(food, s.food, config));
@@ -1368,10 +1561,10 @@ function resolverPreparacion(
   };
 
   for (const ing of prep.ingredientes) {
-    const ids = idsDeIngrediente(ing, profile);
+    const ids = conPropios(idsDeIngrediente(ing, profile), ing, pool);
     const esFijo = (f: Food): boolean =>
       ing.fijo === true || f.role === 'fruta' || f.role === 'vegetal_libre';
-    const candidatos = ids
+    const pasan = ids
       .map((id) => pool.find((f) => f.id === id))
       .filter((f): f is Food => f !== undefined)
       .filter((f) => !ing.rolePool || ing.rolePool.includes(f.role))
@@ -1392,9 +1585,19 @@ function resolverPreparacion(
         (f) =>
           slot.proteinG <= 0 ||
           proteinaMinima + proteinaQueAporta(acotar(f, ing), esFijo(f), ing.gramos) <= topeDeProteina,
-      );
+      )
+      // La proteina principal y el cereal no se repiten en el dia: si el
+      // desayuno ya fue yogur con avena, el licuado de fresa con avena no va.
+      .filter((f) => !repiteFamilia(f, familiasDelDia));
+    // La proteina del licuado sale del polvo cuando la persona lo tiene: el
+    // yogur solo entra si no hay polvo (y si no salio ya en otra comida).
+    const polvos = pasan.filter((f) => f.tags.includes('suplemento'));
+    const candidatos = polvos.length > 0 ? polvos : pasan;
 
-    const elegido = pick(candidatos, profile, random, avoid);
+    // La base no se sortea: la leche de la persona si la admite, y si no,
+    // agua. Nadie licua con agua teniendo la leche que eligio.
+    const elegido =
+      ing.tag === 'base' ? candidatos[0] : pick(candidatos, profile, random, avoid);
     if (!elegido) {
       if (ing.opcional) continue;
       return undefined;
@@ -1413,7 +1616,10 @@ function resolverPreparacion(
       role,
       preparacion: ref,
       requerido: ing.opcional !== true,
-      permitidos: ids,
+      // Si la proteina salio del polvo, la reparacion del dia no la regresa
+      // al yogur para cuadrar un gramo: la receta con polvo manda.
+      permitidos: polvos.length > 0 ? polvos.map((f) => f.id) : ids,
+      intercambiables: intercambiablesDe(ing, food, prep, profile, pool),
       ...(ing.minUnits !== undefined || ing.maxUnits !== undefined
         ? { cotas: { ...(ing.minUnits !== undefined ? { minUnits: ing.minUnits } : {}), ...(ing.maxUnits !== undefined ? { maxUnits: ing.maxUnits } : {}) } }
         : {}),
@@ -1426,12 +1632,22 @@ function resolverPreparacion(
     if (DENSE_CARB_ROLES.includes(role)) cubre.carbo = true;
     if (role === 'grasa' && !fijo) cubre.grasa = true;
     if (role === 'fruta') cubre.fruta = true;
-    if (role === 'vegetal_libre') cubre.verdura = true;
+    if (role === 'vegetal_libre' && !food.tags.includes(BASE_AGUA)) cubre.verdura = true;
     slots.push(nuevo);
   }
 
   // Un platillo de un solo alimento no es platillo, es ese alimento.
   if (slots.length < 2) return undefined;
+  // Sin polvo, la proteina del licuado es yogur CON leche: yogur licuado con
+  // agua no es un licuado que alguien prepare. Si la leche no cabe, no va.
+  if (prep.tipo === 'licuado') {
+    const conAgua = slots.some((s) => s.food.tags.includes(BASE_AGUA));
+    const proteinaEntera = slots.some(
+      (s) =>
+        s.food.role.startsWith('proteina') && !esLeche(s.food) && !s.food.tags.includes('suplemento'),
+    );
+    if (conAgua && proteinaEntera) return undefined;
+  }
   // Si el platillo no trae la proteina, la comida la agrega junto: la sopa de
   // lentejas mas su pechuga tambien tiene que caber.
   const reserva = cubre.proteina ? 0 : plantilla.proteinaMinG + 2;
@@ -1461,6 +1677,7 @@ function elegirPlatillo(
   avoid: Set<string>,
   /** Grupos que ya salieron hoy: un licuado y una sopa al dia, a lo mucho. */
   usados: Set<'licuado' | 'plato'>,
+  familiasDelDia: ReadonlySet<string> = new Set(),
 ): PlatilloResuelto | undefined {
   const tiro = random();
   const esSlotDeLicuado = ['PRE', 'DESAYUNO', 'SNACK', 'POST'].includes(slot.id);
@@ -1479,6 +1696,7 @@ function elegirPlatillo(
   for (const prep of orden) {
     const resuelto = resolverPreparacion(
       prep, slot, profile, config, pool, filters, plantilla, vaCarbohidrato, random, avoid,
+      familiasDelDia,
     );
     if (resuelto) {
       usados.add(grupo);
@@ -1503,6 +1721,7 @@ function verificarPlatillo(comida: Slot[]): void {
     delete s.preparacion;
     delete s.requerido;
     delete s.permitidos;
+    delete s.intercambiables;
   }
 }
 
@@ -1537,7 +1756,10 @@ function platilloDe(items: MenuItem[]): MenuMeal['preparacion'] {
   const renglones = ingredientes.map((i) => sinGramos(i.display));
   // El licuado sin leche se licua con agua: se dice, para que nadie lo
   // prepare en seco o le ponga la leche que el dia no tenia.
-  if (ref.tipo === 'licuado' && !ingredientes.some((i) => i.foodId.startsWith('leche_'))) {
+  if (
+    ref.tipo === 'licuado' &&
+    !ingredientes.some((i) => i.foodId.startsWith('leche_') || i.foodId === AGUA_ID)
+  ) {
     renglones.push('agua al gusto');
   }
   return { ...ref, display: `${ref.nombre} — ${renglones.join(' · ')}` };
@@ -1555,6 +1777,11 @@ function buildMeal(
   /** Sorteo aparte para los platillos: no mueve el de los alimentos. */
   prepRandom: () => number = () => 1,
   platillosDelDia: Set<'licuado' | 'plato'> = new Set(),
+  /**
+   * Proteina principal y cereal que ya salieron en las comidas anteriores del
+   * dia. Esta comida los evita, y al terminar suma los suyos.
+   */
+  familiasDelDia: Set<string> = new Set(),
 ): { meal: MenuMeal; slots: Slot[] } {
   const slots: Slot[] = [];
   const periWorkout = slot.id === 'PRE' || slot.id === 'POST';
@@ -1581,16 +1808,38 @@ function buildMeal(
       ...extra,
       acompanan: slots.map((s) => s.food),
     });
-    const conFeasible = key ? feasible(base, key, targetG, 10) : base;
     // El piso de proteina es duro: `feasible` puede aflojar por densidad y
     // colar la leche descremada, que aporta 10 g en taza y media.
     const piso = extra.minProteinG ?? 0;
-    const conPiso =
-      piso > 0
-        ? conFeasible.filter((f) => (maxGrams(f) * f.proteinPer100) / 100 >= piso)
-        : conFeasible;
-    if (conPiso.length === 0 && extra.estricto === true) return undefined;
-    const candidatos = conPiso.length > 0 ? conPiso : conFeasible;
+    const filtrar = (lista: Food[]): { conFeasible: Food[]; conPiso: Food[] } => {
+      const conFeasible = key ? feasible(lista, key, targetG, 10) : lista;
+      const conPiso =
+        piso > 0
+          ? conFeasible.filter((f) => (maxGrams(f) * f.proteinPer100) / 100 >= piso)
+          : conFeasible;
+      return { conFeasible, conPiso };
+    };
+    // Sin repetir la proteina ni el cereal del dia, y el filtro va ANTES de
+    // `feasible`: despues, en un post-entreno keto el unico que "alcanzaba"
+    // era el atun del pre y ya no quedaba a quien elegir. En el intento
+    // estricto, que ninguno fresco llegue al piso es razon para probar el otro
+    // rol (el huevo si el yogur ya salio); solo el intento final se resigna a
+    // repetir, y eso queda declarado en el menu.
+    const deFrescos = filtrar(sinRepetir(base, familiasDelDia));
+    let candidatos: Food[];
+    if (deFrescos.conPiso.length > 0) {
+      candidatos = deFrescos.conPiso;
+    } else if (extra.estricto === true) {
+      return undefined;
+    } else {
+      const deTodos = filtrar(base);
+      candidatos =
+        deTodos.conPiso.length > 0
+          ? deTodos.conPiso
+          : deFrescos.conFeasible.length > 0
+            ? deFrescos.conFeasible
+            : deTodos.conFeasible;
+    }
     return pick(candidatos, profile, random, avoid, preferidosDe(candidatos, slots, config));
   }
 
@@ -1613,7 +1862,8 @@ function buildMeal(
       }),
     );
     const unicos = base.filter((f, i) => base.findIndex((o) => o.id === f.id) === i);
-    const candidatos = feasible(unicos, key, targetG, 10);
+    const frescos = sinRepetir(unicos, familiasDelDia);
+    const candidatos = feasible(frescos.length > 0 ? frescos : unicos, key, targetG, 10);
     return pick(candidatos, profile, random, avoid, preferidosDe(candidatos, slots, config));
   }
 
@@ -1632,7 +1882,7 @@ function buildMeal(
   // despues —la proteina de la comida corrida junto a la sopa— lo acompaña.
   const platillo = elegirPlatillo(
     slot, profile, config, pool, filters, plantilla, vaCarbohidrato, prepRandom, avoid,
-    platillosDelDia,
+    platillosDelDia, familiasDelDia,
   );
   if (platillo) slots.push(...platillo.slots);
   const cubre = platillo?.cubre ?? {
@@ -1749,10 +1999,13 @@ function buildMeal(
     f: cap(slot.fatG, residual.f),
   };
   for (const s of slots) s.maxEnComida = plantilla.maxAlimentos;
-  ajustarPorciones(slots, effective, profile, config, pool, filters, random, avoid, plantilla);
+  ajustarPorciones(
+    slots, effective, profile, config, pool, filters, random, avoid, plantilla, familiasDelDia,
+  );
   for (const s of slots) s.maxEnComida = plantilla.maxAlimentos;
 
   const kept = slots.filter((s) => s.grams > 0);
+  for (const familia of familiasDe(kept)) familiasDelDia.add(familia);
   const items = kept.map((s) => toItem(s, s.fixed && s.food.role === 'vegetal_libre'));
 
   const totals = items.reduce<MacroTargets>(
@@ -1791,14 +2044,22 @@ function buildMeal(
 }
 
 /** Reconstruye items y totales de una comida a partir de sus gramos. */
-function refreshMeal(meal: MenuMeal, slots: Slot[], pool: Food[], profile: Profile, config: EngineConfig): void {
+function refreshMeal(
+  meal: MenuMeal,
+  slots: Slot[],
+  pool: Food[],
+  profile: Profile,
+  config: EngineConfig,
+  /** Familias de las OTRAS comidas del dia: las equivalencias no las repiten. */
+  fuera: ReadonlySet<string> = new Set(),
+): void {
   const kept = slots.filter((s) => s.grams > 0);
   meal.items = kept.map((s) => toItem(s, s.fixed && s.food.role === 'vegetal_libre'));
   const platillo = platilloDe(meal.items);
   if (platillo) meal.preparacion = platillo;
   else delete meal.preparacion;
   meal.equivalences = kept
-    .map((s) => equivalencesFor(s, pool, profile, config))
+    .map((s) => equivalencesFor(s, pool, profile, config, fuera))
     .filter((e): e is Equivalence => e !== null);
   meal.totals = meal.items.reduce<MacroTargets>(
     (acc, item) => ({
@@ -1837,10 +2098,20 @@ function repairDay(
   // ultimo recurso, y solo se usa aqui —si se usara siempre, todos los menus
   // convergerian al mismo alimento "optimo" y se acabaria la variedad que el
   // sorteo determinista existe para dar.
-  if (contexto && fueraDeTolerancia(comidas.flat(), target)) {
+  // La proteina principal y el cereal no se repiten en el dia. Lo que quedo
+  // repetido al armar (porque en ese momento no habia otra opcion) se vuelve
+  // a intentar ahora que la poda ya movio el resto, y ANTES de la
+  // sustitucion por macros: esa cierra lo que este cambio descuadre.
+  if (contexto) {
+    sustituirAlimentos(comidas, target, config, contexto, 'repetidos');
+    moverGramos(comidas, target, config);
+  }
+
+  for (let vuelta = 0; vuelta < 2 && contexto && fueraDeTolerancia(comidas.flat(), target); vuelta += 1) {
     sustituirAlimentos(comidas, target, config, contexto);
     moverGramos(comidas, target, config);
   }
+
 
   for (const comida of comidas) {
     aplicarComposicion(comida, config);
@@ -1871,13 +2142,27 @@ function sustituirAlimentos(
     filtersPorComida: EligibleOptions[];
     plantillas: Plantilla[];
   },
+  /**
+   * `macros`: cambia un alimento solo si acerca el dia al target.
+   * `repetidos`: cambia la proteina o el cereal que repite otra comida por uno
+   * que no, aunque el dia quede un poco peor —lo cierran despues los gramos—.
+   * Pasa cuando la reparacion cambio el alimento que obligaba a repetir: el
+   * pan del desayuno se volvio camote y la avena de la colacion ya puede ser
+   * pan.
+   */
+  modo: 'macros' | 'repetidos' = 'macros',
 ): void {
   const all = comidas.flat();
+  const despensa = new Set(contexto.profile.pantry ?? []);
+  const enDespensa = (f: Food): boolean => despensa.has(f.id);
   for (let i = 0; i < comidas.length; i += 1) {
     const comida = comidas[i] ?? [];
     const filters = contexto.filtersPorComida[i] ?? {};
     for (const slot of comida) {
       if (!slot.role) continue;
+      if (modo === 'repetidos' && !repiteFamilia(slot.food, familiasDe(comidas.filter((_, j) => j !== i).flat()))) {
+        continue;
+      }
       // El vegetal libre tambien se sustituye, aunque sus gramos esten fijos:
       // 200 g de germen de alfalfa traen 8 g de proteina y 200 de lechuga
       // traen 1.4. Con cuatro comidas al dia esa diferencia es la que sacaba
@@ -1889,6 +2174,12 @@ function sustituirAlimentos(
       // desayuno, la comida y la cena. Cuadraba perfecto y nadie come eso.
       const yaEstan = new Set(comidas.flat().map((s) => s.food.id));
       yaEstan.delete(slot.food.id);
+      // Y tampoco la misma FAMILIA de otra comida: cambiar la pechuga por el
+      // muslo cuando la cena ya es pollo es servir pollo dos veces. La propia
+      // no cuenta: quedarse en su familia no repite nada nuevo.
+      const propia = familiaDe(slot.food);
+      const familiasFuera = familiasDe(comidas.filter((_, j) => j !== i).flat());
+      if (propia && modo === 'macros') familiasFuera.delete(propia);
       // La proteina magra y la grasa son la misma familia para sustituir: en
       // keto la diferencia entre la tilapia y el salmon es justo la grasa que
       // le falta al dia, y obligarse a quedarse en el mismo rol deja fuera la
@@ -1925,15 +2216,18 @@ function sustituirAlimentos(
             ...(esVegetalLibre ? { freeVegetable: true } : {}),
           }),
         )
-        .filter((f) => !yaEstan.has(f.id))
+        .filter((f) => !yaEstan.has(f.id) && !repiteFamilia(f, familiasFuera))
         // El ingrediente de un platillo solo se cambia por otro del platillo:
         // el licuado no se arregla metiendole atun.
         .filter((f) => slot.permitidos === undefined || slot.permitidos.includes(f.id))
+        // Lo que ya esta comprado no se cambia por algo que habria que ir a
+        // comprar: la despensa manda tambien al reparar.
+        .filter((f) => !enDespensa(slot.food) || enDespensa(f))
         // Con la medida propia del platillo, no la general del alimento.
         .map((f) => (slot.permitidos ? acotar(f, slot.cotas) : f));
 
       const original = { food: slot.food, grams: slot.grams };
-      let mejorError = error(all, target);
+      let mejorError = modo === 'repetidos' ? Number.POSITIVE_INFINITY : errorDelDia(all, target);
       let mejor = original;
 
       for (const food of candidatos) {
@@ -1944,7 +2238,7 @@ function sustituirAlimentos(
         for (const grams of porciones) {
           slot.grams = grams;
           if (violaComposicion(comida, config)) continue;
-          const candidato = error(all, target);
+          const candidato = errorDelDia(all, target);
           if (candidato < mejorError - 1e-9) {
             mejorError = candidato;
             mejor = { food, grams };
@@ -1995,7 +2289,7 @@ function podarSobrantes(comidas: Slot[][], target: { p: number; c: number; f: nu
       );
       if (!hayRelevo) continue;
 
-      const antes = error(comidas.flat(), target);
+      const antes = errorDelDia(comidas.flat(), target);
       const donde = comida.indexOf(slot);
       comida.splice(donde, 1);
 
@@ -2006,7 +2300,7 @@ function podarSobrantes(comidas: Slot[][], target: { p: number; c: number; f: nu
       const despues = comidas.flat();
       const faltaSuMacro =
         target[macro] > 0 && (target[macro] - sum(despues, macro)) / target[macro] > 0.05;
-      if (error(despues, target) >= antes || faltaSuMacro) comida.splice(donde, 0, slot);
+      if (errorDelDia(despues, target) >= antes || faltaSuMacro) comida.splice(donde, 0, slot);
     }
   }
 }
@@ -2030,14 +2324,14 @@ function moverGramos(
     let improved = false;
     for (const { slot, comida } of movable) {
       let mejorGramos = slot.grams;
-      let mejor = error(all, target);
+      let mejor = errorDelDia(all, target);
       const original = slot.grams;
       for (const grams of porcionesPosibles(slot.food, config, minDeSlot(slot))) {
         slot.grams = grams;
         // Cerrar el macro pasandose de taza y media de arroz no cierra nada:
         // deja un plato que no se sirve asi.
         if (violaComposicion(comida, config)) continue;
-        const candidato = error(all, target);
+        const candidato = errorDelDia(all, target);
         if (candidato < mejor - 1e-9) {
           mejor = candidato;
           mejorGramos = grams;
@@ -2066,8 +2360,12 @@ function buildMenu(
   const avoid = new Set<string>();
   const residual: Residual = { p: 0, c: 0, f: 0 };
   const platillosDelDia = new Set<'licuado' | 'plato'>();
+  const familiasDelDia = new Set<string>();
   const built = slots.map((slot) =>
-    buildMeal(slot, profile, config, random, avoid, pool, options, residual, prepRandom, platillosDelDia),
+    buildMeal(
+      slot, profile, config, random, avoid, pool, options, residual, prepRandom, platillosDelDia,
+      familiasDelDia,
+    ),
   );
   repairDay(
     built.map((b) => b.slots),
@@ -2093,7 +2391,10 @@ function buildMenu(
     verificarPlatillo(b.slots);
   }
   const meals = built.map((b) => b.meal);
-  for (const b of built) refreshMeal(b.meal, b.slots, pool, profile, config);
+  const fueraDe = (i: number): Set<string> =>
+    familiasDe(built.filter((_, j) => j !== i).flatMap((b) => b.slots));
+  built.forEach((b, i) => refreshMeal(b.meal, b.slots, pool, profile, config, fueraDe(i)));
+  const repeticiones = repeticionesDe(built.map((b) => ({ slot: b.meal.slot, slots: b.slots })));
   const totals = meals.reduce<MacroTargets>(
     (acc, meal) => ({
       kcal: acc.kcal + meal.totals.kcal,
@@ -2117,7 +2418,27 @@ function buildMenu(
       carbG: dev(totals.carbG, target.carbG),
       fatG: dev(totals.fatG, target.fatG),
     },
+    ...(repeticiones.length > 0 ? { repeticiones } : {}),
   };
+}
+
+/**
+ * La proteina principal o el cereal que quedo en dos comidas del dia. Solo
+ * pasa cuando el catalogo elegible del rol se quedo sin otra opcion (la
+ * despensa corta); se declara para que no se confunda con un defecto.
+ */
+function repeticionesDe(
+  comidas: Array<{ slot: MealSlot['id']; slots: Slot[] }>,
+): NonNullable<Menu['repeticiones']> {
+  const porFamilia = new Map<string, MealSlot['id'][]>();
+  for (const comida of comidas) {
+    for (const familia of familiasDe(comida.slots)) {
+      porFamilia.set(familia, [...(porFamilia.get(familia) ?? []), comida.slot]);
+    }
+  }
+  return [...porFamilia.entries()]
+    .filter(([, slots]) => slots.length > 1)
+    .map(([familia, slots]) => ({ familia, slots }));
 }
 
 /**
@@ -2150,6 +2471,8 @@ function shoppingList(
   for (const menu of menus) {
     for (const meal of menu.meals) {
       for (const item of meal.items) {
+        // El agua del licuado no se compra.
+        if (item.foodId === AGUA_ID) continue;
         // Un alimento intercambiado por una equivalencia puede venir SIN
         // `foodId` (los menus guardados antes de que el intercambio lo
         // conservara). Agrupar por `undefined` metia a todos esos alimentos
@@ -2268,6 +2591,211 @@ export function generateMenu(
       : shoppingList([menu1, menu2], pool, daysPerMenu, profile.pantry),
     notas,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Cambiar el platillo: sopa por sopa, licuado por licuado
+// ---------------------------------------------------------------------------
+
+/** Los tipos entre los que se cambia un platillo: la sopa es sopa, crema o caldo. */
+function grupoDeTipo(tipo: Preparacion['tipo']): Preparacion['tipo'][] {
+  return tipo === 'licuado' ? ['licuado'] : ['sopa', 'crema', 'caldo'];
+}
+
+/** Lo que hace falta para cambiar el platillo de una comida ya guardada. */
+export interface CambioDePlatilloInput {
+  /** La comida tal como esta guardada (la del JSON del menu). */
+  meal: MenuMeal;
+  profile: Profile;
+  config?: EngineConfig;
+  pool?: Food[];
+  /** Nombres o ids de lo que hay en las OTRAS comidas del dia. */
+  enElDia?: string[];
+}
+
+export interface OpcionDePlatillo {
+  id: string;
+  nombre: string;
+  tipo: Preparacion['tipo'];
+  /** Los macros con los que quedaria la comida completa. */
+  totals: MacroTargets;
+}
+
+function alimentoDe(item: Pick<MenuItem, 'foodId' | 'name'>, pool: Food[]): Food | undefined {
+  return (
+    pool.find((f) => f.id === item.foodId) ??
+    pool.find((f) => normalize(f.name) === normalize(item.name))
+  );
+}
+
+function familiasDeNombres(nombres: string[], pool: Food[]): Set<string> {
+  const salida = new Set<string>();
+  for (const nombre of nombres) {
+    const food = alimentoDe({ foodId: nombre, name: nombre }, pool);
+    const familia = food ? familiaDe(food) : undefined;
+    if (familia) salida.add(familia);
+  }
+  return salida;
+}
+
+/**
+ * La comida con sus totales y su objetivo aunque el JSON guardado no los
+ * traiga (menus viejos): se suman de los renglones, que es lo que se come.
+ */
+function conTotales(meal: MenuMeal): MenuMeal {
+  const suma = (meal.items ?? []).reduce<MacroTargets>(
+    (acc, i) => ({
+      kcal: acc.kcal + (i.kcal ?? 0),
+      proteinG: round1(acc.proteinG + (i.proteinG ?? 0)),
+      carbG: round1(acc.carbG + (i.carbG ?? 0)),
+      fatG: round1(acc.fatG + (i.fatG ?? 0)),
+      fiberG: round1(acc.fiberG + (i.fiberG ?? 0)),
+    }),
+    { kcal: 0, proteinG: 0, carbG: 0, fatG: 0, fiberG: 0 },
+  );
+  const totals = meal.totals ?? suma;
+  return { ...meal, items: meal.items ?? [], totals, target: meal.target ?? totals };
+}
+
+/** true si la proteina de la comida vive dentro del platillo (el caldo de pollo). */
+function platilloTraeProteina(items: MenuItem[], pool: Food[]): boolean {
+  return items.some((i) => {
+    if (!i.preparacion) return false;
+    const food = alimentoDe(i, pool);
+    return food !== undefined && food.role.startsWith('proteina') && !esLeche(food);
+  });
+}
+
+/**
+ * Arma la comida con otro platillo, conservando sus macros: los ingredientes
+ * del platillo nuevo salen de su receta con las mismas reglas que al armar el
+ * menu, y lo que acompana (el atun, el arroz) se queda y mueve sus gramos para
+ * que la comida siga cuadrando. `undefined` si ese platillo no cabe.
+ */
+function comidaConPlatillo(
+  input: CambioDePlatilloInput,
+  prep: Preparacion,
+): { meal: MenuMeal; slots: Slot[] } | undefined {
+  const config = input.config ?? DEFAULT_CONFIG;
+  const pool = input.pool ?? FOODS;
+  const { profile } = input;
+  const meal = conTotales(input.meal);
+  const target = { p: meal.totals.proteinG, c: meal.totals.carbG, f: meal.totals.fatG };
+  const slot: MealSlot = {
+    id: meal.slot,
+    label: meal.label,
+    timeHint: meal.timeHint,
+    proteinG: meal.target.proteinG,
+    carbG: meal.target.carbG,
+    fatG: meal.target.fatG,
+    kcal: meal.target.kcal,
+    allowDenseCarb: meal.target.carbG >= 15,
+    freeVegetables: true,
+  };
+  if (!prep.slots.includes(slot.id) || !preparacionesPara(slot, profile).some((p) => p.id === prep.id)) {
+    return undefined;
+  }
+  const plantilla = plantillaDe(slot, config);
+  const periWorkout = slot.id === 'PRE' || slot.id === 'POST';
+  const filters: EligibleOptions = {
+    quickOnly: periWorkout,
+    noSupplements: !periWorkout,
+    desayuno: esDesayuno(slot),
+  };
+  const familias = familiasDeNombres(input.enElDia ?? [], pool);
+  const resuelto = resolverPreparacion(
+    prep, slot, profile, config, pool, filters, plantilla, slot.allowDenseCarb && slot.carbG >= 15,
+    rng(1), new Set(), familias,
+  );
+  if (!resuelto) return undefined;
+
+  // La proteina tiene que seguir viviendo donde vivia: si el caldo traia el
+  // pollo y la sopa de lentejas no, la comida se quedaria sin proteina.
+  if (resuelto.cubre.proteina !== platilloTraeProteina(meal.items, pool)) return undefined;
+
+  const acompanan: Slot[] = [];
+  for (const item of meal.items.filter((i) => !i.preparacion)) {
+    const food = alimentoDe(item, pool);
+    if (!food) return undefined;
+    const role = item.why?.role ?? food.role;
+    // La verdura libre de al lado sobra si el platillo nuevo ya es verdura.
+    if (role === 'vegetal_libre' && resuelto.cubre.verdura) continue;
+    acompanan.push({
+      food,
+      grams: item.grams,
+      fixed: item.free || role === 'vegetal_libre',
+      role,
+      ...(role.startsWith('proteina') && !resuelto.cubre.proteina
+        ? { minProteinG: plantilla.proteinaMinG }
+        : {}),
+    });
+  }
+  const slots = [...resuelto.slots, ...acompanan];
+  // Un alimento de al lado que ya es ingrediente del platillo nuevo se va:
+  // el platillo lo trae.
+  for (const lado of acompanan) {
+    const repetido = (s: Slot): boolean =>
+      s.food.id === lado.food.id ||
+      normalize(s.food.name) === normalize(lado.food.name) ||
+      repiteFamilia(lado.food, familiasDe([s]));
+    if (resuelto.slots.some(repetido)) {
+      slots.splice(slots.indexOf(lado), 1);
+    }
+  }
+  for (const s of slots) s.maxEnComida = plantilla.maxAlimentos;
+  solveGrams(slots, target, config);
+  aplicarComposicion(slots, config);
+  asegurarProteina(slots, config);
+  for (const s of slots) s.grams = Math.round(s.grams);
+  verificarPlatillo(slots);
+  if (!slots.some((s) => s.preparacion?.id === prep.id)) return undefined;
+
+  const nueva: MenuMeal = { ...meal, items: [], equivalences: [] };
+  delete nueva.preparacion;
+  refreshMeal(nueva, slots, pool, profile, config, familias);
+  return { meal: nueva, slots };
+}
+
+/**
+ * Los platillos por los que se puede cambiar el de esta comida: del mismo
+ * grupo (sopa por sopa, crema o caldo; licuado por licuado), que quepan en el
+ * slot, la dieta, el presupuesto y la despensa, sin repetir la proteina ni el
+ * cereal del dia, y cuya comida quede con macros equivalentes (+-10 % de
+ * kcal y +-5 g de proteina).
+ */
+export function opcionesDePlatillo(input: CambioDePlatilloInput): OpcionDePlatillo[] {
+  const actual = input.meal.preparacion;
+  if (!actual) return [];
+  const grupo = grupoDeTipo(actual.tipo);
+  const { totals } = conTotales(input.meal);
+  return PREPARACIONES.filter((p) => p.id !== actual.id && grupo.includes(p.tipo))
+    .map((prep) => ({ prep, armada: comidaConPlatillo(input, prep) }))
+    .filter(
+      (x): x is { prep: Preparacion; armada: { meal: MenuMeal; slots: Slot[] } } =>
+        x.armada !== undefined &&
+        Math.abs(x.armada.meal.totals.kcal - totals.kcal) <= Math.max(totals.kcal * 0.1, 30) &&
+        Math.abs(x.armada.meal.totals.proteinG - totals.proteinG) <= 5,
+    )
+    .map(({ prep, armada }) => ({
+      id: prep.id,
+      nombre: prep.nombre,
+      tipo: prep.tipo,
+      totals: armada.meal.totals,
+    }));
+}
+
+/**
+ * La comida con el platillo cambiado, o `null` si ese platillo no es una de
+ * sus opciones. Todos los ingredientes del platillo se reemplazan; lo que
+ * acompana se queda y ajusta sus gramos.
+ */
+export function cambiarPlatillo(
+  input: CambioDePlatilloInput & { preparacionId: string },
+): MenuMeal | null {
+  if (!opcionesDePlatillo(input).some((o) => o.id === input.preparacionId)) return null;
+  const prep = PREPARACIONES.find((p) => p.id === input.preparacionId);
+  if (!prep) return null;
+  return comidaConPlatillo(input, prep)?.meal ?? null;
 }
 
 /** Solo para pruebas: piezas internas que no forman parte del API del motor. */

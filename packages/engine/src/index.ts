@@ -41,8 +41,14 @@ export {
   prepMinDelDia,
   equivalenciasDeAlimento,
   listaDeSuper,
+  opcionesDePlatillo,
+  cambiarPlatillo,
+  maxGrams,
+  type CambioDePlatilloInput,
   type MenuOptions,
+  type OpcionDePlatillo,
 } from './menu.js';
+export { familiaDe, type FamiliaPrincipal } from './familias.js';
 export {
   FOODS,
   buscaAlimentos,

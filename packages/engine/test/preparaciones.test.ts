@@ -24,7 +24,7 @@ describe('catalogo de preparaciones', () => {
       for (const ing of prep.ingredientes) {
         const donde = `${prep.id}`;
         expect(
-          ing.foodId !== undefined || ing.tag === 'leche' || (ing.rolePool?.length ?? 0) > 0,
+          ing.foodId !== undefined || ing.tag === 'leche' || ing.tag === 'base' || (ing.rolePool?.length ?? 0) > 0,
           donde,
         ).toBe(true);
         if (ing.foodId) expect(findFood(ing.foodId), `${donde} ${ing.foodId}`).toBeDefined();
@@ -218,5 +218,76 @@ describe('la preferencia del perfil manda', () => {
     for (const item of comidas.flatMap((m) => m.items)) {
       expect(findFood(item.foodId)!.tags, item.name).not.toContain('no_vegetariano');
     }
+  });
+});
+
+// Menu 1 de Mau: "Licuado de fresa con avena" era yogur 230 g, fresa, avena y
+// media taza de leche. Un licuado se licua con leche o con agua; el yogur no
+// es la base, y solo es la proteina cuando no hay polvo.
+describe('el licuado lleva base liquida', () => {
+  it('cada licuado del catalogo trae su base: una taza, fija', () => {
+    for (const prep of PREPARACIONES.filter((p) => p.tipo === 'licuado')) {
+      const base = prep.ingredientes.filter((i) => i.tag === 'base');
+      expect(base, prep.id).toHaveLength(1);
+      expect(base[0]!.fijo, prep.id).toBe(true);
+      expect(base[0]!.minUnits, prep.id).toBe(1);
+      expect(base[0]!.maxUnits, prep.id).toBe(1);
+      expect(prep.ingredientes.some((i) => i.tag === 'leche'), prep.id).toBe(false);
+    }
+  });
+
+  it('el agua existe en el catalogo, sin macros y sin comprarse', () => {
+    const agua = findFood('agua')!;
+    expect(agua.kcalPer100).toBe(0);
+    expect(agua.tags).toContain('base_agua');
+    const plan = planDe(MAU, 1, 'CUT');
+    expect(plan.shoppingList.some((i) => i.foodId === 'agua')).toBe(false);
+  });
+
+  const licuadosDe = (profile: Profile): MenuMeal[] =>
+    comidasDeLaSemana(profile).filter((m) => m.preparacion?.tipo === 'licuado');
+
+  it('todo licuado servido trae una taza de leche o de agua, y el yogur solo con leche', () => {
+    const licuados = licuadosDe(MAU);
+    expect(licuados.length).toBeGreaterThan(0);
+    for (const meal of licuados) {
+      const ids = meal.items.filter((i) => i.preparacion).map((i) => i.foodId);
+      const base = meal.items.filter(
+        (i) => i.preparacion && (i.foodId === 'agua' || i.foodId.startsWith('leche_')),
+      );
+      expect(base, meal.preparacion!.id).toHaveLength(1);
+      expect(base[0]!.grams, meal.preparacion!.id).toBe(240);
+      if (ids.includes('yogur_griego_0')) {
+        expect(base[0]!.foodId.startsWith('leche_'), ids.join(',')).toBe(true);
+      }
+    }
+  });
+
+  it('con proteina en polvo, la proteina del licuado es el polvo (salvo que ya saliera hoy)', () => {
+    const perfil: Profile = { ...MAU, supplements: ['WHEY'] };
+    let conPolvo = 0;
+    for (const seed of SEMANA) {
+      for (const menu of planDe(perfil, seed).menus) {
+        const polvoEnOtra = (slot: string): boolean =>
+          menu.meals.some(
+            (m) => m.slot !== slot && m.items.some((i) => findFood(i.foodId)!.tags.includes('suplemento')),
+          );
+        for (const meal of menu.meals.filter((m) => m.preparacion?.tipo === 'licuado')) {
+          if (meal.preparacion!.id === 'licuado_mango_yogur') continue;
+          const proteinas = meal.items.filter(
+            (i) =>
+              i.preparacion &&
+              findFood(i.foodId)!.role.startsWith('proteina') &&
+              !i.foodId.startsWith('leche_'),
+          );
+          for (const p of proteinas) {
+            const esPolvo = findFood(p.foodId)!.tags.includes('suplemento');
+            if (esPolvo) conPolvo += 1;
+            else expect(polvoEnOtra(meal.slot), `${seed} ${meal.preparacion!.display}`).toBe(true);
+          }
+        }
+      }
+    }
+    expect(conPolvo).toBeGreaterThan(0);
   });
 });

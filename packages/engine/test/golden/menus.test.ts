@@ -3,7 +3,8 @@ import { generateMenu, incompatibles } from '../../src/menu.js';
 import { distribute } from '../../src/meals.js';
 import { kcalForDeficit, macrosFor } from '../../src/calc.js';
 import { DEFAULT_CONFIG, pickDeficit } from '../../src/config.js';
-import { findFood } from '../../src/foods.js';
+import { FOODS, findFood } from '../../src/foods.js';
+import { familiaDe } from '../../src/familias.js';
 import type { Phase, Profile } from '../../src/types.js';
 
 /**
@@ -214,6 +215,51 @@ describe.each(CASOS)('$nombre', (caso) => {
           new Set(nombres).size,
           `dia ${dia} menu ${meal.menuId} ${meal.slot}: ${nombres.join(' + ')}`,
         ).toBe(nombres.length);
+      }
+    }
+  });
+
+  // Menu 1 de Mau: yogur en el desayuno y otra vez en el licuado, avena en
+  // los dos. La proteina principal y el cereal no se repiten en el dia; la
+  // unica salida es la despensa corta, y esa queda declarada en el menu.
+  it('ninguna proteina principal ni cereal se repite en el dia', () => {
+    for (const dia of DIAS) {
+      for (const menu of diaDe(caso, dia).menus) {
+        const porFamilia = new Map<string, string[]>();
+        for (const meal of menu.meals) {
+          const familias = new Set(
+            meal.items.map((i) => familiaDe(findFood(i.foodId)!)).filter((f) => f !== undefined),
+          );
+          for (const familia of familias) {
+            porFamilia.set(familia, [...(porFamilia.get(familia) ?? []), meal.slot]);
+          }
+        }
+        const declaradas = new Set((menu.repeticiones ?? []).map((r) => r.familia));
+        for (const [familia, slots] of porFamilia) {
+          if (slots.length < 2) continue;
+          expect(declaradas.has(familia), `${familia} en ${slots.join(' y ')} dia ${dia} menu ${menu.id}`).toBe(true);
+        }
+        // La excepcion solo vale cuando de verdad no habia otra: el dia ya uso
+        // TODAS las familias que el presupuesto de esa persona alcanza (el
+        // principiante de presupuesto bajo tiene cuatro proteinas para tres
+        // comidas, y el desayuno lleva dos).
+        for (const { familia } of menu.repeticiones ?? []) {
+          const tope = caso.profile.budget === 'bajo' ? 1 : caso.profile.budget === 'medio' ? 2 : 3;
+          const esProteina = FOODS.some((f) => familiaDe(f) === familia && f.role.startsWith('proteina'));
+          const alcanzables = new Set(
+            FOODS.filter(
+              (f) =>
+                f.costRel <= tope &&
+                (esProteina ? f.role.startsWith('proteina') : !f.role.startsWith('proteina')) &&
+                !f.tags.includes('suplemento'),
+            )
+              .map((f) => familiaDe(f))
+              .filter((f) => f !== undefined),
+          );
+          for (const alcanzable of alcanzables) {
+            expect(porFamilia.has(alcanzable), `${familia} repetida sin usar ${alcanzable}, dia ${dia} menu ${menu.id}`).toBe(true);
+          }
+        }
       }
     }
   });
