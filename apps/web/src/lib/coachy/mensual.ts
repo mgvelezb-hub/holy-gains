@@ -1,4 +1,7 @@
+import type { CheckIn } from "@prisma/client";
+
 import type { GoalZone, GoalZoneReading } from "@/lib/coachy/goal";
+import { decimalToNumber, isoFromDateColumn } from "@/lib/format";
 
 /**
  * El check-in mensual, como concepto del servidor.
@@ -93,6 +96,25 @@ export interface ProximoMensual {
   fecha: string;
   /** Fecha del último mensual (o del ancla). */
   ultimoMensual: string;
+}
+
+/** Un check-in de Prisma, en la forma plana que usa `mensual.ts`. */
+export function aMedida(
+  row: Pick<
+    CheckIn,
+    "id" | "date" | "waistCm" | "weightKg" | "armLeftCm" | "armRightCm" | "legLeftCm" | "legRightCm"
+  >,
+): MedidaCheckIn {
+  return {
+    id: row.id,
+    fecha: isoFromDateColumn(row.date),
+    cinturaCm: decimalToNumber(row.waistCm),
+    pesoKg: decimalToNumber(row.weightKg),
+    brazoIzqCm: decimalToNumber(row.armLeftCm),
+    brazoDerCm: decimalToNumber(row.armRightCm),
+    piernaIzqCm: decimalToNumber(row.legLeftCm),
+    piernaDerCm: decimalToNumber(row.legRightCm),
+  };
 }
 
 // ---------------------------------------------------------------------------

@@ -7,11 +7,15 @@ import { ComposeError, composeReply, replyToText } from "@/lib/coachy/compose";
 import { MissingAnthropicKeyError, hasAnthropicKey } from "@/lib/coachy/anthropic";
 import { lineasDelPlan, respuestaDeterminista } from "@/lib/coachy/retro";
 import { loadFewShotExamples } from "@/lib/coachy/fewshot";
-import { construyeBloqueMensual, clasificaMensuales, type BloqueMensual } from "@/lib/coachy/mensual";
+import {
+  aMedida,
+  construyeBloqueMensual,
+  clasificaMensuales,
+  type BloqueMensual,
+} from "@/lib/coachy/mensual";
 import { syncMealPlans } from "@/lib/coachy/menu";
 import { notify } from "@/lib/coachy/notifications";
 import {
-  aMedida,
   fotosDe,
   lecturaDelObjetivo,
   rearmaRutina,

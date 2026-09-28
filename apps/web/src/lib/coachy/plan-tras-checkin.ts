@@ -1,10 +1,10 @@
 import "server-only";
 
-import type { CheckIn, Profile } from "@prisma/client";
+import type { Profile } from "@prisma/client";
 
 import { goalStatusFor, type GoalStatus } from "@/lib/coachy/goal";
-import type { FotosMensuales, MedidaCheckIn } from "@/lib/coachy/mensual";
-import { decimalToNumber, fromISODate, isoFromDateColumn, shiftISODate, toISODate } from "@/lib/format";
+import type { FotosMensuales } from "@/lib/coachy/mensual";
+import { fromISODate, isoFromDateColumn, shiftISODate, toISODate } from "@/lib/format";
 import { ensureWeekMaterialized } from "@/lib/training/db";
 import { emphasisFor } from "@/lib/training/emphasis";
 import { mondayOf } from "@/lib/training/generate";
@@ -17,25 +17,6 @@ import type { MuscleGroup } from "@/lib/training/types";
  * adelante" que no depende de él: la lectura de fotos contra la referencia y
  * la rutina de lo que queda de esta semana y la siguiente.
  */
-
-/** Un check-in de Prisma, en la forma plana que usa `mensual.ts`. */
-export function aMedida(
-  row: Pick<
-    CheckIn,
-    "id" | "date" | "waistCm" | "weightKg" | "armLeftCm" | "armRightCm" | "legLeftCm" | "legRightCm"
-  >,
-): MedidaCheckIn {
-  return {
-    id: row.id,
-    fecha: isoFromDateColumn(row.date),
-    cinturaCm: decimalToNumber(row.waistCm),
-    pesoKg: decimalToNumber(row.weightKg),
-    brazoIzqCm: decimalToNumber(row.armLeftCm),
-    brazoDerCm: decimalToNumber(row.armRightCm),
-    piernaIzqCm: decimalToNumber(row.legLeftCm),
-    piernaDerCm: decimalToNumber(row.legRightCm),
-  };
-}
 
 /** El estado de "Rumbo a tu objetivo" como lo guarda el bloque mensual. */
 export function fotosDe(status: GoalStatus | null): FotosMensuales | null {
