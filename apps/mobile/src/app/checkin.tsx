@@ -308,7 +308,19 @@ export default function CheckinScreen() {
     } catch (error) {
       if (error instanceof ApiError && error.status === 422 && error.detalles) {
         setFieldErrors(error.detalles);
-        setGeneralError("Revisa los campos marcados");
+        // Si el servidor rechazó un campo que esta pantalla no pinta, decir
+        // "revisa los campos marcados" con todo lleno es un callejón sin
+        // salida. Se nombra el campo y su motivo para que se vea dónde está.
+        const visibles = new Set([
+          "waistCm", "weightKg", "legLeftCm", "legRightCm", "armLeftCm", "armRightCm",
+          "inflammation", "energy", "hunger", "satiety", "strengthRpe",
+        ]);
+        const ocultos = Object.entries(error.detalles).filter(([campo]) => !visibles.has(campo));
+        setGeneralError(
+          ocultos.length === 0
+            ? "Revisa los campos marcados"
+            : `No se pudo enviar: ${ocultos.map(([campo, motivo]) => `${campo} (${motivo})`).join(", ")}`,
+        );
       } else if (error instanceof ApiError && error.status === 403) {
         setGeneralError("Termina tu onboarding antes de enviar un check-in");
       } else {
