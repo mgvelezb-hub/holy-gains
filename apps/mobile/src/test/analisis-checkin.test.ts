@@ -6,6 +6,7 @@ import {
   MAX_REPROGRAMACIONES,
   SONDEO_MS,
   alEnviar,
+  clasificarPermiso,
   pasoAviso,
   flechaDelta,
   lineaCheckin,
@@ -188,5 +189,20 @@ describe("tocaMensual", () => {
     expect(tocaMensual({ servidor: null, diasDesdeUltimaLocal: 28 })).toBe(true);
     expect(tocaMensual({ servidor: null, diasDesdeUltimaLocal: 10 })).toBe(false);
     expect(tocaMensual({ servidor: null, diasDesdeUltimaLocal: null })).toBe(false);
+  });
+});
+
+describe("clasificarPermiso", () => {
+  it("concedido si iOS lo dio (incluido el provisional)", () => {
+    expect(clasificarPermiso({ granted: true, status: "granted" })).toBe("concedido");
+  });
+  it("sin preguntar: toca pedirlo con su renglón previo", () => {
+    expect(clasificarPermiso({ granted: false, status: "undetermined" })).toBe("sin-preguntar");
+  });
+  it("negado: solo Ajustes del sistema lo reabre", () => {
+    expect(clasificarPermiso({ granted: false, status: "denied" })).toBe("negado");
+  });
+  it("sin respuesta del sistema no se acusa de negado", () => {
+    expect(clasificarPermiso(null)).toBe("sin-preguntar");
   });
 });

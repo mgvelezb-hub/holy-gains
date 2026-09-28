@@ -1,12 +1,12 @@
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, AppState, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, AppState, Linking, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/context/theme";
 import { SONDEO_MS, pasoAviso, textoAnalizando, type AvisoAnalisis } from "@/lib/analisis-checkin";
 import { getDecision, postCheckinListo } from "@/lib/api";
-import { aplicarAccionAviso } from "@/lib/recordatorio";
+import { aplicarAccionAviso, estadoPermisoNotificaciones } from "@/lib/recordatorio";
 import { fonts, spacing, type as typeScale, type Palette } from "@/lib/theme";
 
 /**
@@ -46,6 +46,7 @@ export function AnalizandoCheckin({
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [enRevision, setEnRevision] = useState(false);
   const [sigoConEllo, setSigoConEllo] = useState(false);
+  const [avisosApagados, setAvisosApagados] = useState(false);
   const aviso = useRef(avisoInicial);
   const faltaListo = useRef(listoPendiente);
 
@@ -78,6 +79,18 @@ export function AnalizandoCheckin({
       // Sin señal se vuelve a intentar en el siguiente sondeo.
     }
   }, [checkInId, router]);
+
+  useEffect(() => {
+    // Sin permiso el "te aviso" es mentira: se dice, y se da la salida. Se
+    // vuelve a mirar al regresar, por si lo activó en Ajustes.
+    const mirar = () =>
+      void estadoPermisoNotificaciones().then((permiso) => setAvisosApagados(permiso === "negado"));
+    mirar();
+    const sub = AppState.addEventListener("change", (estado) => {
+      if (estado === "active") mirar();
+    });
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     void revisar();
@@ -124,6 +137,11 @@ export function AnalizandoCheckin({
       <Text style={styles.title}>Analizando tu check-in…</Text>
       <Text style={styles.message}>{textoAnalizando({ conFotos, esMensual })}</Text>
       {sigoConEllo ? <Text style={styles.nota}>Tarda más de lo normal; sigo con ello.</Text> : null}
+      {avisosApagados ? (
+        <Pressable onPress={() => void Linking.openSettings()} hitSlop={10} accessibilityRole="link">
+          <Text style={styles.enlace}>Tus avisos están apagados · Actívalos en Ajustes</Text>
+        </Pressable>
+      ) : null}
       <PrimaryButton label="Volver a Hoy" onPress={() => router.replace("/")} />
     </View>
   );
@@ -151,6 +169,12 @@ const makeStyles = (colors: Palette) =>
       color: colors.marfil,
       textAlign: "center",
       lineHeight: 24,
+    },
+    enlace: {
+      fontFamily: fonts.sansSemiBold,
+      ...typeScale.bodySm,
+      color: colors.champan,
+      textAlign: "center",
     },
     nota: {
       fontFamily: fonts.sans,

@@ -1,7 +1,7 @@
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 
-import type { AccionAviso } from "@/lib/analisis-checkin";
+import { clasificarPermiso, type AccionAviso, type PermisoAviso } from "@/lib/analisis-checkin";
 
 /**
  * El recordatorio del check-in.
@@ -38,6 +38,12 @@ export async function pedirPermisoNotificaciones(): Promise<boolean> {
 
   const pedido = await Notifications.requestPermissionsAsync().catch(() => null);
   return Boolean(pedido?.granted);
+}
+
+/** Cómo está el permiso, sin pedirlo. */
+export async function estadoPermisoNotificaciones(): Promise<PermisoAviso> {
+  if (Platform.OS === "web") return "concedido";
+  return clasificarPermiso(await Notifications.getPermissionsAsync().catch(() => null));
 }
 
 /**

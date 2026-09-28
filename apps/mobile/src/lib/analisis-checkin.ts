@@ -88,6 +88,19 @@ export function pasoAviso(
   };
 }
 
+export type PermisoAviso = "concedido" | "sin-preguntar" | "negado";
+
+/**
+ * El permiso de avisos, en lo que la pantalla necesita saber: si ya está, si
+ * toca pedirlo (al abrir el check-in, con su renglón previo) o si solo Ajustes
+ * del sistema lo puede reabrir. `null` = el sistema no respondió.
+ */
+export function clasificarPermiso(permiso: { granted: boolean; status: string } | null): PermisoAviso {
+  if (permiso === null) return "sin-preguntar";
+  if (permiso.granted) return "concedido";
+  return permiso.status === "denied" ? "negado" : "sin-preguntar";
+}
+
 export function textoAnalizando(opciones: { conFotos: boolean; esMensual: boolean }): string {
   const extras = [
     ...(opciones.conFotos ? ["tus fotos"] : []),

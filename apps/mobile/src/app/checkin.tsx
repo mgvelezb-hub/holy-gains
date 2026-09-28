@@ -35,7 +35,7 @@ import {
 } from "@/lib/api";
 import { useSession } from "@/context/session";
 import { alEnviar, tocaMensual, type AvisoAnalisis } from "@/lib/analisis-checkin";
-import { aplicarAccionAviso } from "@/lib/recordatorio";
+import { aplicarAccionAviso, estadoPermisoNotificaciones, pedirPermisoNotificaciones } from "@/lib/recordatorio";
 import { supabase } from "@/lib/supabase";
 import { fonts, radius, spacing, type Palette, type as typeScale } from "@/lib/theme";
 
@@ -114,6 +114,23 @@ export default function CheckinScreen() {
   /** Ya pasó un mes desde brazos/piernas: este check-in es el mensual. */
   const [esMesDeMedidas, setTocaMensual] = useState(false);
   const [ultimaMensual, setUltimaMensual] = useState<string | null>(null);
+  /** El renglón que explica el diálogo de permiso mientras está en pantalla. */
+  const [pidiendoPermiso, setPidiendoPermiso] = useState(false);
+
+  useEffect(() => {
+    // El permiso se pide al ABRIR el check-in, no al final: al enviarlo la
+    // persona ya va de salida, y con la app yéndose iOS no muestra el diálogo.
+    let vivo = true;
+    void (async () => {
+      if ((await estadoPermisoNotificaciones()) !== "sin-preguntar") return;
+      if (vivo) setPidiendoPermiso(true);
+      await pedirPermisoNotificaciones();
+      if (vivo) setPidiendoPermiso(false);
+    })();
+    return () => {
+      vivo = false;
+    };
+  }, []);
 
   useEffect(() => {
     let vivo = true;
@@ -402,6 +419,7 @@ export default function CheckinScreen() {
       </Pressable>
 
       <Text style={styles.title}>Check-in semanal</Text>
+      {pidiendoPermiso ? <Text style={styles.autoNota}>Te aviso cuando tu retroalimentación esté lista</Text> : null}
 
       <Card>
         <SectionLabel>Medidas</SectionLabel>
