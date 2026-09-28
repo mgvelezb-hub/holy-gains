@@ -422,6 +422,14 @@ model Profile {
   customSplit       Json?      @map("custom_split")
 
   /**
+   * Cómo está montado cada ejercicio en el gimnasio de esta persona:
+   * `{"press_banca": {"cargaPorLado": true, "barraKg": 20}, "prensa": {"cargaPorLado": true, "barraKg": 0}}`.
+   * Con `cargaPorLado` la persona teclea lo que puso de UN lado y la app
+   * calcula el total; lo confirmó una vez y se recuerda para ese ejercicio.
+   */
+  exercisePrefs     Json?      @map("exercise_prefs")
+
+  /**
    * Lo que la persona ya tiene en casa: `["pechuga_pollo", "arroz_integral",
    * ...]` (ids del catálogo). El motor los prefiere al armar la semana. Nació
    * de un cambio de motor que dejó despensas compradas con el menú viejo sin
