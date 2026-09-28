@@ -183,6 +183,7 @@ model User {
   activitySessions   ActivitySession[]
   labResults         LabResult[]
   mealLogs           MealLog[]
+  supplementLogs     SupplementLog[]
   customFoods        CustomFood[]
   conversations      Conversation[]
   notifications      Notification[]
@@ -271,6 +272,13 @@ model Profile {
   /// declaró — un menú con 30 g de whey para quien no tiene whey no se puede
   /// seguir.
   supplements      String[]
+  /**
+   * Suplementos sugeridos por el motor que la persona aceptó o descartó:
+   * `{"MAGNESIO": "acepto", "ASHWAGANDHA": "no_quiero", "VITAMINA_D": "ya_lo_tomo"}`.
+   * El motor sugiere con motivo y evidencia; la persona decide. Lo aceptado
+   * pasa a `supplements`; lo descartado no vuelve a sugerirse.
+   */
+  supplementChoices Json?    @map("supplement_choices")
   /// Ventana de alimentación para el ayuno, en horas locales (0-23).
   /// `null` = 12:00-20:00, el 16/8 de uso más común.
   fastingStartHour Int?      @map("fasting_start_hour")
@@ -912,6 +920,23 @@ model CustomFood {
 
   @@index([userId])
   @@map("custom_foods")
+}
+
+/// Toma registrada de un suplemento. Sin esto la pauta es un letrero: con
+/// esto se sabe si la creatina se toma todos los días, que es lo único que
+/// hace que funcione.
+model SupplementLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date       DateTime @db.Date
+  supplement String
+  taken      Boolean
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, date, supplement])
+  @@index([userId, date])
+  @@map("supplement_logs")
 }
 
 model MealLog {
