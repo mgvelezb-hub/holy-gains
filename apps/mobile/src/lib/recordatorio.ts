@@ -83,6 +83,50 @@ export async function recordatorioActivo(): Promise<boolean> {
 }
 
 // ---------------------------------------------------------------------------
+// El análisis del check-in
+// ---------------------------------------------------------------------------
+
+export const AVISO_ANALISIS_ID = "analisis-checkin";
+
+/**
+ * "Tu análisis ya está listo", para cuando la persona sale de la app antes de
+ * que el servidor termine.
+ *
+ * **Límite conocido:** es un aviso LOCAL programado a ciegas. Sin APNs el
+ * servidor no puede despertar al teléfono, y con la app en segundo plano el
+ * teléfono no puede preguntar si ya está; así que se programa a `segundos`
+ * (3 min, que casi siempre alcanza) y al volver al primer plano la pantalla
+ * verifica: si ya está lo cancela y navega, si no sigue sondeando. Con la app
+ * abierta no hace falta aviso: el sondeo navega solo.
+ */
+export async function programarAvisoAnalisis(segundos: number): Promise<boolean> {
+  if (Platform.OS === "web") return false;
+
+  await Notifications.cancelScheduledNotificationAsync(AVISO_ANALISIS_ID).catch(() => {});
+  if (!(await pedirPermisoNotificaciones())) return false;
+
+  await Notifications.scheduleNotificationAsync({
+    identifier: AVISO_ANALISIS_ID,
+    content: {
+      title: "Tu retroalimentación está lista",
+      body: "Tu análisis del check-in ya está listo · Ábrelo",
+      data: { ruta: "/decision" },
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+      seconds: segundos,
+    },
+  }).catch(() => {});
+
+  return true;
+}
+
+export async function cancelarAvisoAnalisis(): Promise<void> {
+  if (Platform.OS === "web") return;
+  await Notifications.cancelScheduledNotificationAsync(AVISO_ANALISIS_ID).catch(() => {});
+}
+
+// ---------------------------------------------------------------------------
 // Comidas del día
 // ---------------------------------------------------------------------------
 

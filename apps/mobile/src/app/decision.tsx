@@ -1,22 +1,65 @@
 import { useRouter } from "expo-router";
-import { ChevronLeft } from "lucide-react-native";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Camera, ChevronLeft, Route, Ruler, ThumbsUp, Wrench } from "lucide-react-native";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { PrimaryButton } from "@/components/PrimaryButton";
+import { ScoreCard } from "@/components/ScoreCard";
 import { EmptyState, ErrorState, LoadingState } from "@/components/States";
 import { useTheme } from "@/context/theme";
-import { ApiError, getDecision, type Decision } from "@/lib/api";
+import { flechaDelta, resumenEsteMes, resumenFotos } from "@/lib/analisis-checkin";
+import {
+  ApiError,
+  getDecision,
+  type BloqueMensual,
+  type Decision,
+  type LecturaZona,
+  type MetricaMensual,
+} from "@/lib/api";
+import { cancelarAvisoAnalisis } from "@/lib/recordatorio";
 import { fonts, radius, spacing, type as typeScale, type Palette } from "@/lib/theme";
 
 /**
- * El zoom de "Tu decisión": kcal, macros y el mensaje completo de Coachy.
+ * El zoom de "Tu decisión": kcal, macros, la retro y el mensaje de Coachy.
  *
- * Antes vivía en Hoy como HeroCard, con el mensaje largo escondido en un
- * Collapsible que abría hacia abajo dentro de la misma pantalla. La LEY DE
- * DISEÑO prohíbe eso — nada se abre hacia abajo — así que Hoy ahora solo trae
- * el resumen en una línea (kcal · meta) y este es el detalle completo.
+ * LEY DE DISEÑO: nada se abre hacia abajo. Cada parte de la retro es una
+ * línea con su dato duro, y el detalle vive en su propia hoja. En el mensual
+ * se suman "Este mes" (medidas contra el mes anterior y el inicio) y "Tus
+ * fotos" (zonas contra la referencia).
  */
+
+type Hoja = "mes" | "fotos" | "bien" | "ajustar" | "plan" | null;
+
+const METRICA_LABEL: Record<MetricaMensual, string> = {
+  cintura: "Cintura",
+  peso: "Peso",
+  brazoIzq: "Brazo izq.",
+  brazoDer: "Brazo der.",
+  piernaIzq: "Pierna izq.",
+  piernaDer: "Pierna der.",
+};
+
+const ZONA_LABEL: Record<LecturaZona["zona"], string> = {
+  cintura: "Cintura",
+  cadera_gluteo: "Cadera y glúteo",
+  pierna: "Pierna",
+  brazo: "Brazo",
+  espalda: "Espalda",
+};
+
+const BRECHA_LABEL: Record<LecturaZona["brecha"], string> = {
+  cerca: "cerca",
+  media: "a medio camino",
+  lejos: "lejos",
+};
+
+const TENDENCIA_LABEL: Record<LecturaZona["tendencia"], string> = {
+  "acercándose": "acercándose",
+  igual: "igual",
+  "alejándose": "en sentido contrario",
+};
+
 export default function DecisionScreen() {
   const router = useRouter();
   const { colors } = useTheme();
@@ -28,12 +71,15 @@ export default function DecisionScreen() {
   const [decision, setDecision] = useState<Decision | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [hoja, setHoja] = useState<Hoja>(null);
 
   const load = useCallback(async () => {
     try {
       const res = await getDecision();
       setDecision(res.decision);
       setError(null);
+      // Ya la está viendo: el aviso de "tu análisis está listo" sobra.
+      if (res.estado === "lista") void cancelarAvisoAnalisis();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "No se pudo cargar tu decisión");
     }
@@ -52,6 +98,9 @@ export default function DecisionScreen() {
   if (decision === undefined && !error) return <LoadingState label="Cargando tu decisión..." />;
   if (decision === undefined && error) return <ErrorState message={error} onRetry={load} />;
 
+  const mensual = decision?.mensual?.esMensual ? decision.mensual : null;
+  const retro = decision?.retro ?? null;
+
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
       <ScrollView
@@ -65,7 +114,7 @@ export default function DecisionScreen() {
           <Text style={styles.backText}>Atrás</Text>
         </Pressable>
 
-        <Text style={styles.title}>Tu decisión</Text>
+        <Text style={styles.title}>{mensual ? "Tu mes" : "Tu decisión"}</Text>
 
         {!decision ? (
           <EmptyState message="Tu coach todavía está armando tu siguiente decisión." />
@@ -90,6 +139,56 @@ export default function DecisionScreen() {
               </View>
             </View>
 
+            {(mensual || retro) && (
+              <View style={styles.secciones}>
+                {mensual && (
+                  <ScoreCard
+                    icon={Ruler}
+                    tint={colors.guindaLight}
+                    title="Este mes"
+                    summary={resumenEsteMes(mensual.deltas)}
+                    onPress={() => setHoja("mes")}
+                  />
+                )}
+                {mensual && (
+                  <ScoreCard
+                    icon={Camera}
+                    tint={colors.paloRosa}
+                    title="Tus fotos"
+                    summary={resumenFotos(mensual.fotos)}
+                    onPress={() => setHoja("fotos")}
+                  />
+                )}
+                {retro && (
+                  <ScoreCard
+                    icon={ThumbsUp}
+                    tint={colors.champan}
+                    title="Va bien"
+                    summary={retro.va_bien[0] ?? "—"}
+                    onPress={() => setHoja("bien")}
+                  />
+                )}
+                {retro && (
+                  <ScoreCard
+                    icon={Wrench}
+                    tint={colors.paloRosa}
+                    title="Hay que ajustar"
+                    summary={retro.ajustar[0] ?? "Nada por ahora: sigue igual"}
+                    onPress={retro.ajustar.length > 0 ? () => setHoja("ajustar") : undefined}
+                  />
+                )}
+                {retro && (
+                  <ScoreCard
+                    icon={Route}
+                    tint={colors.champan}
+                    title="Tu plan de aquí en adelante"
+                    summary={retro.plan.macros}
+                    onPress={() => setHoja("plan")}
+                  />
+                )}
+              </View>
+            )}
+
             {decision.texto && (
               <View style={styles.mensaje}>
                 <Text style={styles.mensajeTitulo}>Mensaje de Coachy</Text>
@@ -99,7 +198,145 @@ export default function DecisionScreen() {
           </>
         )}
       </ScrollView>
+
+      <HojaDetalle
+        visible={hoja !== null}
+        titulo={tituloDe(hoja)}
+        onClose={() => setHoja(null)}
+      >
+        {hoja === "mes" && mensual && <DetalleMes deltas={mensual.deltas} />}
+        {hoja === "fotos" && mensual && <DetalleFotos fotos={mensual.fotos} />}
+        {hoja === "bien" && retro && <Lista renglones={retro.va_bien} />}
+        {hoja === "ajustar" && retro && <Lista renglones={retro.ajustar} />}
+        {hoja === "plan" && retro && (
+          <View style={styles.hojaCuerpo}>
+            <Lista renglones={[retro.plan.macros, retro.plan.menu, retro.plan.rutina]} />
+            <PrimaryButton
+              label="Ver plan de nutrición"
+              onPress={() => {
+                setHoja(null);
+                router.push("/plan-nutricion");
+              }}
+            />
+            <PrimaryButton
+              label="Ver rutinas"
+              onPress={() => {
+                setHoja(null);
+                router.push("/rutinas");
+              }}
+            />
+          </View>
+        )}
+      </HojaDetalle>
     </SafeAreaView>
+  );
+}
+
+function tituloDe(hoja: Hoja): string {
+  switch (hoja) {
+    case "mes":
+      return "Este mes";
+    case "fotos":
+      return "Tus fotos";
+    case "bien":
+      return "Va bien";
+    case "ajustar":
+      return "Hay que ajustar";
+    case "plan":
+      return "Tu plan de aquí en adelante";
+    default:
+      return "";
+  }
+}
+
+function HojaDetalle({
+  visible,
+  titulo,
+  onClose,
+  children,
+}: {
+  visible: boolean;
+  titulo: string;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+  return (
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+      <SafeAreaView style={styles.screen} edges={["top"]}>
+        <ScrollView contentContainerStyle={styles.content}>
+          <Pressable onPress={onClose} hitSlop={10} style={styles.back}>
+            <ChevronLeft size={22} color={colors.paloRosa} strokeWidth={2} />
+            <Text style={styles.backText}>Atrás</Text>
+          </Pressable>
+          <Text style={styles.title}>{titulo}</Text>
+          {children}
+        </ScrollView>
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
+function Lista({ renglones }: { renglones: string[] }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+  return (
+    <View style={styles.hojaCuerpo}>
+      {renglones.map((renglon) => (
+        <Text key={renglon} style={styles.renglon}>
+          {renglon}
+        </Text>
+      ))}
+    </View>
+  );
+}
+
+function DetalleMes({ deltas }: { deltas: BloqueMensual["deltas"] }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const filas = (Object.keys(METRICA_LABEL) as MetricaMensual[]).filter(
+    (metrica) => deltas[metrica].actual !== null,
+  );
+
+  return (
+    <View style={styles.hojaCuerpo}>
+      <View style={styles.filaTabla}>
+        <Text style={[styles.celda, styles.celdaTitulo]} />
+        <Text style={[styles.celda, styles.celdaTitulo]}>vs mes pasado</Text>
+        <Text style={[styles.celda, styles.celdaTitulo]}>vs inicio</Text>
+      </View>
+      {filas.map((metrica) => {
+        const unidad = metrica === "peso" ? "kg" : "cm";
+        const delta = deltas[metrica];
+        return (
+          <View key={metrica} style={styles.filaTabla}>
+            <Text style={styles.celda}>
+              {METRICA_LABEL[metrica]} · {delta.actual} {unidad}
+            </Text>
+            <Text style={styles.celda}>{flechaDelta(delta.vsMesAnterior, unidad)}</Text>
+            <Text style={styles.celda}>{flechaDelta(delta.vsInicio, unidad)}</Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+function DetalleFotos({ fotos }: { fotos: BloqueMensual["fotos"] }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+  if (!fotos || fotos.zonas.length === 0) {
+    return <Text style={styles.renglon}>{resumenFotos(fotos)}.</Text>;
+  }
+  return (
+    <View style={styles.hojaCuerpo}>
+      {fotos.zonas.map((zona) => (
+        <Text key={zona.zona} style={styles.renglon}>
+          {ZONA_LABEL[zona.zona]}: {BRECHA_LABEL[zona.brecha]}, {TENDENCIA_LABEL[zona.tendencia]}.
+        </Text>
+      ))}
+    </View>
   );
 }
 
@@ -155,6 +392,7 @@ const makeStyles = (colors: Palette) =>
       ...typeScale.label,
       color: colors.paloRosa,
     },
+    secciones: { marginTop: spacing.xl, gap: spacing.sm },
     mensaje: {
       marginTop: spacing.xl,
       paddingTop: spacing.lg,
@@ -172,5 +410,29 @@ const makeStyles = (colors: Palette) =>
       fontFamily: fonts.sans,
       ...typeScale.body,
       color: colors.marfil,
+    },
+    hojaCuerpo: { gap: spacing.md },
+    renglon: {
+      fontFamily: fonts.sans,
+      ...typeScale.body,
+      color: colors.marfil,
+    },
+    filaTabla: {
+      flexDirection: "row",
+      gap: spacing.sm,
+      paddingVertical: spacing.xs,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.cardBorder,
+      borderRadius: radius.sm,
+    },
+    celda: {
+      flex: 1,
+      fontFamily: fonts.sans,
+      ...typeScale.bodySm,
+      color: colors.marfil,
+    },
+    celdaTitulo: {
+      fontFamily: fonts.sansSemiBold,
+      color: colors.paloRosa,
     },
   });

@@ -126,8 +126,51 @@ export type DisciplineLoad = {
   importancia?: number;
 };
 
+/** Una medida del mensual: contra el mensual anterior y contra el inicio. */
+export type DeltaMensual = {
+  actual: number | null;
+  vsMesAnterior: number | null;
+  vsInicio: number | null;
+};
+
+export const METRICAS_MENSUALES = [
+  "cintura",
+  "peso",
+  "brazoIzq",
+  "brazoDer",
+  "piernaIzq",
+  "piernaDer",
+] as const;
+export type MetricaMensual = (typeof METRICAS_MENSUALES)[number];
+
+export type ZonaObjetivo = "cintura" | "cadera_gluteo" | "pierna" | "brazo" | "espalda";
+
+export type LecturaZona = {
+  zona: ZonaObjetivo;
+  brecha: "cerca" | "media" | "lejos";
+  tendencia: "acercándose" | "igual" | "alejándose";
+  accion: string;
+};
+
+/** El bloque mensual que el servidor arma tras el check-in (`lib/coachy/mensual.ts`). */
+export type BloqueMensual = {
+  esMensual: boolean;
+  previoMensualId: string | null;
+  deltas: Record<MetricaMensual, DeltaMensual>;
+  fotos: { estado: "listo" | "sin_referencia" | "sin_fotos" | "en_espera"; zonas: LecturaZona[] } | null;
+  objetivo: { vaBien: string[]; ajustar: string[] };
+};
+
+/** "Va bien", "Hay que ajustar" y "Tu plan de aquí en adelante". */
+export type RetroCheckIn = {
+  va_bien: string[];
+  ajustar: string[];
+  plan: { macros: string; menu: string; rutina: string };
+};
+
 export type Decision = {
   id: string;
+  checkInId: string;
   phase: string;
   kcal: number;
   proteinG: number;
@@ -139,9 +182,29 @@ export type Decision = {
   meta: string | null;
   preguntas: string[];
   alreadyAnswered: boolean;
+  /** `null` en decisiones de antes del mensual del servidor. */
+  mensual: BloqueMensual | null;
+  retro: RetroCheckIn | null;
 };
 
-export type DecisionResponse = { decision: Decision | null };
+export type ProximoMensual = {
+  /** Semanas que faltan, redondeando hacia arriba. `0` = ya toca. */
+  semanas: number;
+  fecha: string;
+  ultimoMensual: string;
+};
+
+export type EstadoAnalisis = "analizando" | "lista";
+
+export type DecisionResponse = {
+  decision: Decision | null;
+  /** En qué va el análisis de `checkInId` (el pedido con `desde`, o el último). */
+  estado: EstadoAnalisis;
+  checkInId: string | null;
+  /** La decisión espera a su coach humano, no a la IA. */
+  enRevisionHumana: boolean;
+  proximoMensual: ProximoMensual | null;
+};
 
 export type CheckInDecisionSummary = {
   phase: string;
@@ -1194,8 +1257,13 @@ export function preguntarNutricion(question: string): Promise<ConsultaResponse> 
   });
 }
 
-export function getDecision(): Promise<DecisionResponse> {
-  return apiFetch<DecisionResponse>("/api/v1/decision");
+/**
+ * La decisión vigente. Con `desde`, en qué va el análisis de ESE check-in:
+ * `decision` llega `null` y `estado` en `"analizando"` hasta que esté lista.
+ */
+export function getDecision(desde?: string): Promise<DecisionResponse> {
+  const query = desde ? `?desde=${encodeURIComponent(desde)}` : "";
+  return apiFetch<DecisionResponse>(`/api/v1/decision${query}`);
 }
 
 export function getCheckins(limit?: number): Promise<CheckInsResponse> {

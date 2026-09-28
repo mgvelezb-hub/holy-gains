@@ -1,5 +1,6 @@
 import { useRouter } from "expo-router";
 import {
+  CalendarCheck,
   Dumbbell,
   Flame,
   Footprints,
@@ -33,11 +34,13 @@ import {
   type MeResponse,
   type Notification,
   type OtherSessionView,
+  type ProximoMensual,
   type TrainingTodayResponse,
   type NutritionResponse,
   type TodayCard,
 } from "@/lib/api";
 import { EngraneAjustes } from "@/components/EngraneAjustes";
+import { lineaCheckin } from "@/lib/analisis-checkin";
 import { HeroCard } from "@/components/HeroCard";
 import { InfoTip, TextoInfo } from "@/components/InfoTip";
 import { ScoreCard } from "@/components/ScoreCard";
@@ -79,6 +82,8 @@ import { enviarResumenAlReloj } from "@/lib/reloj-nativo";
 type HomeData = {
   me: MeResponse;
   decision: Decision | null;
+  /** Contador al siguiente mensual, con la regla del servidor. */
+  proximoMensual: ProximoMensual | null;
   nutrition: NutritionResponse | null;
   today: TodayCard | null;
   /**
@@ -182,6 +187,7 @@ export default function HoyScreen() {
       setData({
         me,
         decision: decisionRes.decision,
+        proximoMensual: decisionRes.proximoMensual ?? null,
         nutrition,
         today: todayCard,
         todayOthers,
@@ -338,6 +344,16 @@ export default function HoyScreen() {
       <ComidaDeHoy nutrition={nutrition} onPress={() => router.push("/comida-hoy")} />
 
       <DecisionCard decision={decision} onPress={() => router.push("/decision")} />
+
+      {/* El check-in en una línea, con el contador del servidor: se reinicia
+          solo al registrar el mensual, nunca por abrir la app. */}
+      <ScoreCard
+        icon={CalendarCheck}
+        tint={colors.champan}
+        title="Check-in"
+        summary={lineaCheckin(data.proximoMensual)}
+        onPress={() => router.push("/checkin")}
+      />
 
       {/* Registrar a mano es la excepción desde que el reloj sube los
           entrenamientos solo: va al final, debajo de lo que sí hay que hacer

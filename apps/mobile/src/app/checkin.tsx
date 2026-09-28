@@ -4,6 +4,7 @@ import { Camera, ChevronLeft } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 
+import { AnalizandoCheckin } from "@/components/AnalizandoCheckin";
 import { Card } from "@/components/Card";
 import { Chip } from "@/components/Chip";
 import { PercentStepper } from "@/components/PercentStepper";
@@ -56,7 +57,10 @@ export default function CheckinScreen() {
   const { session } = useSession();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const [submitted, setSubmitted] = useState(false);
+  /** El check-in ya se envió: su id, para sondear el análisis. */
+  const [enviado, setEnviado] = useState<{ id: string; conFotos: boolean; esMensual: boolean } | null>(
+    null,
+  );
   /**
    * Fotos opcionales, una por vista. Se eligen antes de enviar y se suben
    * DESPUÉS, cuando el check-in ya existe: la ruta en Storage lleva su id, así
@@ -98,6 +102,8 @@ export default function CheckinScreen() {
    * app puede hacer por ella.
    */
   const [mostrarMensuales, setMostrarMensuales] = useState(false);
+  /** Ya pasó un mes desde brazos/piernas: este check-in es el mensual. */
+  const [tocaMensual, setTocaMensual] = useState(false);
   const [ultimaMensual, setUltimaMensual] = useState<string | null>(null);
 
   useEffect(() => {
@@ -119,7 +125,10 @@ export default function CheckinScreen() {
                 (Date.parse(`${todayISO()}T12:00:00.000Z`) - Date.parse(`${ultima}T12:00:00.000Z`)) /
                   86_400_000,
               );
-        if (dias >= 28) setMostrarMensuales(true);
+        if (dias >= 28) {
+          setMostrarMensuales(true);
+          setTocaMensual(true);
+        }
       })
       .catch(() => {
         // Sin historial se queda cerrado y con su enlace, como antes.
@@ -304,7 +313,12 @@ export default function CheckinScreen() {
       const userId = session?.user.id ?? null;
       if (userId) await subirFotos(creado.id, userId);
 
-      setSubmitted(true);
+      const trajoMensuales = [legLeftCm, legRightCm, armLeftCm, armRightCm].some((v) => v.trim() !== "");
+      setEnviado({
+        id: creado.id,
+        conFotos: Object.values(fotos).some(Boolean),
+        esMensual: trajoMensuales || tocaMensual,
+      });
     } catch (error) {
       if (error instanceof ApiError && error.status === 422 && error.detalles) {
         setFieldErrors(error.detalles);
@@ -333,16 +347,13 @@ export default function CheckinScreen() {
     }
   }
 
-  if (submitted) {
+  if (enviado) {
     return (
-      <View style={styles.confirmScreen}>
-        <Text style={styles.confirmTitle}>Check-in recibido</Text>
-        <Text style={styles.confirmMessage}>
-          Gracias por tu constancia. Tu coach va a revisar tus números y en un par de días tendrás
-          tu siguiente decisión.
-        </Text>
-        <PrimaryButton label="Volver a Hoy" onPress={() => router.replace("/")} />
-      </View>
+      <AnalizandoCheckin
+        checkInId={enviado.id}
+        conFotos={enviado.conFotos}
+        esMensual={enviado.esMensual}
+      />
     );
   }
 
@@ -724,26 +735,5 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
     ...typeScale.bodySm,
     color: colors.error,
     textAlign: "center",
-  },
-  confirmScreen: {
-    flex: 1,
-    backgroundColor: colors.obsidiana,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: spacing.xxl,
-    gap: spacing.xl,
-  },
-  confirmTitle: {
-    fontFamily: fonts.display,
-    ...typeScale.title,
-    color: colors.champan,
-    textAlign: "center",
-  },
-  confirmMessage: {
-    fontFamily: fonts.serifItalic,
-    ...typeScale.subheading,
-    color: colors.marfil,
-    textAlign: "center",
-    lineHeight: 24,
   },
 });
