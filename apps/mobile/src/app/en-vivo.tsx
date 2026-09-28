@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import { useKeepAwake } from "expo-keep-awake";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -30,6 +31,8 @@ import { Parrafo } from "@/components/Parrafo";
 import { ErrorState, LoadingState } from "@/components/States";
 import { useTheme } from "@/context/theme";
 import {
+  getEjercicioPrefs,
+  patchEjercicioPrefs,
   postActivities,
   type ExerciseAlternative,
   type OtherSessionView,
@@ -41,9 +44,12 @@ import {
 import { actividadDeCardio, pasosDeCardio, tituloTarjetaCardio } from "@/lib/cardio";
 import {
   alCerrarSerieEnElReloj,
+  alFrecuenciaDelReloj,
   drenarSeriesCerradas,
+  enviarFinAlReloj,
   enviarSesionAlReloj,
   estadoDelReloj,
+  type LecturaDeFc,
 } from "@/lib/reloj-nativo";
 import {
   aplicarDelReloj,
@@ -52,22 +58,33 @@ import {
 } from "@/lib/reloj-sesion";
 import {
   ajustarDescanso,
+  alternativasLibres,
+  barraPorDefecto,
   cerrarDescanso,
   cerrarSerie,
+  conFrecuencia,
   descansoTermino,
   editarSerie,
   estadoInicial,
   etiquetaDeSerie,
   formatoReloj,
+  ladoDesdeTotal,
   objetivoDeSerie,
+  omitirSaltadas,
   pesoDeDropset,
+  pesoSugerido,
+  preguntarMontaje,
   progreso,
+  sustituirEnSesion,
+  terminarEjercicio,
   textoDeTempo,
+  totalDesdeLado,
   restanteSeg,
   saltarDescanso,
   volumenKg,
   type EjercicioVivo,
   type EstadoSesion,
+  type Montaje,
 } from "@/lib/sesion-viva";
 import {
   aKilos,
@@ -123,6 +140,42 @@ import { refreshPendingCount, syncAndNotify } from "@/lib/training-sync";
 
 /** Cada cuánto baja el descanso. Un segundo, como cualquier cronómetro. */
 const TICK_MS = 1000;
+
+/**
+ * Montajes por ejercicio (carga por lado, barra) y el perfil de pulso, en el
+ * teléfono: la sesión se usa sin señal y la pregunta "¿se carga por lado?" no
+ * puede repetirse cada vez que no hay red. El servidor
+ * (`/api/v1/me/ejercicio-prefs`) es la copia que sobrevive al teléfono.
+ */
+const LLAVE_MONTAJES = "holygains.sesion.montajes";
+
+type DatosDeSesion = {
+  montajes: Record<string, Montaje>;
+  edad: number | null;
+  fcReposo: number | null;
+};
+
+async function leeDatosLocales(): Promise<DatosDeSesion> {
+  try {
+    const crudo = await AsyncStorage.getItem(LLAVE_MONTAJES);
+    const leido = crudo ? (JSON.parse(crudo) as Partial<DatosDeSesion>) : {};
+    return {
+      montajes: typeof leido.montajes === "object" && leido.montajes !== null ? leido.montajes : {},
+      edad: typeof leido.edad === "number" ? leido.edad : null,
+      fcReposo: typeof leido.fcReposo === "number" ? leido.fcReposo : null,
+    };
+  } catch {
+    return { montajes: {}, edad: null, fcReposo: null };
+  }
+}
+
+async function guardaDatosLocales(datos: DatosDeSesion): Promise<void> {
+  try {
+    await AsyncStorage.setItem(LLAVE_MONTAJES, JSON.stringify(datos));
+  } catch {
+    // Sin copia local solo se vuelve a preguntar; la sesión sigue.
+  }
+}
 
 /**
  * Lunes de esta semana, que es la llave del cache.
@@ -222,6 +275,24 @@ export default function EnVivoScreen() {
   const [cambiando, setCambiando] = useState(false);
   const inicioDeSerie = useRef<Date>(new Date());
 
+  /**
+   * Montaje de cada ejercicio (carga por lado y barra) y el perfil de pulso.
+   * Se lee del teléfono al abrir y se refresca del servidor si hay señal.
+   */
+  const [datos, setDatos] = useState<DatosDeSesion>({ montajes: {}, edad: null, fcReposo: null });
+  const datosRef = useRef(datos);
+  datosRef.current = datos;
+  /** La pregunta "¿se carga por lado?": en qué paso va y para qué ejercicio. */
+  const [preguntaMontaje, setPreguntaMontaje] = useState<
+    { exerciseId: string; nombre: string; paso: "lado" | "barra" } | null
+  >(null);
+  const [barraBorrador, setBarraBorrador] = useState("");
+  /** Ejercicios por los que ya se preguntó en esta sesión (aunque se haya cerrado sin contestar). */
+  const preguntados = useRef<Set<string>>(new Set());
+
+  /** La última lectura de pulso del reloj y a cuánto tiene que bajar. */
+  const [fc, setFc] = useState<(LecturaDeFc & { objetivo: number | null }) | null>(null);
+
   // Hay un Apple Watch con la app puesta.
   //
   // Se vuelve a revisar al volver del fondo, y no una sola vez al montar: el
@@ -279,6 +350,10 @@ export default function EnVivoScreen() {
       const ejercicios: EjercicioVivo[] = encontrada.exercises.map((ejercicio, indice) => ({
         indice,
         nombre: ejercicio.name,
+        exerciseId: ejercicio.exerciseId,
+        // Rol y esquema deciden el descanso por esfuerzo (`descansoPara`).
+        poolRole: ejercicio.poolRole,
+        esquema: ejercicio.scheme,
         alternativas: ejercicio.alternatives,
         descansoSeg: ejercicio.restSeconds,
         unilateral: ejercicio.unilateral === true,
@@ -299,6 +374,7 @@ export default function EnVivoScreen() {
             objetivo: serie.reps,
             hechas: capturada?.reps ?? null,
             pesoKg: capturada?.weightKg ?? sugerido ?? null,
+            pesoPlanKg: sugerido ?? null,
             calentamiento: serie.warmup,
             ...(serie.tempo ? { tempo: serie.tempo } : {}),
             ...(serie.intensity ? { intensidad: serie.intensity } : {}),
@@ -328,12 +404,14 @@ export default function EnVivoScreen() {
         const ejercicio = ejercicios[enCurso.ejercicioActual];
         const serieValida = ejercicio?.series[enCurso.serieActual] !== undefined;
         if (serieValida) {
-          estadoFinal = {
+          // Lo que quedó sin cerrar ANTES del cursor fue un "Terminar este
+          // ejercicio": se da por terminado, no se vuelve a pedir.
+          estadoFinal = omitirSaltadas({
             ...base,
             ejercicioActual: enCurso.ejercicioActual,
             serieActual: enCurso.serieActual,
             descansoHasta: enCurso.descansoHasta,
-          };
+          });
           setReps(enCurso.reps);
           setPeso(enCurso.pesoKg);
         }
@@ -365,10 +443,15 @@ export default function EnVivoScreen() {
   // la fricción que hace que nadie registre.
   useEffect(() => {
     if (!estado || estado.terminada) return;
-    const serie = estado.ejercicios[estado.ejercicioActual]?.series[estado.serieActual];
-    if (!serie) return;
+    const ejercicioActual = estado.ejercicios[estado.ejercicioActual];
+    const serie = ejercicioActual?.series[estado.serieActual];
+    if (!ejercicioActual || !serie) return;
     setReps(serie.objetivo);
-    setPeso(serie.pesoKg);
+    // El peso sale de la tendencia: lo que sugiere la progresión corrido por
+    // lo que de verdad se cargó en la anterior (o la anterior ajustada por
+    // reps en una pirámide). Se ve y se ajusta durante el descanso, para
+    // salir de él ya listo.
+    setPeso(pesoSugerido(ejercicioActual, estado.serieActual) ?? serie.pesoKg);
   }, [estado?.ejercicioActual, estado?.serieActual, estado?.terminada]);
 
   // El reloj del descanso.
@@ -477,6 +560,76 @@ export default function EnVivoScreen() {
       setPaso(preferencia.paso);
     });
   }, []);
+
+  // Montajes y perfil de pulso: primero lo del teléfono (sirve sin señal) y
+  // luego el servidor, que manda si responde. Lo que el teléfono sabe y el
+  // servidor todavía no (se contestó sin red) se conserva.
+  useEffect(() => {
+    let vivo = true;
+    void (async () => {
+      const locales = await leeDatosLocales();
+      if (!vivo) return;
+      setDatos(locales);
+      try {
+        const remoto = await getEjercicioPrefs();
+        if (!vivo) return;
+        const fusion: DatosDeSesion = {
+          montajes: { ...locales.montajes, ...remoto.prefs },
+          edad: remoto.edad ?? locales.edad,
+          fcReposo: remoto.fcReposo ?? locales.fcReposo,
+        };
+        setDatos(fusion);
+        void guardaDatosLocales(fusion);
+        // Lo contestado sin señal se sube ahora.
+        for (const [id, montaje] of Object.entries(locales.montajes)) {
+          if (!remoto.prefs[id]) void patchEjercicioPrefs(id, montaje).catch(() => undefined);
+        }
+      } catch {
+        // Sin señal: se queda lo del teléfono.
+      }
+    })();
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
+  function guardarMontaje(exerciseId: string, montaje: Montaje) {
+    const siguiente = { ...datosRef.current, montajes: { ...datosRef.current.montajes, [exerciseId]: montaje } };
+    setDatos(siguiente);
+    void guardaDatosLocales(siguiente);
+    void patchEjercicioPrefs(exerciseId, montaje).catch(() => undefined);
+  }
+
+  // La primera vez en una barra o máquina de discos se pregunta cómo se
+  // carga. Se pregunta una sola vez por ejercicio y sesión: cerrar la hoja
+  // sin contestar es un "ahora no", no una invitación a insistir.
+  useEffect(() => {
+    if (!estado || estado.terminada || fase !== "entrenando") return;
+    const actual = estado.ejercicios[estado.ejercicioActual];
+    const id = actual?.exerciseId;
+    if (!actual || !id || datos.montajes[id] || preguntados.current.has(id)) return;
+    if (!preguntarMontaje(actual.nombre)) return;
+    preguntados.current.add(id);
+    setPreguntaMontaje({ exerciseId: id, nombre: actual.nombre, paso: "lado" });
+  }, [estado?.ejercicioActual, estado?.ejercicios, estado?.terminada, fase, datos.montajes]);
+
+  /**
+   * El pulso que manda el reloj durante el descanso (`{tipo:'fc', bpm, t}`
+   * cada ~5 s). Mueve el término del descanso hacia la recuperación real —
+   * ver `descansoPara` — y alimenta el "Recuperándote · 128 → 110 lpm".
+   */
+  useEffect(() => {
+    if (!conReloj) return;
+    const suscripcion = alFrecuenciaDelReloj((lectura) => {
+      const actual = estadoRef.current;
+      if (!actual) return;
+      const perfil = { reposo: datosRef.current.fcReposo, edad: datosRef.current.edad };
+      const { estado: siguiente, descanso } = conFrecuencia(actual, lectura.bpm, perfil, Date.now());
+      setFc({ ...lectura, objetivo: descanso?.fcObjetivo ?? null });
+      if (siguiente !== actual) setEstado(siguiente);
+    });
+    return () => suscripcion?.remove();
+  }, [conReloj]);
 
   const persistir = useCallback(async (siguiente: SessionSyncInput) => {
     setDraft(siguiente);
@@ -673,7 +826,16 @@ export default function EnVivoScreen() {
       setPulsos((previos) => ({ ...previos, [clave]: pulso }));
     });
 
-    const { estado: siguiente } = cerrarSerie(estado, { reps, pesoKg: peso }, Date.now());
+    // La MISMA hora para el término del descanso y para el reloj de la
+    // pantalla. `ahora` solo se empuja mientras hay descanso, así que entre
+    // descansos se queda con la hora del último tick: el primer frame del
+    // descanso nuevo restaba contra esa hora vieja y el cronómetro arrancaba
+    // en un número (base + lo que llevaba parado) y saltaba al correcto en el
+    // siguiente tick.
+    const momento = Date.now();
+    const { estado: siguiente } = cerrarSerie(estado, { reps, pesoKg: peso }, momento);
+    setAhora(momento);
+    setFc(null);
     setEstado(siguiente);
 
     const clientId = clientIdFor(sesion.workoutId, ejercicioIndex, setIndex);
@@ -713,29 +875,44 @@ export default function EnVivoScreen() {
   function sustituir(alternativa: ExerciseAlternative) {
     if (!estado || !draft || !sesion) return;
 
-    const indice = estado.ejercicioActual;
-    const ejercicios = estado.ejercicios.map((ejercicio, posicion) =>
-      posicion === indice
-        ? {
-            ...ejercicio,
-            nombre: alternativa.name,
-            series: ejercicio.series.map((serie) => ({ ...serie, hechas: null, pesoKg: null })),
-          }
-        : ejercicio,
+    // Si lo elegido ya tocaba más abajo, ese de abajo se cambia por otra de
+    // sus alternativas: una sesión con el mismo ejercicio dos veces es un
+    // error del cambio, no una elección. Cada cambio viaja a la cola en orden.
+    const { estado: siguiente, cambios } = sustituirEnSesion(
+      estado,
+      estado.ejercicioActual,
+      alternativa,
     );
-
-    setEstado({ ...estado, ejercicios, serieActual: 0, descansoHasta: null });
+    setEstado(siguiente);
     setCambiando(false);
 
-    const prefijo = exercisePrefix(sesion.workoutId, indice);
+    const indices = new Set(cambios.map((cambio) => cambio.indice));
+    const prefijos = cambios.map((cambio) => exercisePrefix(sesion.workoutId, cambio.indice));
     void persistir({
       ...draft,
-      sets: draft.sets.filter((serie) => !serie.clientId.startsWith(prefijo)),
+      sets: draft.sets.filter((serie) => !prefijos.some((prefijo) => serie.clientId.startsWith(prefijo))),
       substitutions: [
-        ...draft.substitutions.filter((cambio) => cambio.exerciseIndex !== indice),
-        { exerciseIndex: indice, exerciseId: alternativa.exerciseId },
+        ...draft.substitutions.filter((cambio) => !indices.has(cambio.exerciseIndex)),
+        ...cambios.map((cambio) => ({
+          exerciseIndex: cambio.indice,
+          exerciseId: cambio.alternativa.exerciseId,
+        })),
       ],
     });
+  }
+
+  /**
+   * "Terminar este ejercicio": pasa al siguiente y deja las series que
+   * faltan SIN registrar — no se inventan ceros. En el último ejercicio es
+   * terminar la sesión, y el reloj se entera.
+   */
+  function terminarEsteEjercicio() {
+    if (!estado) return;
+    const { estado: siguiente, siguiente: que } = terminarEjercicio(estado);
+    setEstado(siguiente);
+    setCambiando(false);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (que === "fin") enviarFinAlReloj();
   }
 
   /**
@@ -785,6 +962,13 @@ export default function EnVivoScreen() {
     });
   }
 
+  /** Cómo se carga el ejercicio en curso. `null` = total directo. */
+  function montajeActual(): Montaje | null {
+    const id = estado?.ejercicios[estado.ejercicioActual]?.exerciseId;
+    const montaje = id ? datos.montajes[id] : undefined;
+    return montaje?.cargaPorLado ? montaje : null;
+  }
+
   /** Aplica lo tecleado en el campo manual y cierra el teclado. */
   function aplicarCaptura() {
     if (!capturando) return;
@@ -798,8 +982,14 @@ export default function EnVivoScreen() {
     const objetivo = capturando.serie;
     const esPeso = capturando.campo === "peso";
     // Lo tecleado está en la unidad que se está viendo; a kilos antes de
-    // guardar, siempre.
-    const valor = esPeso ? aKilos(numero, unidad) : Math.round(numero);
+    // guardar, siempre. Con carga por lado se teclea UN lado y se guarda el
+    // total: lado × 2 + barra.
+    const montaje = montajeActual();
+    const valor = !esPeso
+      ? Math.round(numero)
+      : montaje
+        ? totalDesdeLado(aKilos(numero, unidad), montaje.barraKg)
+        : aKilos(numero, unidad);
 
     if (objetivo === null) {
       if (esPeso) setPeso(valor);
@@ -831,11 +1021,12 @@ export default function EnVivoScreen() {
           ? serie?.pesoKg ?? null
           : peso;
 
+    const montaje = montajeActual();
     setBorrador(
       actual === null || actual === undefined
         ? ""
         : campo === "peso"
-          ? formatoPeso(aUnidad(actual, unidad))
+          ? formatoPeso(aUnidad(montaje ? ladoDesdeTotal(actual, montaje.barraKg) : actual, unidad))
           : String(actual),
     );
     setCapturando({ campo, serie: objetivo });
@@ -873,6 +1064,9 @@ export default function EnVivoScreen() {
   async function terminarAqui() {
     if (!draft) return;
     setConfirmandoFin(false);
+    // El reloj deja de mostrar la sesión: sin esto seguía en la serie que
+    // tocaba, de una sesión que ya estaba cerrada.
+    enviarFinAlReloj();
     await persistir({ ...draft, completedAt: new Date().toISOString() });
     await olvidaSesionEnCurso();
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -881,6 +1075,7 @@ export default function EnVivoScreen() {
 
   async function cerrarSesion() {
     if (!draft) return;
+    enviarFinAlReloj();
     await persistir({ ...draft, completedAt: new Date().toISOString() });
     await olvidaSesionEnCurso();
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -892,8 +1087,32 @@ export default function EnVivoScreen() {
 
   const avance = progreso(estado);
   const ejercicio = estado.ejercicios[estado.ejercicioActual];
-  const restante = restanteSeg(estado, ahora);
+  // La hora de la pantalla nunca es más vieja que la de este render: el
+  // estado `ahora` solo avanza con el intervalo, y un descanso recién
+  // arrancado no puede leerse contra el tick de hace tres minutos.
+  const ahoraVisible = Math.max(ahora, Date.now());
+  const restante = restanteSeg(estado, ahoraVisible);
   const descansando = restante !== null && restante > 0;
+
+  const montaje = montajeActual();
+  const alternativas = alternativasLibres(estado, estado.ejercicioActual);
+  const pendientesDelEjercicio =
+    ejercicio?.series.filter((serie) => serie.hechas === null && serie.omitida !== true).length ?? 0;
+  const hechasDelEjercicio = ejercicio?.series.filter((serie) => serie.hechas !== null).length ?? 0;
+  /** "Por lado 20 kg · total 60 kg" — siempre a la vista con carga por lado. */
+  const textoDeCarga =
+    montaje && peso !== null
+      ? `Por lado ${formatoPeso(aUnidad(ladoDesdeTotal(peso, montaje.barraKg), unidad))} ${unidad} · total ${formatoPeso(aUnidad(peso, unidad))} ${unidad}`
+      : null;
+  const fcVigente = fc !== null && ahoraVisible - fc.en < 20_000 ? fc : null;
+
+  function ajustarPesoSiguiente(delta: number) {
+    setPeso((valor) => {
+      if (!montaje) return ajustaPeso(valor, delta, unidad);
+      const lado = ladoDesdeTotal(valor ?? montaje.barraKg, montaje.barraKg);
+      return totalDesdeLado(ajustaPeso(lado, delta, unidad), montaje.barraKg);
+    });
+  }
 
   const serieActual = ejercicio?.series[estado.serieActual] ?? null;
   const tempoActual = textoDeTempo(serieActual?.tempo);
@@ -901,10 +1120,16 @@ export default function EnVivoScreen() {
   const warmup = sesion.warmup;
   const pasosCardio = fase === "cardio" ? pasosEnCurso() : [];
   const enCalentamiento = !estado.terminada && fase === "calentamiento" && warmup !== null;
+  // Mismo arreglo que el descanso: `ahoraCalentamiento` es la hora del
+  // último tick, y el primer paso arrancaba contado contra la hora en que se
+  // abrió la pantalla.
   const restanteCalentamiento =
     calentamientoHasta === null
       ? null
-      : Math.max(0, Math.ceil((calentamientoHasta - ahoraCalentamiento) / 1000));
+      : Math.max(
+          0,
+          Math.ceil((calentamientoHasta - Math.max(ahoraCalentamiento, Date.now())) / 1000),
+        );
 
   return (
     <SafeAreaView style={styles.screen} edges={["top", "bottom"]}>
@@ -1105,12 +1330,19 @@ export default function EnVivoScreen() {
 
               <View style={styles.campoPeso}>
                 <Campo
-                  etiqueta={unidad === "kg" ? "Kilos" : "Libras"}
-                  valor={peso === null ? "—" : formatoPeso(aUnidad(peso, unidad))}
-                  onMenos={() => setPeso((valor) => ajustaPeso(valor, -paso, unidad))}
-                  onMas={() => setPeso((valor) => ajustaPeso(valor, paso, unidad))}
+                  etiqueta={`${unidad === "kg" ? "Kilos" : "Libras"}${montaje ? " por lado" : ""}`}
+                  valor={
+                    peso === null
+                      ? "—"
+                      : formatoPeso(
+                          aUnidad(montaje ? ladoDesdeTotal(peso, montaje.barraKg) : peso, unidad),
+                        )
+                  }
+                  onMenos={() => ajustarPesoSiguiente(-paso)}
+                  onMas={() => ajustarPesoSiguiente(paso)}
                   onTocarValor={() => abrirCaptura("peso", null)}
                 />
+                {textoDeCarga && <Text style={styles.cargaTexto}>{textoDeCarga}</Text>}
                 {/* El salto de los botones y la unidad del PESO. La barra sube
                     de 2.5 en 2.5 pero la mancuerna de 0.5, y hay gimnasios con
                     los discos en libras. Tocar el número teclea la cantidad
@@ -1142,6 +1374,20 @@ export default function EnVivoScreen() {
                         </Text>
                       </Pressable>
                     ))}
+                    {ejercicio?.exerciseId ? (
+                      <Pressable
+                        onPress={() =>
+                          setPreguntaMontaje({
+                            exerciseId: ejercicio.exerciseId!,
+                            nombre: ejercicio.nombre,
+                            paso: "lado",
+                          })
+                        }
+                        style={[styles.ajusteChip, montaje && styles.ajusteChipOn]}
+                      >
+                        <Text style={[styles.ajusteTexto, montaje && styles.ajusteTextoOn]}>por lado</Text>
+                      </Pressable>
+                    ) : null}
                   </View>
                 </View>
               </View>
@@ -1153,6 +1399,34 @@ export default function EnVivoScreen() {
               <Timer size={20} color={colors.champan} strokeWidth={2} />
               <Text style={styles.descansoReloj}>{formatoReloj(restante ?? 0)}</Text>
               <Text style={styles.descansoTexto}>de descanso</Text>
+              {fcVigente && fcVigente.objetivo !== null && (
+                <Text style={styles.descansoFc}>
+                  {fcVigente.bpm <= fcVigente.objetivo
+                    ? `Recuperada · ${fcVigente.bpm} lpm`
+                    : `Recuperándote · ${fcVigente.bpm} → ${fcVigente.objetivo} lpm`}
+                </Text>
+              )}
+
+              {/* El peso de la que sigue, a la mano: salir del descanso ya
+                  con los discos puestos. Los mismos ± que el campo de arriba. */}
+              {serieActual && (
+                <View style={styles.siguienteFila}>
+                  <Pressable onPress={() => ajustarPesoSiguiente(-paso)} hitSlop={8} style={styles.campoBoton}>
+                    <Minus size={18} color={colors.marfil} strokeWidth={2.5} />
+                  </Pressable>
+                  <Pressable onPress={() => abrirCaptura("peso", null)} hitSlop={8} style={styles.siguienteCaja}>
+                    <Text style={styles.siguienteTexto} numberOfLines={1}>
+                      Siguiente ·{" "}
+                      {peso === null
+                        ? "sin peso"
+                        : textoDeCarga ?? `${formatoPeso(aUnidad(peso, unidad))} ${unidad}`}
+                    </Text>
+                  </Pressable>
+                  <Pressable onPress={() => ajustarPesoSiguiente(paso)} hitSlop={8} style={styles.campoBoton}>
+                    <Plus size={18} color={colors.marfil} strokeWidth={2.5} />
+                  </Pressable>
+                </View>
+              )}
 
               <View style={styles.descansoBotones}>
                 <Pressable
@@ -1198,7 +1472,15 @@ export default function EnVivoScreen() {
             </Pressable>
           )}
 
-          {(ejercicio?.alternativas ?? []).length > 0 && (
+          {/* Terminar SOLO este ejercicio (3 de 5 series): las que faltan se
+              quedan sin registrar y se pasa al siguiente. */}
+          {hechasDelEjercicio > 0 && pendientesDelEjercicio > 0 && (
+            <Pressable onPress={terminarEsteEjercicio} hitSlop={8} style={styles.terminarEjercicio}>
+              <Text style={styles.cambiarEnlace}>Terminar este ejercicio</Text>
+            </Pressable>
+          )}
+
+          {alternativas.length > 0 && (
             <View style={styles.cambiarCaja}>
               <Pressable onPress={() => setCambiando((valor) => !valor)} hitSlop={8}>
                 <Text style={styles.cambiarEnlace}>
@@ -1207,7 +1489,7 @@ export default function EnVivoScreen() {
               </Pressable>
 
               {cambiando &&
-                (ejercicio?.alternativas ?? []).map((alternativa) => (
+                alternativas.map((alternativa) => (
                   <Pressable
                     key={alternativa.exerciseId}
                     onPress={() => sustituir(alternativa)}
@@ -1340,6 +1622,99 @@ export default function EnVivoScreen() {
                 <Text style={styles.botonSecundarioTexto}>Guardar</Text>
               </Pressable>
             </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* "¿Esta máquina se carga por lado?" — una vez por ejercicio, y se
+          recuerda (Profile.exercisePrefs). Con carga por lado se teclea UN
+          lado y se registra el total: lado × 2 + barra. */}
+      <Modal
+        visible={preguntaMontaje !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPreguntaMontaje(null)}
+      >
+        <Pressable style={styles.tecladoFondo} onPress={() => setPreguntaMontaje(null)}>
+          <Pressable style={styles.tecladoCaja} onPress={() => {}}>
+            {preguntaMontaje?.paso === "lado" ? (
+              <>
+                <Text style={styles.tecladoTitulo}>¿Esta máquina se carga por lado?</Text>
+                <Text style={styles.tecladoNota}>{preguntaMontaje.nombre}</Text>
+                <View style={styles.tecladoBotones}>
+                  <Pressable
+                    onPress={() => {
+                      guardarMontaje(preguntaMontaje.exerciseId, { cargaPorLado: false, barraKg: 0 });
+                      setPreguntaMontaje(null);
+                    }}
+                    style={[styles.botonSecundario, { flex: 1 }]}
+                  >
+                    <Text style={styles.botonSecundarioTexto}>No, peso total</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      const previa = datos.montajes[preguntaMontaje.exerciseId];
+                      const barra =
+                        previa?.cargaPorLado === true
+                          ? previa.barraKg
+                          : barraPorDefecto(preguntaMontaje.nombre, unidad);
+                      setBarraBorrador(formatoPeso(aUnidad(barra, unidad)));
+                      setPreguntaMontaje({ ...preguntaMontaje, paso: "barra" });
+                    }}
+                    style={[styles.botonSecundario, { flex: 1 }]}
+                  >
+                    <Check size={16} color={colors.marfil} strokeWidth={2} />
+                    <Text style={styles.botonSecundarioTexto}>Sí, por lado</Text>
+                  </Pressable>
+                </View>
+              </>
+            ) : preguntaMontaje ? (
+              <>
+                <Text style={styles.tecladoTitulo}>¿Cuánto pesa la barra o el carro?</Text>
+                <Text style={styles.tecladoNota}>
+                  En {unidad}. Barra olímpica: {unidad === "kg" ? "20 kg" : "45 lb"}; carro de prensa,
+                  0 si no sabes.
+                </Text>
+                <TextInput
+                  value={barraBorrador}
+                  onChangeText={setBarraBorrador}
+                  keyboardType="decimal-pad"
+                  autoFocus
+                  selectTextOnFocus
+                  style={styles.tecladoInput}
+                  returnKeyType="done"
+                />
+                <View style={styles.tecladoBotones}>
+                  <Pressable
+                    onPress={() => {
+                      guardarMontaje(preguntaMontaje.exerciseId, {
+                        cargaPorLado: true,
+                        barraKg: barraPorDefecto(preguntaMontaje.nombre, unidad),
+                      });
+                      setPreguntaMontaje(null);
+                    }}
+                    style={styles.botonSecundario}
+                  >
+                    <Text style={styles.botonSecundarioTexto}>No sé</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      const numero = Number(barraBorrador.replace(",", "."));
+                      const barraKg =
+                        Number.isFinite(numero) && numero >= 0
+                          ? aKilos(numero, unidad)
+                          : barraPorDefecto(preguntaMontaje.nombre, unidad);
+                      guardarMontaje(preguntaMontaje.exerciseId, { cargaPorLado: true, barraKg });
+                      setPreguntaMontaje(null);
+                    }}
+                    style={[styles.botonSecundario, { flex: 1 }]}
+                  >
+                    <Check size={16} color={colors.marfil} strokeWidth={2} />
+                    <Text style={styles.botonSecundarioTexto}>Guardar</Text>
+                  </Pressable>
+                </View>
+              </>
+            ) : null}
           </Pressable>
         </Pressable>
       </Modal>
@@ -1633,6 +2008,22 @@ const makeStyles = (colors: Palette) =>
       fontVariant: ["tabular-nums"],
     },
     nota: { fontFamily: fonts.sans, ...typeScale.bodySm, color: colors.paloRosaLight },
+    cargaTexto: {
+      fontFamily: fonts.sansMedium,
+      ...typeScale.bodySm,
+      color: colors.champan,
+      textAlign: "center",
+    },
+    descansoFc: { fontFamily: fonts.sansMedium, ...typeScale.bodySm, color: colors.marfil },
+    siguienteFila: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+      marginTop: spacing.sm,
+    },
+    siguienteCaja: { flexShrink: 1, paddingHorizontal: spacing.sm },
+    siguienteTexto: { fontFamily: fonts.sansSemiBold, ...typeScale.body, color: colors.marfil },
+    terminarEjercicio: { alignItems: "center", paddingVertical: spacing.xs },
     tituloFin: { fontFamily: fonts.sansBold, ...typeScale.title, color: colors.marfil },
     subtituloFin: { fontFamily: fonts.sans, ...typeScale.body, color: colors.paloRosa },
   });

@@ -28,7 +28,10 @@ type NativoReloj = {
   enviarSesion(json: string): boolean;
   enviarResumen(json: string): boolean;
   drenar(): string[];
+  /** Opcional: los builds nativos anteriores a I2 no lo traen. */
+  enviarFin?(): boolean;
   addListener(evento: "onSerieCerrada", oyente: () => void): Suscripcion;
+  addListener(evento: "onFrecuencia", oyente: (lectura: { bpm: number; t: number }) => void): Suscripcion;
 };
 
 export type EstadoReloj = {
@@ -169,4 +172,45 @@ export function actualizarComidaEnElReloj(comida: {
 /** Avisa que hay algo nuevo que recoger. No trae los datos: llama a drenar. */
 export function alCerrarSerieEnElReloj(oyente: () => void): Suscripcion | null {
   return nativo?.addListener("onSerieCerrada", oyente) ?? null;
+}
+
+/**
+ * Avisa al reloj que la sesión terminó en el teléfono ("Terminar aquí",
+ * cerrar la sesión o terminar el último ejercicio).
+ *
+ * Contrato con el reloj: `{tipo: "fin"}` por `sendMessage` (si la app de la
+ * muñeca está abierta) y también en el `applicationContext`, para que el
+ * reloj que estaba fuera de alcance se entere al volver. Sin esto la muñeca
+ * seguía mostrando la serie de una sesión que ya estaba cerrada.
+ */
+export function enviarFinAlReloj(): boolean {
+  if (!nativo?.enviarFin) return false;
+  try {
+    return nativo.enviarFin();
+  } catch {
+    return false;
+  }
+}
+
+/** Una lectura de pulso que mandó el reloj: `{tipo: "fc", bpm, t}`. */
+export type LecturaDeFc = { bpm: number; /** Cuándo llegó, ms epoch. */ en: number };
+
+/**
+ * Se suscribe al pulso que manda el reloj durante el descanso (cada ~5 s).
+ * `t` llega en segundos desde 1970 (Swift `timeIntervalSince1970`); si viene
+ * en milisegundos también se entiende. Una lectura sin `bpm` sensato se tira.
+ */
+export function alFrecuenciaDelReloj(oyente: (lectura: LecturaDeFc) => void): Suscripcion | null {
+  if (!nativo) return null;
+  try {
+    return nativo.addListener("onFrecuencia", (lectura) => {
+      const bpm = Number(lectura?.bpm);
+      if (!Number.isFinite(bpm) || bpm < 30 || bpm > 240) return;
+      const t = Number(lectura?.t);
+      const en = Number.isFinite(t) && t > 0 ? (t < 1e12 ? t * 1000 : t) : Date.now();
+      oyente({ bpm: Math.round(bpm), en });
+    });
+  } catch {
+    return null;
+  }
 }

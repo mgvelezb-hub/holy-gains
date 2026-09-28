@@ -12,12 +12,17 @@ public class RelojModule: Module {
   public func definition() -> ModuleDefinition {
     Name("Reloj")
 
-    Events("onSerieCerrada")
+    Events("onSerieCerrada", "onFrecuencia")
 
     OnCreate {
       Puente.compartido.activar()
       Puente.compartido.alLlegarSerie = { [weak self] in
         self?.sendEvent("onSerieCerrada", [:])
+      }
+      // El pulso del descanso llega en vivo y no se guarda: si nadie escucha,
+      // la siguiente lectura (5 s después) lo reemplaza.
+      Puente.compartido.alLlegarFrecuencia = { [weak self] bpm, t in
+        self?.sendEvent("onFrecuencia", ["bpm": bpm, "t": t])
       }
     }
 
@@ -35,6 +40,10 @@ public class RelojModule: Module {
 
     Function("drenar") { () -> [String] in
       Puente.compartido.drenar()
+    }
+
+    Function("enviarFin") { () -> Bool in
+      Puente.compartido.enviarFin()
     }
   }
 }

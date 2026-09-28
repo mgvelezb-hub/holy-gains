@@ -2383,3 +2383,31 @@ export function patchLeche(
     { method: "PATCH", body: { tipoLeche } },
   );
 }
+
+/** Cómo está montado un ejercicio: se carga por lado y cuánto pesa la barra (kg). */
+export type MontajeDeEjercicio = { cargaPorLado: boolean; barraKg: number };
+
+/**
+ * `GET /api/v1/me/ejercicio-prefs` — los montajes guardados por ejercicio, y
+ * lo que el descanso por pulso necesita: edad y última FC en reposo.
+ */
+export type EjercicioPrefsResponse = {
+  prefs: Record<string, MontajeDeEjercicio>;
+  edad: number | null;
+  fcReposo: number | null;
+};
+
+export function getEjercicioPrefs(): Promise<EjercicioPrefsResponse> {
+  return apiFetch<EjercicioPrefsResponse>("/api/v1/me/ejercicio-prefs");
+}
+
+/** `PATCH /api/v1/me/ejercicio-prefs` — recuerda el montaje de UN ejercicio. */
+export function patchEjercicioPrefs(
+  exerciseId: string,
+  montaje: MontajeDeEjercicio,
+): Promise<{ prefs: Record<string, MontajeDeEjercicio> }> {
+  return apiFetch<{ prefs: Record<string, MontajeDeEjercicio> }>("/api/v1/me/ejercicio-prefs", {
+    method: "PATCH",
+    body: { exerciseId, ...montaje },
+  });
+}

@@ -33,6 +33,9 @@ final class Puente: NSObject {
   /// entregue dos veces.
   var alLlegarSerie: (() -> Void)?
 
+  /// El pulso que manda el reloj durante el descanso: `{tipo: "fc", bpm, t}`.
+  var alLlegarFrecuencia: ((Double, Double) -> Void)?
+
   private let llaveBuzon = "reloj.seriesCerradas"
 
   /// Lo último que se mandó de cada cosa, para poder remandarlo junto.
@@ -117,6 +120,44 @@ final class Puente: NSObject {
     }
   }
 
+  /**
+   La sesión terminó en el teléfono: `{tipo: "fin"}` al reloj.
+
+   Por `sendMessage` si la app de la muñeca está abierta (llega al instante) y
+   también en el contexto, para el reloj que estaba fuera de alcance. La
+   sesión guardada se olvida: remandarla con el siguiente resumen le
+   devolvería al reloj una sesión que ya se cerró.
+   */
+  @discardableResult
+  func enviarFin() -> Bool {
+    ultimaSesion = nil
+    guard WCSession.isSupported() else { return false }
+    let sesion = WCSession.default
+    guard sesion.activationState == .activated, sesion.isPaired, sesion.isWatchAppInstalled else {
+      return false
+    }
+
+    if sesion.isReachable {
+      sesion.sendMessage(["tipo": "fin"], replyHandler: nil, errorHandler: nil)
+    }
+
+    var contexto: [String: Any] = ["tipo": "fin"]
+    if let ultimoResumen { contexto["resumen"] = ultimoResumen }
+    do {
+      try sesion.updateApplicationContext(contexto)
+      return true
+    } catch {
+      return sesion.isReachable
+    }
+  }
+
+  private func recibir(_ mensaje: [String: Any]) {
+    guard let tipo = mensaje["tipo"] as? String, tipo == "fc" else { return }
+    guard let bpm = (mensaje["bpm"] as? NSNumber)?.doubleValue else { return }
+    let t = (mensaje["t"] as? NSNumber)?.doubleValue ?? Date().timeIntervalSince1970
+    DispatchQueue.main.async { [weak self] in self?.alLlegarFrecuencia?(bpm, t) }
+  }
+
   /// Devuelve lo que el reloj mandó y vacía el buzón.
   func drenar() -> [String] {
     let buzon = UserDefaults.standard.stringArray(forKey: llaveBuzon) ?? []
@@ -157,6 +198,20 @@ extension Puente: WCSessionDelegate {
 
   func sessionDidDeactivate(_ session: WCSession) {
     WCSession.default.activate()
+  }
+
+  /// Mensajes en vivo del reloj (hoy: el pulso del descanso).
+  func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
+    recibir(message)
+  }
+
+  func session(
+    _ session: WCSession,
+    didReceiveMessage message: [String: Any],
+    replyHandler: @escaping ([String: Any]) -> Void
+  ) {
+    recibir(message)
+    replyHandler([:])
   }
 
   func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
