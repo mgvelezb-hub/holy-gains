@@ -29,11 +29,15 @@ import { InfoTip, TextoInfo } from "@/components/InfoTip";
 import { ErrorState, LoadingState } from "@/components/States";
 import { useTheme } from "@/context/theme";
 import {
+  postActivities,
   type ExerciseAlternative,
+  type OtherSessionView,
   type SessionSyncInput,
   type SessionView,
+  type WarmupStep,
   type WeekView,
 } from "@/lib/api";
+import { actividadDeCardio, pasosDeCardio, tituloTarjetaCardio } from "@/lib/cardio";
 import {
   alCerrarSerieEnElReloj,
   drenarSeriesCerradas,
@@ -171,7 +175,19 @@ export default function EnVivoScreen() {
    * cerrada. Nunca es obligatorio — "Saltar calentamiento" salta directo a
    * "entrenando" en cualquier momento.
    */
-  const [fase, setFase] = useState<"calentamiento" | "entrenando">("entrenando");
+  const [fase, setFase] = useState<"calentamiento" | "entrenando" | "cardio">("entrenando");
+
+  /**
+   * El cardio de después de pesas de hoy (H2), si el plan lo trae. Aparece
+   * al cerrar la última serie y corre con el MISMO timer del calentamiento
+   * (`pasoCalentamiento`/`calentamientoHasta`): solo cambian los pasos.
+   */
+  const [cardioDelDia, setCardioDelDia] = useState<OtherSessionView | null>(null);
+  const [cardioInicio, setCardioInicio] = useState<Date | null>(null);
+  const [cardioEstado, setCardioEstado] = useState<"pendiente" | "guardando" | "hecho" | "omitido">(
+    "pendiente",
+  );
+  const [cardioMsg, setCardioMsg] = useState<string | null>(null);
   const [calentamientoIniciado, setCalentamientoIniciado] = useState(false);
   const [pasoCalentamiento, setPasoCalentamiento] = useState(0);
   /**
@@ -292,6 +308,12 @@ export default function EnVivoScreen() {
 
       setSesion(encontrada);
       setDraft(guardadas);
+      setCardioDelDia(
+        semana?.otherSessions?.find(
+          (otra) =>
+            otra.date === encontrada.date && otra.discipline === "CARDIO" && otra.sesion?.cardio !== undefined,
+        ) ?? null,
+      );
 
       const base = estadoInicial(ejercicios);
 
@@ -550,15 +572,59 @@ export default function EnVivoScreen() {
    * que es exactamente lo que hace "Saltar calentamiento".
    */
   function avanzarCalentamiento(indice: number) {
-    const pasos = sesion?.warmup?.pasos ?? [];
+    const pasos = pasosEnCurso();
     const siguiente = pasos[indice];
     if (!siguiente) {
       setCalentamientoHasta(null);
+      if (fase === "cardio") {
+        void registrarCardio();
+        return;
+      }
       setFase("entrenando");
       return;
     }
     setPasoCalentamiento(indice);
     setCalentamientoHasta(Date.now() + siguiente.segundos * 1000);
+  }
+
+  /** Los pasos que corre el timer: los del calentamiento o, al final, los del cardio. */
+  function pasosEnCurso(): WarmupStep[] {
+    if (fase === "cardio" && cardioDelDia?.sesion?.cardio) {
+      return pasosDeCardio(cardioDelDia.sesion.cardio, cardioDelDia.minutes);
+    }
+    return sesion?.warmup?.pasos ?? [];
+  }
+
+  function empezarCardio() {
+    setFase("cardio");
+    setCardioInicio(new Date());
+    setCalentamientoIniciado(true);
+    setPasoCalentamiento(0);
+    const primero = cardioDelDia?.sesion?.cardio
+      ? pasosDeCardio(cardioDelDia.sesion.cardio, cardioDelDia.minutes)[0]
+      : undefined;
+    setCalentamientoHasta(primero ? Date.now() + primero.segundos * 1000 : null);
+  }
+
+  /**
+   * Registra el cardio como sesión de disciplina del día, con su hora real:
+   * si el reloj también la grabó, el servidor las enlaza en vez de duplicar.
+   * Sin señal no se pierde la sesión de pesas: se avisa y se puede cerrar.
+   */
+  async function registrarCardio() {
+    const detalle = cardioDelDia?.sesion?.cardio;
+    if (!detalle || !sesion || cardioEstado === "guardando") return;
+    setCalentamientoHasta(null);
+    setCardioEstado("guardando");
+    try {
+      await postActivities([actividadDeCardio(detalle, sesion.date, cardioInicio ?? new Date(), new Date())]);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setCardioEstado("hecho");
+      setCardioMsg("Cardio registrado.");
+    } catch {
+      setCardioEstado("hecho");
+      setCardioMsg("No se pudo subir el cardio. Regístralo en Rutinas cuando tengas señal.");
+    }
   }
 
   function empezarCalentamiento() {
@@ -574,6 +640,10 @@ export default function EnVivoScreen() {
   /** Nunca es obligatorio: pasa directo a la primera serie, desde donde sea. */
   function saltarTodoElCalentamiento() {
     setCalentamientoHasta(null);
+    if (fase === "cardio") {
+      void registrarCardio();
+      return;
+    }
     setFase("entrenando");
   }
 
@@ -828,6 +898,7 @@ export default function EnVivoScreen() {
   const tempoActual = textoDeTempo(serieActual?.tempo);
 
   const warmup = sesion.warmup;
+  const pasosCardio = fase === "cardio" ? pasosEnCurso() : [];
   const enCalentamiento = !estado.terminada && fase === "calentamiento" && warmup !== null;
   const restanteCalentamiento =
     calentamientoHasta === null
@@ -868,17 +939,65 @@ export default function EnVivoScreen() {
         />
       </View>
 
-      {estado.terminada ? (
+      {estado.terminada && fase === "cardio" && cardioEstado !== "hecho" && cardioDelDia?.sesion?.cardio ? (
+        <ScrollView contentContainerStyle={styles.contenido}>
+          <Text style={styles.ejercicioPaso}>CARDIO</Text>
+          <Text style={styles.ejercicioNombre}>
+            {tituloTarjetaCardio(cardioDelDia.sesion.cardio, cardioDelDia.minutes)}
+          </Text>
+          <View style={styles.descanso}>
+            <Timer size={20} color={colors.champan} strokeWidth={2} />
+            <Text style={styles.descansoReloj}>{formatoReloj(restanteCalentamiento ?? 0)}</Text>
+            <Text style={styles.descansoTexto}>{pasosCardio[pasoCalentamiento]?.nombre ?? ""}</Text>
+            <Text style={styles.progresoTexto}>
+              Paso {pasoCalentamiento + 1} de {pasosCardio.length}
+            </Text>
+            <View style={styles.descansoBotones}>
+              <Pressable onPress={saltarPasoCalentamiento} style={styles.botonSecundario}>
+                <SkipForward size={16} color={colors.marfil} strokeWidth={2} />
+                <Text style={styles.botonSecundarioTexto}>Saltar paso</Text>
+              </Pressable>
+              <Pressable
+                onPress={saltarTodoElCalentamiento}
+                style={styles.botonSecundario}
+                disabled={cardioEstado === "guardando"}
+              >
+                <Text style={styles.botonSecundarioTexto}>Terminar cardio</Text>
+              </Pressable>
+            </View>
+          </View>
+        </ScrollView>
+      ) : estado.terminada ? (
         <ScrollView contentContainerStyle={styles.contenido}>
           <Text style={styles.tituloFin}>Sesión completa</Text>
           <Text style={styles.subtituloFin}>
             {avance.total} series · {volumenKg(estado)} kg levantados. Ya quedó guardada en tu
             teléfono; se sube sola cuando haya señal.
           </Text>
-          <Pressable onPress={cerrarSesion} style={styles.botonPrincipal}>
-            <Check size={22} color={colors.pergamino} strokeWidth={2.5} />
-            <Text style={styles.botonPrincipalTexto}>Cerrar sesión</Text>
-          </Pressable>
+          {cardioDelDia?.sesion?.cardio && cardioEstado === "pendiente" ? (
+            // La tarjeta del cardio: una línea y un botón. El timer es el del
+            // calentamiento; al terminar se registra solo.
+            <View style={styles.serieCaja}>
+              <Text style={styles.seriePlan}>
+                {tituloTarjetaCardio(cardioDelDia.sesion.cardio, cardioDelDia.minutes)}
+              </Text>
+              <Pressable onPress={empezarCardio} style={styles.botonPrincipal}>
+                <PlayCircle size={22} color={colors.pergamino} strokeWidth={2.5} />
+                <Text style={styles.botonPrincipalTexto}>Empezar cardio</Text>
+              </Pressable>
+              <Pressable onPress={() => setCardioEstado("omitido")} hitSlop={8}>
+                <Text style={styles.cambiarEnlace}>Hoy no</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <>
+              {cardioMsg && <Text style={styles.subtituloFin}>{cardioMsg}</Text>}
+              <Pressable onPress={cerrarSesion} style={styles.botonPrincipal}>
+                <Check size={22} color={colors.pergamino} strokeWidth={2.5} />
+                <Text style={styles.botonPrincipalTexto}>Cerrar sesión</Text>
+              </Pressable>
+            </>
+          )}
         </ScrollView>
       ) : enCalentamiento && warmup ? (
         <ScrollView contentContainerStyle={styles.contenido}>
