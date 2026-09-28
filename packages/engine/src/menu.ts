@@ -1,12 +1,13 @@
 import { DEFAULT_CONFIG, type EngineConfig } from './config.js';
 import { permitePolvos } from './suplementos.js';
 import { roundTo } from './calc.js';
-import { FOODS, catalogoCon, matchesAny, normalize } from './foods.js';
+import { FOODS, catalogoCon, esLeche, lecheDe, matchesAny, normalize } from './foods.js';
 import { PREPARACIONES } from './preparaciones.js';
 import type {
   Equivalence,
   Food,
   FoodRole,
+  IngredientePreparacion,
   MacroTargets,
   MealSlot,
   Menu,
@@ -194,6 +195,9 @@ function eligible(
     // puede seguir. Los polvos entran solo si la persona los declaró.
     if (food.tags.includes('suplemento') && !permitePolvos(profile)) return false;
     if (matchesAny(food, excluded)) return false;
+    // Una sola leche en la casa: la que la persona eligio. Las otras no salen
+    // ni en el licuado ni sueltas —quien compra deslactosada no tiene entera—.
+    if (esLeche(food) && food.id !== lecheDe(profile)) return false;
     // Vegetariana es ovolactovegetariana: sale la carne, el pollo y el
     // pescado; el huevo y los lacteos se quedan. El catalogo trae la etiqueta
     // por alimento, así que aquí no se adivina por nombre.
@@ -1295,6 +1299,16 @@ function preparacionesPara(slot: MealSlot, profile: Profile): Preparacion[] {
   });
 }
 
+/**
+ * Los alimentos que pueden llenar un ingrediente: el fijo, la leche de la
+ * persona o la lista corta.
+ */
+function idsDeIngrediente(ing: IngredientePreparacion, profile: Profile): string[] {
+  if (ing.foodId) return [ing.foodId];
+  if (ing.tag === 'leche') return [lecheDe(profile)];
+  return ing.opciones ?? [];
+}
+
 /** El platillo de la comida, si toca uno. */
 interface PlatilloResuelto {
   slots: Slot[];
@@ -1354,7 +1368,7 @@ function resolverPreparacion(
   };
 
   for (const ing of prep.ingredientes) {
-    const ids = ing.foodId ? [ing.foodId] : (ing.opciones ?? []);
+    const ids = idsDeIngrediente(ing, profile);
     const esFijo = (f: Food): boolean =>
       ing.fijo === true || f.role === 'fruta' || f.role === 'vegetal_libre';
     const candidatos = ids
@@ -1523,7 +1537,7 @@ function platilloDe(items: MenuItem[]): MenuMeal['preparacion'] {
   const renglones = ingredientes.map((i) => sinGramos(i.display));
   // El licuado sin leche se licua con agua: se dice, para que nadie lo
   // prepare en seco o le ponga la leche que el dia no tenia.
-  if (ref.tipo === 'licuado' && !ingredientes.some((i) => i.foodId === 'leche_descremada')) {
+  if (ref.tipo === 'licuado' && !ingredientes.some((i) => i.foodId.startsWith('leche_'))) {
     renglones.push('agua al gusto');
   }
   return { ...ref, display: `${ref.nombre} — ${renglones.join(' · ')}` };

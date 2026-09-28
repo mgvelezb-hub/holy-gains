@@ -131,7 +131,17 @@ export interface Profile {
    * Los caldos van con las sopas —para quien cocina son lo mismo—.
    */
   preparaciones?: PreferenciaPreparaciones;
+  /**
+   * La leche de la casa: la que va en licuados y cremas. Sin el campo,
+   * descremada, que era la unica que el catalogo tenia. Cambia las kcal y la
+   * grasa del platillo —el solver mueve lo demas para cuadrar el dia—, y las
+   * otras leches no salen en ningun lado del menu.
+   */
+  tipoLeche?: TipoLeche;
 }
+
+export const TIPOS_LECHE = ['descremada', 'entera', 'deslactosada', 'deslactosada_light'] as const;
+export type TipoLeche = (typeof TIPOS_LECHE)[number];
 
 export interface PreferenciaPreparaciones {
   licuados: boolean;
@@ -399,6 +409,12 @@ export type TipoPreparacion = 'licuado' | 'sopa' | 'crema' | 'caldo';
  */
 export interface IngredientePreparacion {
   foodId?: string;
+  /**
+   * `leche`: la leche que la persona eligio (`Profile.tipoLeche`). No es una
+   * lista de opciones: quien compra deslactosada no quiere que el licuado
+   * salga con entera.
+   */
+  tag?: 'leche';
   rolePool?: FoodRole[];
   opciones?: string[];
   /** Cotas de porcion propias del platillo, dentro de la medida casera del alimento. */

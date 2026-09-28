@@ -1,5 +1,5 @@
 import foodsData from '../data/foods.json';
-import type { Food, FoodRole } from './types.js';
+import type { Food, FoodRole, Profile } from './types.js';
 
 export const FOODS: Food[] = foodsData as Food[];
 
@@ -9,6 +9,16 @@ export function foodsByRole(role: FoodRole, pool: Food[] = FOODS): Food[] {
 
 export function findFood(id: string, pool: Food[] = FOODS): Food | undefined {
   return pool.find((f) => f.id === id);
+}
+
+/** El id del catalogo de la leche que la persona eligio; descremada si no dijo. */
+export function lecheDe(profile: Pick<Profile, 'tipoLeche'>): string {
+  return `leche_${profile.tipoLeche ?? 'descremada'}`;
+}
+
+/** true si el alimento es una de las leches del catalogo (tag `leche`). */
+export function esLeche(food: Pick<Food, 'tags'>): boolean {
+  return food.tags.includes('leche');
 }
 
 /** Normaliza para comparar nombres escritos por el usuario (sin acentos, minusculas). */

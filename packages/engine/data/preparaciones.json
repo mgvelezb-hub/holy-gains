@@ -44,7 +44,7 @@
         "maxUnits": 60
       },
       {
-        "foodId": "leche_descremada",
+        "tag": "leche",
         "minUnits": 0.5,
         "maxUnits": 1,
         "opcional": true
@@ -85,7 +85,7 @@
         "foodId": "crema_cacahuate"
       },
       {
-        "foodId": "leche_descremada",
+        "tag": "leche",
         "minUnits": 0.5,
         "maxUnits": 1,
         "opcional": true
@@ -169,7 +169,7 @@
         "maxUnits": 60
       },
       {
-        "foodId": "leche_descremada",
+        "tag": "leche",
         "minUnits": 0.5,
         "maxUnits": 1,
         "opcional": true
@@ -377,7 +377,7 @@
         "gramos": 200
       },
       {
-        "foodId": "leche_descremada",
+        "tag": "leche",
         "minUnits": 0.5,
         "maxUnits": 1
       },
@@ -411,7 +411,7 @@
         "gramos": 150
       },
       {
-        "foodId": "leche_descremada",
+        "tag": "leche",
         "minUnits": 0.5,
         "maxUnits": 1
       },
@@ -445,7 +445,7 @@
         "gramos": 200
       },
       {
-        "foodId": "leche_descremada",
+        "tag": "leche",
         "fijo": true,
         "minUnits": 0.5,
         "maxUnits": 0.5
@@ -479,7 +479,7 @@
         "maxUnits": 1
       },
       {
-        "foodId": "leche_descremada",
+        "tag": "leche",
         "minUnits": 0.5,
         "maxUnits": 1
       },

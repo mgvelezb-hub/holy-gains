@@ -23,7 +23,10 @@ describe('catalogo de preparaciones', () => {
       expect(prep.ingredientes.length, prep.id).toBeGreaterThanOrEqual(2);
       for (const ing of prep.ingredientes) {
         const donde = `${prep.id}`;
-        expect(ing.foodId !== undefined || (ing.rolePool?.length ?? 0) > 0, donde).toBe(true);
+        expect(
+          ing.foodId !== undefined || ing.tag === 'leche' || (ing.rolePool?.length ?? 0) > 0,
+          donde,
+        ).toBe(true);
         if (ing.foodId) expect(findFood(ing.foodId), `${donde} ${ing.foodId}`).toBeDefined();
         for (const id of ing.opciones ?? []) {
           const food = findFood(id);
@@ -41,7 +44,11 @@ describe('catalogo de preparaciones', () => {
   it('las cotas de porcion caben dentro de la medida casera del alimento', () => {
     for (const prep of PREPARACIONES) {
       for (const ing of prep.ingredientes) {
-        const ids = ing.foodId ? [ing.foodId] : (ing.opciones ?? []);
+        const ids = ing.foodId
+          ? [ing.foodId]
+          : ing.tag === 'leche'
+            ? FOODS.filter((f) => f.tags.includes('leche')).map((f) => f.id)
+            : (ing.opciones ?? []);
         for (const id of ids) {
           const s = findFood(id)!.serving;
           if (!s) continue;
@@ -61,8 +68,10 @@ describe('catalogo de preparaciones', () => {
 
   it('las cremas no llevan crema lactea salvo que lo digan', () => {
     for (const prep of PREPARACIONES.filter((p) => p.tipo === 'crema')) {
+      // La leche de la casa, la que la persona eligio: nunca una fija.
+      expect(prep.ingredientes.some((i) => i.tag === 'leche'), prep.id).toBe(true);
       const ids = prep.ingredientes.flatMap((i) => (i.foodId ? [i.foodId] : (i.opciones ?? [])));
-      expect(ids, prep.id).toContain('leche_descremada');
+      expect(ids, prep.id).not.toContain('leche_descremada');
       expect(ids.some((id) => /^crema/i.test(findFood(id)!.name)), prep.id).toBe(false);
     }
   });
