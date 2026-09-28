@@ -118,6 +118,9 @@ export async function programarAvisoAnalisis(segundos: number): Promise<boolean>
     content: {
       title: "Tu retroalimentación está lista",
       body: "Tu análisis del check-in ya está listo · Ábrelo",
+      // Sin `sound` iOS lo entrega en silencio: llega al centro de avisos y
+      // nadie se entera.
+      sound: "default",
       data: { ruta: "/decision" },
     },
     trigger: {
