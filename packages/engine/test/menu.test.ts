@@ -286,8 +286,12 @@ describe('generador de menus (spec §6)', () => {
             const tope = ligera
               ? DEFAULT_CONFIG.maxFoodsPerLightMeal
               : DEFAULT_CONFIG.maxFoodsPerMeal;
+            // Un platillo (licuado, sopa) cuenta como uno: es una cosa en la mesa.
             const ingredientes = meal.items.filter(
-              (i) => findFood(i.foodId)!.role !== 'vegetal_libre',
+              (i, n, todos) =>
+                i.preparacion
+                  ? todos.findIndex((o) => o.preparacion?.id === i.preparacion!.id) === n
+                  : findFood(i.foodId)!.role !== 'vegetal_libre',
             );
             expect(
               ingredientes.length,
@@ -730,6 +734,8 @@ describe('equivalencias de vegetales libres', () => {
         for (const meal of menu.meals) {
           for (const item of meal.items) {
             if (findFood(item.foodId)!.role !== 'vegetal_libre') continue;
+            // La calabacita de la crema es la crema: no se cambia por jicama.
+            if (item.preparacion) continue;
             const equiv = meal.equivalences.find((e) => e.forFoodId === item.foodId);
             expect(equiv, `${item.name} seed ${seed} sin equivalencias`).toBeDefined();
             expect(equiv!.options.length).toBeGreaterThanOrEqual(1);

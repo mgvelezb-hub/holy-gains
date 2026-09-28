@@ -184,14 +184,19 @@ describe.each(CASOS)('$nombre', (caso) => {
   });
 
   // Cinco ingredientes en una comida principal, cuatro en el peri-entreno y la
-  // colacion. El vegetal libre no cuenta: no se cocina, se sirve al lado.
+  // colacion. El vegetal libre no cuenta: no se cocina, se sirve al lado. Y
+  // un platillo cuenta como uno: el licuado es una cosa en la mesa.
   it('ninguna comida pasa de su tope de ingredientes', () => {
     for (const dia of DIAS) {
       for (const meal of comidasDe(caso, dia)) {
         const ligera = ['PRE', 'POST', 'SNACK'].includes(meal.slot);
         const tope = ligera ? DEFAULT_CONFIG.maxFoodsPerLightMeal : DEFAULT_CONFIG.maxFoodsPerMeal;
+        // Un platillo (licuado, sopa) cuenta como uno: es una cosa en la mesa.
         const ingredientes = meal.items.filter(
-          (i) => findFood(i.foodId)!.role !== 'vegetal_libre',
+          (i, n, todos) =>
+            i.preparacion
+              ? todos.findIndex((o) => o.preparacion?.id === i.preparacion!.id) === n
+              : findFood(i.foodId)!.role !== 'vegetal_libre',
         );
         expect(
           ingredientes.length,
@@ -312,6 +317,32 @@ describe.each(CASOS)('$nombre', (caso) => {
           expect(item.display, `dia ${dia} ${item.name}`).toBeTruthy();
           expect(item.why.closes, `dia ${dia} ${item.name}`).toBeTruthy();
         }
+      }
+    }
+  });
+});
+
+// Las preparaciones (licuados, sopas, cremas) eran una omision: el motor solo
+// servia alimentos sueltos. La semana de Mau tiene que traer de las dos.
+describe('la semana de Mau trae preparaciones', () => {
+  const mau = CASOS[0]!;
+
+  it('al menos un licuado y una sopa, crema o caldo en siete dias', () => {
+    const tipos = DIAS.flatMap((dia) =>
+      comidasDe(mau, dia).flatMap((meal) => (meal.preparacion ? [meal.preparacion.tipo] : [])),
+    );
+    expect(tipos).toContain('licuado');
+    expect(tipos.some((t) => t === 'sopa' || t === 'crema' || t === 'caldo')).toBe(true);
+  });
+
+  it('con las preparaciones apagadas no sale ninguna', () => {
+    const apagado: Caso = {
+      ...mau,
+      profile: { ...mau.profile, preparaciones: { licuados: false, sopas: false, cremas: false } },
+    };
+    for (const dia of DIAS) {
+      for (const meal of comidasDe(apagado, dia)) {
+        expect(meal.preparacion, `dia ${dia} ${meal.slot}`).toBeUndefined();
       }
     }
   });
