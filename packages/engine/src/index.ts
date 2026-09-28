@@ -68,4 +68,22 @@ export {
   type PautaSuplemento,
   type Supplement,
 } from './suplementos.js';
+export {
+  DIAS_DESCARTE,
+  MAX_SUGERENCIAS,
+  MENSAJE_FRENO,
+  parseElecciones,
+  registraEleccion,
+  sugerirSuplementos,
+  type CheckInSenal,
+  type DiaSalud,
+  type Eleccion,
+  type EleccionRegistrada,
+  type EleccionesSuplementos,
+  type EntradaSugerencias,
+  type ObjetivoPerfil,
+  type ResultadoSugerencias,
+  type Sugerencia,
+  type ValorLab,
+} from './sugerencias-suplementos.js';
 export { runBacktest, type BacktestReport, type BacktestWeek } from './backtest.js';
