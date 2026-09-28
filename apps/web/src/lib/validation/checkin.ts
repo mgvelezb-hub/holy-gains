@@ -81,8 +81,14 @@ export const sensationsStepSchema = z.object({
    * nativa ya no lo pregunta y el servidor lo deriva de `health_days` (ver
    * `sleepScoreFor` en lib/health/db.ts). El formulario web todavía lo manda,
    * y quien no traiga reloj puede seguir escribiéndolo.
+   *
+   * `nullable` además de `optional` porque `coerceCheckInPayload` convierte
+   * lo que no viene en `null`, y un `null` no pasa por `optional()`: la app
+   * nativa mandaba el check-in completo y el servidor lo rechazaba por un
+   * campo que la pantalla ni muestra ("Revisa los campos marcados" con todo
+   * lleno).
    */
-  sleep: scale1to5.optional(),
+  sleep: scale1to5.nullable().optional(),
   strengthRpe: z.number().int().min(1).max(10).nullable().optional(),
   strengthTrend: z.enum(STRENGTH_TRENDS).nullable().optional(),
 });
