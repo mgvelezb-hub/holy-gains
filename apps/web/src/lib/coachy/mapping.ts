@@ -2,6 +2,7 @@ import type { CheckIn, Profile } from "@prisma/client";
 import { DEFAULT_CONFIG, SUPPLEMENTS, loadConfig } from "engine";
 
 import { decimalToNumber } from "@/lib/format";
+import { sinMarcaDeLeche, tipoLecheDe } from "@/lib/coachy/leche";
 import {
   preferenciaDePreparaciones,
   sinMarcasDePreparacion,
@@ -154,10 +155,16 @@ export function toEngineProfile(profile: Profile, latestWeightKg?: number | null
     pantry: parsePantry(profile.pantry),
     // Las marcas de preparación ("licuados") no son alimentos: salen de aquí
     // y entran como `preparaciones` abajo.
-    excludedFoods: [...sinMarcasDePreparacion(profile.excludedFoods), ...profile.allergies],
+    excludedFoods: [
+      ...sinMarcaDeLeche(sinMarcasDePreparacion(profile.excludedFoods)),
+      ...profile.allergies,
+    ],
     // Qué platillos compuestos acepta el menú. No hay columna: vive en los
     // excluidos, donde "no me des licuados" ya significa eso.
     preparaciones: preferenciaDePreparaciones(profile.excludedFoods),
+    // La leche de licuados y cremas, marcada `leche:<tipo>` en los excluidos
+    // (`lib/coachy/leche.ts`). Sin marca, descremada.
+    tipoLeche: tipoLecheDe(profile.excludedFoods),
     allergies: profile.allergies,
     // Tope de tiempo de cocina. El motor lo trata como preferencia: si deja un
     // rol sin candidatos, prefiere darte de comer a respetar el tope.
