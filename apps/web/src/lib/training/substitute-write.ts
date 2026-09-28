@@ -4,7 +4,7 @@ import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { loadCatalog, parseStoredPlan } from "@/lib/training/db";
-import { isAllowedSubstitute, withSubstitute } from "@/lib/training/substitutes";
+import { isAllowedSubstitute, planSubstitution } from "@/lib/training/substitutes";
 
 /**
  * Cambiar un ejercicio de una sesión ya materializada.
@@ -64,6 +64,8 @@ export async function applySubstitutions(
   const plan = parseStoredPlan(workout.exercisesJson);
   const results: SubstitutionResult[] = [];
   const replaced = new Set<number>();
+  /** Los lugares que se reacomodaron solos para no repetir un ejercicio. */
+  const reacomodados = new Set<number>();
   /** Los cambios que valen para el futuro, no solo para la sesión de hoy. */
   const recordados: Record<string, string> = {};
 
@@ -107,12 +109,26 @@ export async function applySubstitutions(
       continue;
     }
 
-    plan.exercises[substitution.exerciseIndex] = withSubstitute(current, candidate);
-    replaced.add(substitution.exerciseIndex);
+    // Si lo elegido ya estaba más abajo en la sesión, ese de abajo se cambia
+    // por otro del mismo grupo: una sesión con el mismo ejercicio dos veces
+    // es un error del cambio, no una elección.
+    const cambio = planSubstitution(plan.exercises, substitution.exerciseIndex, candidate, catalog);
+    plan.exercises = cambio.exercises;
+    for (const index of cambio.replaced) {
+      replaced.add(index);
+      if (index !== substitution.exerciseIndex) reacomodados.add(index);
+    }
     // Se recuerda para las próximas semanas: sin esto el generador volvía a
     // proponer el ejercicio que ya se rechazó, y había que cambiarlo cada
     // semana. Un cambio repetido es una preferencia, no una casualidad.
-    if (current.exerciseId) recordados[current.exerciseId] = candidate.id;
+    //
+    // Lo que se reacomodó para no repetir NO es preferencia: nadie rechazó
+    // ese ejercicio, solo estaba de más. El teléfono manda ese reacomodo como
+    // un cambio explícito (para que las dos copias coincidan) y no debe
+    // quedar recordado.
+    if (current.exerciseId && !reacomodados.has(substitution.exerciseIndex)) {
+      recordados[current.exerciseId] = candidate.id;
+    }
     results.push({ exerciseIndex: substitution.exerciseIndex, ok: true, name: candidate.name });
   }
 

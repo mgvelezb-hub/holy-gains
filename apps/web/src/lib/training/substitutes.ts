@@ -69,20 +69,38 @@ export function catalogEntryFor(
   return catalog.find((option) => namesMatch(option.name, exercise.name)) ?? null;
 }
 
+/** Lo que ya ocupa la sesión: un nombre suelto o un ejercicio con su id. */
+export type TakenExercise = string | Pick<PlannedExercise, "exerciseId" | "name">;
+
 /**
  * Las opciones para cambiar un ejercicio, ya ordenadas.
  *
- * `taken` son los nombres que ya están en la sesión de hoy: nadie quiere
- * cambiar prensa por el mismo jalón que va a hacer tres ejercicios después.
+ * `taken` es lo que ya está en la sesión de hoy: nadie quiere cambiar prensa
+ * por el mismo jalón que va a hacer tres ejercicios después.
+ *
+ * Se excluye por **id** además de por nombre. Antes solo se comparaban
+ * nombres exactos, y un ejercicio guardado en el plan con otro nombre que el
+ * del catálogo ("Hack squat (máquina)" contra "Hack squat") se colaba como
+ * alternativa del de arriba.
  */
 export function alternativesFor(
   exercise: Pick<PlannedExercise, "exerciseId" | "name" | "muscleGroup">,
   catalog: ExerciseOption[],
-  taken: string[] = [],
+  taken: TakenExercise[] = [],
 ): ExerciseAlternative[] {
   const entry = catalogEntryFor(exercise, catalog);
   const group = entry?.muscleGroup ?? exercise.muscleGroup;
-  const busy = new Set([...taken, exercise.name].map(normalize));
+  const busy = new Set(
+    [...taken.map((item) => (typeof item === "string" ? item : item.name)), exercise.name].map(normalize),
+  );
+  const busyIds = new Set<string>();
+  for (const item of [...taken, exercise]) {
+    if (typeof item === "string") continue;
+    if (item.exerciseId) busyIds.add(item.exerciseId);
+  }
+  if (entry) busyIds.add(entry.id);
+  const isBusy = (option: ExerciseOption): boolean =>
+    busyIds.has(option.id) || busy.has(normalize(option.name));
 
   const declared: ExerciseAlternative[] = [];
   const companions: ExerciseAlternative[] = [];
@@ -90,7 +108,7 @@ export function alternativesFor(
 
   for (const wanted of entry?.substitutes ?? []) {
     const option = catalog.find((row) => namesMatch(row.name, wanted));
-    if (!option || busy.has(normalize(option.name)) || seen.has(option.id)) continue;
+    if (!option || isBusy(option) || seen.has(option.id)) continue;
     seen.add(option.id);
     declared.push({
       exerciseId: option.id,
@@ -102,7 +120,7 @@ export function alternativesFor(
 
   for (const option of catalog) {
     if (option.muscleGroup !== group) continue;
-    if (busy.has(normalize(option.name)) || seen.has(option.id)) continue;
+    if (isBusy(option) || seen.has(option.id)) continue;
     // El respaldo exige video: este cambio ocurre sin señal y sin
     // demostración el ejercicio no se puede hacer bien.
     if (!option.videoUrl) continue;
@@ -159,4 +177,59 @@ export function withSubstitute(
     tracker: candidate.isTracker,
     sets: exercise.sets.map((set) => ({ ...set, weightKg: null })),
   };
+}
+
+/** ¿El ejercicio planeado es este del catálogo? Por id, o por nombre exacto. */
+function isSameExercise(
+  exercise: Pick<PlannedExercise, "exerciseId" | "name">,
+  candidate: ExerciseOption,
+): boolean {
+  if (exercise.exerciseId && exercise.exerciseId === candidate.id) return true;
+  return normalize(exercise.name) === normalize(candidate.name);
+}
+
+/**
+ * Aplica un cambio de ejercicio a la sesión SIN dejarla con un repetido.
+ *
+ * El caso que lo pidió: la máquina estaba ocupada, se cambió por su
+ * alternativa, y dos ejercicios después tocaba justo esa alternativa. Si el
+ * ejercicio elegido ya estaba **más abajo**, ese de abajo se reemplaza por
+ * otra opción del mismo grupo —del mismo rol primero— que no esté en la
+ * sesión ni sea la máquina que se acaba de dejar (está ocupada). Lo de arriba
+ * no se toca: ya se hizo. Si no hay con qué reemplazarlo, se queda.
+ *
+ * Devuelve los índices que cambiaron, para borrar sus series capturadas.
+ */
+export function planSubstitution(
+  exercises: PlannedExercise[],
+  index: number,
+  candidate: ExerciseOption,
+  catalog: ExerciseOption[],
+): { exercises: PlannedExercise[]; replaced: number[] } {
+  const current = exercises[index];
+  if (!current) return { exercises, replaced: [] };
+
+  const next = [...exercises];
+  next[index] = withSubstitute(current, candidate);
+  const replaced = [index];
+
+  for (let below = index + 1; below < next.length; below += 1) {
+    const repeated = next[below]!;
+    if (!isSameExercise(repeated, candidate)) continue;
+
+    const taken: TakenExercise[] = [...next.filter((_, position) => position !== below), current];
+    const options = alternativesFor(repeated, catalog, taken);
+    const pick =
+      options.find(
+        (option) =>
+          catalog.find((row) => row.id === option.exerciseId)?.poolRole === repeated.poolRole,
+      ) ?? options[0];
+    const replacement = pick ? catalog.find((row) => row.id === pick.exerciseId) : undefined;
+    if (!replacement) continue;
+
+    next[below] = withSubstitute(repeated, replacement);
+    replaced.push(below);
+  }
+
+  return { exercises: next, replaced };
 }
