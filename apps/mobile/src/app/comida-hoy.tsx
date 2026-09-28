@@ -10,11 +10,11 @@ import { useTheme } from "@/context/theme";
 import {
   ApiError,
   getComidasLogRango,
-  getNutrition,
   MOTIVO_SALTO_LABEL,
-  type NutritionResponse,
   type RegistroComidaCompleto,
 } from "@/lib/api";
+import { getPlanNutricion, type PlanNutricion } from "@/lib/api-nutricion";
+import { filasDeHoy } from "@/lib/comidas-hoy";
 import { todayISO } from "@/lib/streak";
 import { sufijoTomas, tomasDeComida, tomasSueltas } from "@/lib/tomas-comida";
 import { fonts, radius, spacing, type as typeScale, type Palette } from "@/lib/theme";
@@ -46,7 +46,9 @@ export default function ComidaHoyScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
-  const [nutrition, setNutrition] = useState<NutritionResponse | null>(null);
+  // El plan canónico: `hoy.comidas` ya es el menú del día con la hora que
+  // rige HOY (no la general del menú 1).
+  const [nutrition, setNutrition] = useState<PlanNutricion | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [registros, setRegistros] = useState<Record<string, RegistroComidaCompleto>>({});
@@ -58,7 +60,7 @@ export default function ComidaHoyScreen() {
     try {
       const hoy = todayISO();
       const [nutritionRes, comidasRes] = await Promise.all([
-        getNutrition(),
+        getPlanNutricion(),
         getComidasLogRango({ from: hoy, to: hoy }).catch(() => null),
       ]);
       setNutrition(nutritionRes);
@@ -90,7 +92,7 @@ export default function ComidaHoyScreen() {
   if (!nutrition && error) return <ErrorState message={error} onRetry={load} />;
   if (!nutrition) return null;
 
-  const menu = nutrition.menus[0] ?? null;
+  const filas = filasDeHoy(nutrition);
 
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
@@ -107,18 +109,18 @@ export default function ComidaHoyScreen() {
 
         <Text style={styles.title}>Tu comida de hoy</Text>
 
-        {!menu ? (
+        {filas.length === 0 ? (
           <EmptyState message="Tu menú se sirve en cuanto tu coach publique tu decisión." />
         ) : (
           <View style={styles.lista}>
-            {menu.meals.map((meal) => (
+            {filas.map((meal) => (
               <Pressable
                 key={meal.slot}
                 style={styles.fila}
                 onPress={() => router.push(`/comida/${meal.slot}` as never)}
               >
                 <Text style={styles.filaTexto} numberOfLines={1}>
-                  {meal.label} · {meal.timeHint} · {estadoDe(registros[meal.slot])}
+                  {meal.label} · {meal.hora} · {estadoDe(registros[meal.slot])}
                   {sufijoTomas(tomasDeComida(tomas, meal.slot))
                     ? ` · ${sufijoTomas(tomasDeComida(tomas, meal.slot))}`
                     : ""}

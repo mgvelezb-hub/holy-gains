@@ -11,7 +11,6 @@ import { TomasDeLaComida, useTomasDeHoy } from "@/components/TomasDelDia";
 import { useTheme } from "@/context/theme";
 import {
   ApiError,
-  getNutrition,
   getComidasLogRango,
   postComidaLogCompleto,
   MOTIVOS_SALTO,
@@ -20,6 +19,8 @@ import {
   type MenuMeal,
   type RegistroComidaCompleto,
 } from "@/lib/api";
+import { getPlanNutricion } from "@/lib/api-nutricion";
+import { comidaDeHoy } from "@/lib/comidas-hoy";
 import { todayISO } from "@/lib/streak";
 import { tomasDeComida } from "@/lib/tomas-comida";
 import { fonts, radius, spacing, type as typeScale, type Palette } from "@/lib/theme";
@@ -56,6 +57,8 @@ export default function ComidaSlotScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const [meal, setMeal] = useState<MenuMeal | null>(null);
+  // La hora que rige hoy esa comida (horario por día), no la general del menú.
+  const [hora, setHora] = useState<string | null>(null);
   const [registro, setRegistro] = useState<RegistroComidaCompleto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
@@ -67,9 +70,11 @@ export default function ComidaSlotScreen() {
     if (!slot) return;
     try {
       const hoy = todayISO();
-      const [nutrition, comidas] = await Promise.all([getNutrition(), getComidasLogRango({ from: hoy, to: hoy })]);
-      const encontrada = nutrition.menus[0]?.meals.find((m) => m.slot === slot) ?? null;
-      setMeal(encontrada);
+      const [plan, comidas] = await Promise.all([getPlanNutricion(), getComidasLogRango({ from: hoy, to: hoy })]);
+      // El menú que se come HOY y su hora de hoy, del plan canónico.
+      const deHoy = comidaDeHoy(plan, slot);
+      setMeal(deHoy.meal);
+      setHora(deHoy.hora);
       setRegistro(comidas.registros.find((r) => r.date === hoy && r.slot === slot) ?? null);
       setError(null);
     } catch (e) {
@@ -92,7 +97,7 @@ export default function ComidaSlotScreen() {
       const { registro: nuevo } = await postComidaLogCompleto({
         date: todayISO(),
         slot,
-        plannedAt: meal?.timeHint,
+        plannedAt: hora ?? meal?.timeHint,
         ...input,
       });
       setRegistro(nuevo);
@@ -118,7 +123,7 @@ export default function ComidaSlotScreen() {
         {meal && (
           <>
             <Text style={styles.title}>
-              {meal.label} · {meal.timeHint}
+              {meal.label} · {hora ?? meal.timeHint}
             </Text>
 
             <Text style={styles.estado}>
