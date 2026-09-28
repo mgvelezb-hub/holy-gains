@@ -8,6 +8,10 @@
     {
       "path": "/api/cron/wednesday",
       "schedule": "0 18 * * 3"
+    },
+    {
+      "path": "/api/coachy/run",
+      "schedule": "*/15 * * * *"
     }
   ]
 }
