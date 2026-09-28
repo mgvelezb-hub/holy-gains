@@ -1,9 +1,10 @@
 import "server-only";
 
-import type { Prisma } from "@prisma/client";
-
 import { prisma } from "@/lib/prisma";
-import { loadCatalog, parseStoredPlan } from "@/lib/training/db";
+import { calentamientoPara } from "@/lib/training/calentamiento";
+import { loadCatalog, parseStoredPlan, planGuardable, toTrainingProfile } from "@/lib/training/db";
+import { firmaDelPlan } from "@/lib/training/semana";
+import type { DayKind } from "@/lib/training/types";
 import { isAllowedSubstitute, planSubstitution } from "@/lib/training/substitutes";
 
 /**
@@ -136,15 +137,23 @@ export async function applySubstitutions(
 
   await recuerdaCambios(userId, recordados);
 
+  // La firma con el cambio ya recordado: esta sesión es lo que el plan nuevo
+  // pide, así que no se rearma (ni pierde el cambio) antes de la primera
+  // serie. El objeto va completo —calentamiento incluido—: sin él la
+  // siguiente reconciliación lo leía como plan viejo y lo rearmaba (I1).
+  const perfil = await prisma.profile.findUnique({ where: { userId } });
+  const firma = perfil ? firmaDelPlan(toTrainingProfile(perfil)) : (plan.firma ?? "");
+
   await prisma.workout.update({
     where: { id: workout.id },
     data: {
-      exercisesJson: {
-        dayKind: plan.dayKind,
-        schemeLabel: plan.schemeLabel,
-        cardioMinutes: plan.cardioMinutes,
-        exercises: plan.exercises,
-      } as unknown as Prisma.InputJsonValue,
+      exercisesJson: planGuardable(
+        {
+          ...plan,
+          warmup: plan.warmup ?? calentamientoPara(plan.dayKind as DayKind),
+        },
+        firma,
+      ),
     },
   });
 
