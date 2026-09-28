@@ -118,11 +118,13 @@ export async function tomasPara(
   userId: string,
   profile: Profile,
   hoy: string = toISODate(new Date()),
+  /** Los slots del menú de hoy, si quien pregunta ya los tiene (`planDeNutricion`). */
+  slotsDeHoy?: MealSlotId[],
 ): Promise<{ tomas: TomaDelDia[]; resumen: ReturnType<typeof resumenTomas> }> {
   const [pesoKg, decision, slots, logs] = await Promise.all([
     pesoActual(userId, profile),
     decisionVigente(userId),
-    slotsDelDia(userId, profile),
+    slotsDeHoy ? Promise.resolve(slotsDeHoy) : slotsDelDia(userId, profile),
     prisma.supplementLog.findMany({
       where: { userId, date: fromISODate(hoy) },
       select: { supplement: true, taken: true },

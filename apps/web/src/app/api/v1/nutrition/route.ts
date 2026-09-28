@@ -1,17 +1,17 @@
 import { NextResponse } from "next/server";
 
 import { apiUser, unauthorized } from "@/lib/api/auth";
-import { parseMealTimes } from "@/lib/coachy/horarios";
-import { alimentosPropiosDe } from "@/lib/coachy/alimentos-propios-db";
-import { currentMealPlan, listaDeSuperDe } from "@/lib/coachy/menu";
-import { parsePantry } from "@/lib/coachy/mapping";
-import { toGroceries, toMenuView } from "@/lib/coachy/menu-view";
+import { planDeNutricion } from "@/lib/coachy/plan-nutricion";
 
 /**
  * `GET /api/v1/nutrition` — el plan de alimentación vigente del atleta, para
- * la app nativa. Mismo camino que la tarjeta "Tu alimentación" del home
- * (`currentMealPlan` + los mappers de `@/lib/coachy/menu-view`), así que
- * ambos frentes ven exactamente el mismo menú.
+ * la app nativa.
+ *
+ * Sale de `planDeNutricion` (K1), la misma función que alimenta
+ * `/api/v1/nutricion/plan`: menús, lista de súper con "ya lo tienes",
+ * horarios por día, tomas, avisos y el porqué. Las pantallas viejas leen las
+ * llaves de siempre (`decision`, `menus`, `groceries`, `menuPreference`,
+ * `horarios`, `materialized`); las nuevas, el resto. Nadie cruza fuentes.
  */
 
 export const dynamic = "force-dynamic";
@@ -23,45 +23,11 @@ export async function GET(request: Request): Promise<NextResponse> {
   if (!user.profile?.onboardingCompletedAt) {
     return NextResponse.json({ error: "onboarding incompleto" }, { status: 403 });
   }
-  const profile = user.profile;
 
-  const nutrition = await currentMealPlan(user.id, profile).catch((error) => {
+  try {
+    return NextResponse.json(await planDeNutricion(user.id, null, { profile: user.profile }));
+  } catch (error) {
     console.error("[coachy] no se pudo cargar la alimentación (api)", error);
-    return null;
-  });
-
-  const horarios = parseMealTimes(profile.mealTimes);
-  const menus =
-    nutrition?.plans.map((plan) => toMenuView(plan.menuNumber, plan.mealsJson, horarios)) ?? [];
-
-  // La lista de súper depende de qué menús se van a cocinar de verdad: los dos
-  // repartidos en la semana, o uno solo los siete días.
-  const groceries = nutrition
-    ? listaDeSuperDe(
-        nutrition.plans,
-        profile.menuPreference,
-        parsePantry(profile.pantry),
-        await alimentosPropiosDe(user.id),
-      )
-    : [];
-
-  return NextResponse.json({
-    decision: nutrition
-      ? {
-          id: nutrition.decision.id,
-          phase: nutrition.decision.phase,
-          kcal: nutrition.decision.kcal,
-          proteinG: nutrition.decision.proteinG,
-          carbsG: nutrition.decision.carbsG,
-          fatG: nutrition.decision.fatG,
-        }
-      : null,
-    menus,
-    groceries,
-    /** `AMBOS` | `MENU_1` | `MENU_2`: cuál se está cocinando. */
-    menuPreference: profile.menuPreference,
-    /** Los horarios propios que ya pisan la sugerencia del motor. */
-    horarios,
-    materialized: nutrition?.materialized ?? false,
-  });
+    return NextResponse.json({ error: "No se pudo cargar tu alimentación" }, { status: 500 });
+  }
 }

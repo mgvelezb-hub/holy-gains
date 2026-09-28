@@ -2,9 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { apiUser, unauthorized } from "@/lib/api/auth";
-import { alimentosPropiosDe } from "@/lib/coachy/alimentos-propios-db";
-import { parsePantry } from "@/lib/coachy/mapping";
-import { MENU_PREFERENCES, currentMealPlan, listaDeSuperDe } from "@/lib/coachy/menu";
+import { MENU_PREFERENCES } from "@/lib/coachy/menu";
+import { planDeNutricion } from "@/lib/coachy/plan-nutricion";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -46,20 +45,17 @@ export async function PUT(request: Request): Promise<NextResponse> {
 
   const { menuPreference } = parsed.data;
 
-  await prisma.profile.update({
+  const profile = await prisma.profile.update({
     where: { userId: user.id },
     data: { menuPreference },
   });
 
-  const nutrition = await currentMealPlan(user.id, user.profile).catch(() => null);
-  const groceries = nutrition
-    ? listaDeSuperDe(
-        nutrition.plans,
-        menuPreference,
-        parsePantry(user.profile.pantry),
-        await alimentosPropiosDe(user.id),
-      )
-    : [];
+  // La lista sale del plan canónico: la misma que pinta Nutrición después.
+  const plan = await planDeNutricion(user.id, null, { profile }).catch(() => null);
 
-  return NextResponse.json({ menuPreference, groceries });
+  return NextResponse.json({
+    menuPreference,
+    groceries: plan?.groceries ?? [],
+    ...(plan ? { despensa: plan.despensa } : {}),
+  });
 }

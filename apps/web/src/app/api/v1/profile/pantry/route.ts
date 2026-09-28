@@ -3,7 +3,7 @@ import { FOODS, terminosDeBusqueda } from "engine";
 import { z } from "zod";
 
 import { apiUser, unauthorized } from "@/lib/api/auth";
-import { materializeMealPlans } from "@/lib/coachy/menu";
+import { decisionVigente, materializeMealPlans } from "@/lib/coachy/menu";
 import { prisma } from "@/lib/prisma";
 import { alimentosPropiosDe } from "@/lib/coachy/alimentos-propios-db";
 import { grupoDeRol } from "@/lib/coachy/alimentos-propios";
@@ -178,11 +178,8 @@ export async function PATCH(request: Request): Promise<NextResponse> {
     data: { pantry },
   });
 
-  const decision = await prisma.decision.findFirst({
-    where: { userId: user.id, status: "APROBADA" },
-    orderBy: { checkIn: { date: "desc" } },
-    include: { checkIn: { select: { date: true } } },
-  });
+  // La misma decisión que pinta Nutrición (`decisionVigente`).
+  const decision = await decisionVigente(user.id);
   if (!decision) return NextResponse.json({ pantry, rearmado: false, congelado: false });
 
   // La semana está congelada cuando ya se comió con ella: rehacerla a media

@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import { CATALOGO_SUPLEMENTOS, parseElecciones } from "engine";
 
 import { apiUser, unauthorized } from "@/lib/api/auth";
-import { toISODate } from "@/lib/format";
-import { sugerenciasPara, tomasPara } from "@/lib/suplementos/db";
+import { planDeNutricion } from "@/lib/coachy/plan-nutricion";
 
 /**
  * `GET /api/v1/suplementos` — lo que la pantalla de suplementos pinta:
@@ -12,7 +11,8 @@ import { sugerenciasPara, tomasPara } from "@/lib/suplementos/db";
  * - `resumen.linea`: "1 de 3 · siguiente: omega-3 con la comida" (Hoy).
  * - `sugerencias`: máximo tres, con motivo, evidencia, dosis y qué cambiaría.
  *   Se calculan al pedirlas, así una elección nueva se refleja sin esperar al
- *   check-in. Si hay freno clínico, vienen vacías y `freno` trae la línea.
+ *   check-in. Si hay freno clínico, vienen vacías, `freno` trae la línea y
+ *   las tomas quedan en pausa (`tomasPausadas`).
  * - `catalogo`: para el buscador de "agregar".
  */
 
@@ -25,21 +25,20 @@ export async function GET(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "onboarding incompleto" }, { status: 403 });
   }
   const profile = user.profile;
-  const hoy = toISODate(new Date());
 
-  const [{ tomas, resumen }, sugerencias] = await Promise.all([
-    tomasPara(user.id, profile, hoy),
-    sugerenciasPara(user.id, profile, { hoy }),
-  ]);
+  // Tomas, sugerencias y freno salen del plan canónico: las mismas que ve
+  // Nutrición y las que viajan en el "Prepárate".
+  const plan = await planDeNutricion(user.id, null, { profile });
   const { elecciones, quiereInfusiones } = parseElecciones(profile.supplementChoices);
 
   return NextResponse.json({
-    hoy,
-    tomas,
-    resumen: { hechas: resumen.hechas, total: resumen.total, linea: resumen.linea },
-    sugerencias: sugerencias.sugerencias,
-    freno: sugerencias.freno,
-    notas: sugerencias.notas,
+    hoy: plan.hoy.fecha,
+    tomas: plan.tomas,
+    tomasPausadas: plan.tomasPausadas,
+    resumen: plan.resumenTomas,
+    sugerencias: plan.sugerencias,
+    freno: plan.freno,
+    notas: plan.notasSuplementos,
     elecciones,
     quiereInfusiones,
     catalogo: CATALOGO_SUPLEMENTOS,

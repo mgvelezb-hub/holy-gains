@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { apiUser, unauthorized } from "@/lib/api/auth";
-import { materializeMealPlans } from "@/lib/coachy/menu";
-import { toGroceries, toMenuView } from "@/lib/coachy/menu-view";
+import { decisionVigente, materializeMealPlans } from "@/lib/coachy/menu";
+import { planDeNutricion } from "@/lib/coachy/plan-nutricion";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -40,11 +40,9 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
   const profile = user.profile;
 
-  const decision = await prisma.decision.findFirst({
-    where: { userId: user.id, status: "APROBADA" },
-    orderBy: { checkIn: { date: "desc" } },
-    include: { checkIn: { select: { date: true } } },
-  });
+  // La misma decisión que pinta Nutrición: rearmar otra sería rearmar un
+  // menú que la pantalla no enseña.
+  const decision = await decisionVigente(user.id);
 
   if (!decision) {
     return NextResponse.json(
@@ -63,9 +61,8 @@ export async function POST(request: Request): Promise<NextResponse> {
     select: { weightKg: true },
   });
 
-  let plans;
   try {
-    plans = await materializeMealPlans(decision, profile, {
+    await materializeMealPlans(decision, profile, {
       overwrite: true,
       latestWeightKg: latest?.weightKg === null || latest?.weightKg === undefined
         ? null
@@ -79,20 +76,8 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
   }
 
-  const menus = plans.map((plan) => toMenuView(plan.menuNumber, plan.mealsJson));
-  const groceries = plans[0] ? toGroceries(plans[0].groceryListJson) : [];
-
-  return NextResponse.json({
-    decision: {
-      id: decision.id,
-      phase: decision.phase,
-      kcal: decision.kcal,
-      proteinG: decision.proteinG,
-      carbsG: decision.carbsG,
-      fatG: decision.fatG,
-    },
-    menus,
-    groceries,
-    materialized: true,
-  });
+  // Lo que devuelve es el plan canónico recién rearmado: la lista de súper
+  // respeta el menú elegido y la despensa, igual que la pantalla después.
+  const plan = await planDeNutricion(user.id, null, { profile });
+  return NextResponse.json({ ...plan, materialized: true });
 }

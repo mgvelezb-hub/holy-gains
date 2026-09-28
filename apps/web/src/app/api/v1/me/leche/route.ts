@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { apiUser, unauthorized } from "@/lib/api/auth";
 import { conTipoLeche } from "@/lib/coachy/leche";
-import { materializeMealPlans } from "@/lib/coachy/menu";
+import { decisionVigente, materializeMealPlans } from "@/lib/coachy/menu";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -58,11 +58,8 @@ export async function PATCH(request: Request): Promise<NextResponse> {
     data: { excludedFoods: conTipoLeche(user.profile.excludedFoods, tipoLeche) },
   });
 
-  const decision = await prisma.decision.findFirst({
-    where: { userId: user.id, status: "APROBADA" },
-    orderBy: { checkIn: { date: "desc" } },
-    include: { checkIn: { select: { date: true } } },
-  });
+  // La misma decisión que pinta Nutrición (`decisionVigente`).
+  const decision = await decisionVigente(user.id);
   if (!decision) return NextResponse.json({ tipoLeche, rearmado: false, congelado: false });
 
   const registrados = await prisma.mealLog.count({

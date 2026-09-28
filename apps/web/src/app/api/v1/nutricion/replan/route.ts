@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { apiUser, unauthorized } from "@/lib/api/auth";
+import type { Profile } from "@prisma/client";
+
 import { conTipoLeche, tipoLecheDe } from "@/lib/coachy/leche";
+import { vistaPreviaDelPlan } from "@/lib/coachy/plan-nutricion";
 import { prisma } from "@/lib/prisma";
 import { conNucleo } from "@/lib/suplementos/entrada";
 
@@ -20,6 +23,12 @@ import { conNucleo } from "@/lib/suplementos/entrada";
  * Las implicaciones se calculan aquí y no en la app porque salen de las mismas
  * reglas del motor: un texto en el cliente se desincroniza el día que el motor
  * cambia y nadie se entera.
+ *
+ * `?preview=1` (K1) NO escribe: devuelve la lectura y la vista previa del plan
+ * con esas respuestas —kcal y macros, un día de muestra en medidas caseras,
+ * cuánto de la despensa entra, las tomas del día y los avisos— para que la
+ * pantalla la enseñe mientras se contesta. Sale de `vistaPreviaDelPlan`, con
+ * el mismo perfil del motor que arma los menús de verdad.
  */
 
 export const dynamic = "force-dynamic";
@@ -130,32 +139,46 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const datos = parsed.data;
+  const cambios = cambiosDelPerfil(user.profile, datos);
 
-  const normaliza = (lista: string[]) =>
-    [...new Set(lista.map((valor) => valor.trim().toLowerCase()).filter(Boolean))];
+  if (new URL(request.url).searchParams.get("preview") === "1") {
+    const previa = await vistaPreviaDelPlan(user.id, { ...user.profile, ...cambios }).catch((error: unknown) => {
+      console.error("[coachy] no se pudo armar la vista previa del plan", error);
+      return null;
+    });
+    return NextResponse.json({ lectura: lecturaDe(datos), previa });
+  }
 
-  await prisma.profile.update({
-    where: { userId: user.id },
-    data: {
-      goal: datos.goal,
-      mealsPerDay: datos.mealsPerDay,
-      budget: datos.budget,
-      dietStyle: datos.dietStyle,
-      maxPrepMin: datos.maxPrepMin,
-      // Replantear solo edita el núcleo; lo aceptado fuera de él se conserva.
-      supplements: conNucleo(user.profile.supplements, datos.supplements),
-      // La leche elegida no es una respuesta del cuestionario: se conserva.
-      excludedFoods: conTipoLeche(
-        normaliza(datos.excludedFoods),
-        tipoLecheDe(user.profile.excludedFoods),
-      ),
-      favoriteFoods: normaliza(datos.favoriteFoods),
-    },
-  });
+  await prisma.profile.update({ where: { userId: user.id }, data: cambios });
 
   return NextResponse.json({
     lectura: lecturaDe(datos),
     // Se dice explícitamente para que nadie espere que el menú cambie hoy.
     cuando: "Entra en tu siguiente decisión, con el check-in. El menú de esta semana ya se compró.",
   });
+}
+
+/** Lo que las respuestas cambian del perfil: lo mismo para guardar que para la vista previa. */
+function cambiosDelPerfil(
+  perfil: Profile,
+  datos: z.infer<typeof schema>,
+): Pick<
+  Profile,
+  "goal" | "mealsPerDay" | "budget" | "dietStyle" | "maxPrepMin" | "supplements" | "excludedFoods" | "favoriteFoods"
+> {
+  const normaliza = (lista: string[]) =>
+    [...new Set(lista.map((valor) => valor.trim().toLowerCase()).filter(Boolean))];
+
+  return {
+    goal: datos.goal,
+    mealsPerDay: datos.mealsPerDay,
+    budget: datos.budget,
+    dietStyle: datos.dietStyle,
+    maxPrepMin: datos.maxPrepMin,
+    // Replantear solo edita el núcleo; lo aceptado fuera de él se conserva.
+    supplements: conNucleo(perfil.supplements, datos.supplements),
+    // La leche elegida no es una respuesta del cuestionario: se conserva.
+    excludedFoods: conTipoLeche(normaliza(datos.excludedFoods), tipoLecheDe(perfil.excludedFoods)),
+    favoriteFoods: normaliza(datos.favoriteFoods),
+  };
 }
