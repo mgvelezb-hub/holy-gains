@@ -6,6 +6,8 @@
  */
 
 import type { BloqueMensual } from "@/lib/coachy/mensual";
+import type { Sugerencia } from "engine";
+
 import type { EngineDecision, Phase } from "@/lib/engine-types";
 
 /** Zonas que compara la visión. Coinciden con la spec 03 §2.2.2. */
@@ -62,6 +64,18 @@ export interface CoachyReply {
    * y el plan de aquí en adelante. Opcional por lo mismo que `mensual`.
    */
   retro?: RetroCheckIn;
+  /**
+   * Las sugerencias de suplementos que el motor sacó de este check-in, con
+   * su motivo y dosis del catálogo. Las escribe el código después de la
+   * redacción: el modelo nunca inventa una dosis.
+   */
+  suplementos?: SuplementosDelCheckIn;
+}
+
+export interface SuplementosDelCheckIn {
+  freno: string | null;
+  sugerencias: Sugerencia[];
+  notas: string[];
 }
 
 /** "Tu plan de aquí en adelante": una línea por pieza, escrita por nosotros. */

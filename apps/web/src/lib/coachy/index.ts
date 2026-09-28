@@ -26,6 +26,8 @@ import { pickQuestions, type QuestionContext } from "@/lib/coachy/questions";
 import type { ComposeInput, CoachyReply } from "@/lib/coachy/types";
 import { formatLongDate } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
+import { sugerenciasPara } from "@/lib/suplementos/db";
+import { lineasParaAjustar } from "@/lib/suplementos/entrada";
 
 export { runCheckinAnalysis } from "@/lib/coachy/analyze";
 export { composeReply, replyToText } from "@/lib/coachy/compose";
@@ -192,6 +194,30 @@ export async function runCoachy(checkInId: string): Promise<CoachyRunResult> {
     }
   }
   reply = { ...reply, mensual };
+
+  // Suplementos: el motor sugiere con lo que este check-in acaba de contar
+  // (síntomas, energía, hambre) más el reloj y los estudios. Van a "Hay que
+  // ajustar" escritos por el código —nombre y motivo del motor—, así Claude
+  // no tiene de dónde inventar una dosis. Si falla, la retro sale sin ellos.
+  const suplementos = await sugerenciasPara(user.id, profile, {
+    decision: {
+      phase: analysis.engineDecision.phase,
+      kcal: analysis.engineDecision.targets.kcal,
+      proteinG: analysis.engineDecision.targets.proteinG,
+    },
+  }).catch((error: unknown) => {
+    console.error("[coachy] no se pudieron calcular los suplementos", checkIn.id, error);
+    return null;
+  });
+  if (suplementos) {
+    reply = {
+      ...reply,
+      suplementos,
+      ...(reply.retro
+        ? { retro: { ...reply.retro, ajustar: [...reply.retro.ajustar, ...lineasParaAjustar(suplementos)] } }
+        : {}),
+    };
+  }
 
   const decision = await prisma.decision.update({
     where: { id: analysis.decision.id },

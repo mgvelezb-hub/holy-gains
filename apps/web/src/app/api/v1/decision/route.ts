@@ -81,6 +81,8 @@ async function serialize(
     alreadyAnswered: await alreadyAnsweredFor(userId, decision.id),
     mensual: reply?.mensual ?? null,
     retro: reply?.retro ?? null,
+    // Las sugerencias de suplementos de ese check-in (motor, no modelo).
+    suplementos: reply?.suplementos ?? null,
   };
 }
 

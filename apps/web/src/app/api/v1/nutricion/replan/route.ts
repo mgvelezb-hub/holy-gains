@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { apiUser, unauthorized } from "@/lib/api/auth";
+import { conTipoLeche, tipoLecheDe } from "@/lib/coachy/leche";
 import { prisma } from "@/lib/prisma";
+import { conNucleo } from "@/lib/suplementos/entrada";
 
 /**
  * `POST /api/v1/nutricion/replan` — rearmar el perfil de alimentación.
@@ -140,8 +142,13 @@ export async function POST(request: Request): Promise<NextResponse> {
       budget: datos.budget,
       dietStyle: datos.dietStyle,
       maxPrepMin: datos.maxPrepMin,
-      supplements: [...new Set(datos.supplements)],
-      excludedFoods: normaliza(datos.excludedFoods),
+      // Replantear solo edita el núcleo; lo aceptado fuera de él se conserva.
+      supplements: conNucleo(user.profile.supplements, datos.supplements),
+      // La leche elegida no es una respuesta del cuestionario: se conserva.
+      excludedFoods: conTipoLeche(
+        normaliza(datos.excludedFoods),
+        tipoLecheDe(user.profile.excludedFoods),
+      ),
       favoriteFoods: normaliza(datos.favoriteFoods),
     },
   });

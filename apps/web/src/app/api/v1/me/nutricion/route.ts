@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { apiUser, unauthorized } from "@/lib/api/auth";
+import { conTipoLeche, sinMarcaDeLeche, tipoLecheDe } from "@/lib/coachy/leche";
 import { conPreferenciaDePreparaciones } from "@/lib/coachy/preparaciones";
 import { prisma } from "@/lib/prisma";
+import { conNucleo } from "@/lib/suplementos/entrada";
 
 /**
  * `PATCH /api/v1/me/nutricion` — las preferencias que cambian el menú.
@@ -105,10 +107,16 @@ export async function PATCH(request: Request): Promise<NextResponse> {
 
   // Las marcas de preparación viven en los excluidos: se aplican sobre la
   // lista que llega en esta misma petición, o sobre la guardada si no llega.
-  const excluidos =
+  const conPreparaciones =
     preparaciones === undefined
       ? excludedFoods
       : conPreferenciaDePreparaciones(excludedFoods ?? user.profile.excludedFoods, preparaciones);
+  // La marca de leche no viaja a la pantalla (GET /me la quita): la lista que
+  // regresa sin ella conserva la leche guardada. Se cambia en PATCH /me/leche.
+  const excluidos =
+    conPreparaciones === undefined
+      ? undefined
+      : conTipoLeche(conPreparaciones, tipoLecheDe(user.profile.excludedFoods));
 
   const profile = await prisma.profile.update({
     where: { userId: user.id },
@@ -120,7 +128,8 @@ export async function PATCH(request: Request): Promise<NextResponse> {
       ...(dietStyle !== undefined ? { dietStyle } : {}),
       ...(fastingStartHour !== undefined ? { fastingStartHour } : {}),
       ...(fastingEndHour !== undefined ? { fastingEndHour } : {}),
-      ...(supplements !== undefined ? { supplements: [...new Set(supplements)] } : {}),
+      // Solo el núcleo viaja aquí: lo aceptado fuera de él (magnesio, té) se conserva.
+      ...(supplements !== undefined ? { supplements: conNucleo(user.profile.supplements, supplements) } : {}),
     },
     select: {
       budget: true,
@@ -134,5 +143,5 @@ export async function PATCH(request: Request): Promise<NextResponse> {
     },
   });
 
-  return NextResponse.json(profile);
+  return NextResponse.json({ ...profile, excludedFoods: sinMarcaDeLeche(profile.excludedFoods) });
 }

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { parseElecciones } from "engine";
 
 import { apiUser, unauthorized } from "@/lib/api/auth";
+import { sinMarcaDeLeche, tipoLecheDe } from "@/lib/coachy/leche";
 import { parsePantry } from "@/lib/coachy/mapping";
 import { preferenciaDePreparaciones } from "@/lib/coachy/preparaciones";
 import { decimalToNumber } from "@/lib/format";
@@ -52,7 +54,11 @@ export async function GET(request: Request): Promise<NextResponse> {
           // Lo que ya tiene comprado. La pantalla de la despensa lo pinta
           // marcado y el renglón de Ajustes cuenta cuántos alimentos son.
           pantry: parsePantry(profile.pantry),
-          excludedFoods: profile.excludedFoods,
+          // Sin la marca de leche: la pantalla de excluidos no la pinta, y
+          // PATCH /me/nutricion la conserva aunque no regrese.
+          excludedFoods: sinMarcaDeLeche(profile.excludedFoods),
+          // La leche de licuados y cremas (`lib/coachy/leche.ts`).
+          tipoLeche: tipoLecheDe(profile.excludedFoods),
           // Licuados, sopas y cremas: se leen de los excluidos (ver
           // `lib/coachy/preparaciones.ts`); Ajustes pinta los interruptores.
           preparaciones: preferenciaDePreparaciones(profile.excludedFoods),
@@ -79,6 +85,9 @@ export async function GET(request: Request): Promise<NextResponse> {
           trainingSchedule: profile.trainingSchedule,
           dietStyle: profile.dietStyle,
           supplements: profile.supplements,
+          // Qué sugerencias aceptó o descartó, y si quiere tés e infusiones.
+          // El renglón de Ajustes cuenta tomas y sugerencias con esto.
+          supplementChoices: parseElecciones(profile.supplementChoices),
           // A qué hora entrena: la pantalla de dieta lo necesita para avisar
           // cuando la ventana del ayuno deja el entrenamiento fuera.
           trainingTime: profile.trainingTime,
