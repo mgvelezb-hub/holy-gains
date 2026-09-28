@@ -27,15 +27,28 @@ export function RestTimer({
 }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const [now, setNow] = useState(() => Date.now());
-  const [target, setTarget] = useState(seconds);
+  // El intervalo solo fuerza el repintado; la hora se lee en cada render.
+  //
+  // Antes la hora vivía en un estado que se inicializaba al montar y se
+  // actualizaba cada 250 ms: al cerrar OTRA serie con el cronómetro ya en
+  // pantalla, `startedAt` cambiaba pero `now` seguía siendo el de la serie
+  // anterior, y el primer frame restaba contra una hora vieja — el reloj
+  // arrancaba en un número y saltaba a otro en el siguiente tick.
+  const [, setTick] = useState(0);
+  // El objetivo elegido con los chips vale para ESTE descanso. Guardado como
+  // estado suelto se quedaba pegado al siguiente (y a otro ejercicio con otro
+  // `seconds`), que es el otro número del que saltaba.
+  const [eleccion, setEleccion] = useState<{ para: number; segundos: number } | null>(null);
+  const target = eleccion?.para === startedAt ? eleccion.segundos : seconds;
+  const setTarget = (segundos: number) => setEleccion({ para: startedAt, segundos });
 
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 250);
+    const id = setInterval(() => setTick((valor) => valor + 1), 250);
     return () => clearInterval(id);
   }, [startedAt]);
 
-  const elapsed = Math.floor((now - startedAt) / 1000);
+  const now = Date.now();
+  const elapsed = Math.max(0, Math.floor((now - startedAt) / 1000));
   const left = target - elapsed;
   const done = left <= 0;
 
