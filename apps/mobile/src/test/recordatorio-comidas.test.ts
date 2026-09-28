@@ -13,7 +13,7 @@ vi.mock("expo-notifications", () => ({
   SchedulableTriggerInputTypes: { WEEKLY: "weekly", DAILY: "daily", TIME_INTERVAL: "timeInterval" },
 }));
 
-const { diaCodigoAWeekday, resumenMenu, sumaMinutosHora } = await import("@/lib/recordatorio");
+const { cuerpoPreparate, diaCodigoAWeekday, resumenMenu, sumaMinutosHora } = await import("@/lib/recordatorio");
 
 /**
  * Las piezas puras del recordatorio en dos tiempos.
@@ -72,5 +72,19 @@ describe("resumenMenu", () => {
 
   it("sin items regresa vacío", () => {
     expect(resumenMenu([])).toBe("");
+  });
+});
+
+describe("cuerpoPreparate", () => {
+  it("sin tomas es el menú de siempre", () => {
+    expect(cuerpoPreparate([{ name: "Pollo" }, { name: "Arroz" }])).toBe("Pollo, Arroz");
+    expect(cuerpoPreparate([])).toBe("Ya casi es hora de tu comida.");
+  });
+
+  it("con una toma amarrada a la comida suma \"+ omega-3\"", () => {
+    expect(cuerpoPreparate([{ name: "Pollo" }], ["omega-3"])).toBe("Pollo + omega-3");
+    expect(cuerpoPreparate([{ name: "Salmón" }], ["magnesio", "té de manzanilla"])).toBe(
+      "Salmón + magnesio + té de manzanilla",
+    );
   });
 });

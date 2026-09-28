@@ -261,9 +261,21 @@ export function resumenMenu(items: ItemMenuAviso[]): string {
     .join(", ");
 }
 
+/**
+ * El cuerpo del "Prepárate": el menú y, si hay una toma amarrada a esa
+ * comida, "+ omega-3". Así el suplemento llega con la comida que lo lleva,
+ * sin un aviso propio que se sume al ruido.
+ */
+export function cuerpoPreparate(items: ItemMenuAviso[], extras: readonly string[] = []): string {
+  const menu = resumenMenu(items) || "Ya casi es hora de tu comida.";
+  return extras.length === 0 ? menu : `${menu} + ${extras.join(" + ")}`;
+}
+
 export interface ComidaAviso {
   slot: string;
   label: string;
+  /** Tomas del día amarradas a esta comida ("omega-3", "té de manzanilla"). */
+  extras?: string[];
   /** Menú vigente (1 o 2): a dónde abre "Ver menú". */
   menuNumber: number;
   items: ItemMenuAviso[];
@@ -311,7 +323,7 @@ export async function programarComidas(comidas: ComidaAviso[]): Promise<boolean>
           identifier: `${COMIDA_PREFIJO}${comida.slot}-${dia}-prep`,
           content: {
             title: `Prepárate: ${comida.label}`,
-            body: resumenMenu(comida.items) || "Ya casi es hora de tu comida.",
+            body: cuerpoPreparate(comida.items, comida.extras),
             categoryIdentifier: CATEGORIA_COMIDA_PREP,
             data: { ruta: `/menu/${comida.menuNumber}`, comidaSlot: comida.slot, comidaPlaneada: hora },
           },

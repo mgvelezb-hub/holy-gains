@@ -2253,3 +2253,118 @@ export function patchPreparaciones(preparaciones: {
     body: { preparaciones },
   });
 }
+
+// ---------------------------------------------------------------------------
+// Suplementos e infusiones (H5)
+// ---------------------------------------------------------------------------
+
+export type CategoriaSuplemento = "SUPLEMENTO" | "INFUSION";
+export type EleccionSuplemento = "acepto" | "no_quiero" | "ya_lo_tomo";
+
+/** Una ficha del catálogo del motor (`packages/engine/data/suplementos.json`). */
+export type FichaSuplemento = {
+  id: string;
+  categoria: CategoriaSuplemento;
+  nombre: string;
+  corto: string;
+  dosis: { min: number; max: number; default: number; unidad: string };
+  dosisTexto: string;
+  momento: string;
+  ancla: string;
+  conComida: boolean | null;
+  porque: string;
+  evidencia: string;
+  tope: string;
+  frenos: string[];
+  senales: string[];
+  objetivos: string[];
+  preparacion?: string;
+  aviso?: string;
+};
+
+/** Una toma de hoy, amarrada a su comida (`slot`) o a un momento sin comida. */
+export type TomaDelDia = {
+  supplement: string;
+  categoria: CategoriaSuplemento;
+  nombre: string;
+  corto: string;
+  dosis: string;
+  slot: string | null;
+  cuando: string;
+  hecho: boolean;
+};
+
+export type SugerenciaSuplemento = {
+  supplement: string;
+  categoria: CategoriaSuplemento;
+  nombre: string;
+  motivo: string;
+  evidencia: string;
+  dosis: string;
+  momento: string;
+  prioridad: number;
+  cambiaria: string;
+  regla: string;
+  aviso?: string;
+  preparacion?: string;
+};
+
+export type SuplementosResponse = {
+  hoy: string;
+  tomas: TomaDelDia[];
+  resumen: { hechas: number; total: number; linea: string };
+  sugerencias: SugerenciaSuplemento[];
+  /** Freno clínico: si viene, no hay sugerencias y esta es la línea. */
+  freno: string | null;
+  notas: string[];
+  elecciones: Record<string, { eleccion: EleccionSuplemento; fecha: string | null }>;
+  quiereInfusiones: boolean;
+  catalogo: FichaSuplemento[];
+};
+
+/** `GET /api/v1/suplementos` — tomas de hoy, sugerencias activas y catálogo. */
+export function getSuplementos(): Promise<SuplementosResponse> {
+  return apiFetch<SuplementosResponse>("/api/v1/suplementos");
+}
+
+type EleccionResponse = {
+  supplements: string[];
+  elecciones: SuplementosResponse["elecciones"];
+  quiereInfusiones: boolean;
+};
+
+/**
+ * `POST /api/v1/suplementos/eleccion` — Acepto / Ya lo tomo / No quiero.
+ * "No quiero" también es el "quitar" de una toma: sale y no vuelve en 90 días.
+ */
+export function postEleccionSuplemento(
+  supplement: string,
+  eleccion: EleccionSuplemento,
+): Promise<EleccionResponse> {
+  return apiFetch<EleccionResponse>("/api/v1/suplementos/eleccion", {
+    method: "POST",
+    body: { supplement, eleccion },
+  });
+}
+
+/** Prende o apaga las sugerencias de tés e infusiones. */
+export function postInfusiones(quiere: boolean): Promise<EleccionResponse> {
+  return apiFetch<EleccionResponse>("/api/v1/suplementos/eleccion", {
+    method: "POST",
+    body: { infusiones: quiere },
+  });
+}
+
+/** `POST /api/v1/suplementos/log` — marcar (o desmarcar) una toma del día. */
+export function postLogSuplemento(
+  date: string,
+  supplement: string,
+  taken: boolean,
+): Promise<{ registro: { date: string; supplement: string; taken: boolean } }> {
+  return apiFetch("/api/v1/suplementos/log", { method: "POST", body: { date, supplement, taken } });
+}
+
+/** La decisión con las sugerencias de suplementos de su check-in. */
+export type DecisionConSuplementos = Decision & {
+  suplementos?: { freno: string | null; sugerencias: SugerenciaSuplemento[]; notas: string[] } | null;
+};
