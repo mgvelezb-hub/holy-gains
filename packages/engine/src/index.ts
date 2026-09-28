@@ -76,6 +76,7 @@ export {
   DIAS_DESCARTE,
   MAX_SUGERENCIAS,
   MENSAJE_FRENO,
+  fijaInfusiones,
   parseElecciones,
   registraEleccion,
   sugerirSuplementos,

@@ -1,4 +1,4 @@
-import { dosisCafeinaMg, fichaDe, esSuplemento, type FichaSuplemento, type ObjetivoSuplemento, type Supplement } from './suplementos.js';
+import { dosisCafeinaMg, fichaDe, esSuplemento, type CategoriaSuplemento, type FichaSuplemento, type ObjetivoSuplemento, type Supplement } from './suplementos.js';
 import type { DietStyle, Phase } from './types.js';
 
 /**
@@ -88,10 +88,13 @@ export interface EntradaSugerencias {
   healthDays: DiaSalud[];
   /** Valores de QUIMICA sanguinea. Se usa el mas reciente por llave, del ultimo ano. */
   labs: ValorLab[];
+  /** `false` si la persona apago las infusiones (`_infusiones` en `supplementChoices`). */
+  quiereInfusiones?: boolean;
 }
 
 export interface Sugerencia {
   supplement: Supplement;
+  categoria: CategoriaSuplemento;
   nombre: string;
   motivo: string;
   evidencia: string;
@@ -103,8 +106,10 @@ export interface Sugerencia {
   cambiaria: string;
   /** Id de la regla que la disparo. */
   regla: string;
-  /** Linea de precaucion obligatoria (hierro, vitamina D muy baja). */
+  /** Linea de precaucion obligatoria (hierro, vitamina D muy baja, valeriana). */
   aviso?: string;
+  /** Solo infusiones. */
+  preparacion?: string;
 }
 
 export interface ResultadoSugerencias {
@@ -509,6 +514,84 @@ export function sugerirSuplementos(input: EntradaSugerencias): ResultadoSugerenc
     });
   }
 
+  // 7. Infusiones: la misma logica de senal, mas suave. Nunca desplazan un
+  // suplemento con senal fuerte (ver el recorte de abajo).
+  const saciedadBaja = ultimo?.satiety !== undefined && ultimo.satiety !== null && ultimo.satiety <= 2;
+  const digestivo = sintomas.has('inflamacion_abdominal') || sintomas.has('estrenimiento') || saciedadBaja;
+  if (digestivo) {
+    const que = sintomas.has('inflamacion_abdominal')
+      ? 'inflamación abdominal'
+      : sintomas.has('estrenimiento')
+        ? 'estreñimiento'
+        : 'poca saciedad';
+    suma({
+      supplement: 'MENTA',
+      prioridad: 40,
+      regla: 'digestion',
+      motivo: `Marcaste ${que}: la menta después de comer relaja el tubo digestivo.`,
+      cambiaria: 'Menos distensión después de comer en unos días.',
+    });
+    suma({
+      supplement: 'JENGIBRE',
+      prioridad: 38,
+      regla: 'digestion',
+      motivo: `Marcaste ${que}: el jengibre acelera el vaciado del estómago.`,
+      cambiaria: 'Menos pesadez después de comer en unos días.',
+    });
+  }
+  if (hambreAlta && enCorte) {
+    suma({
+      supplement: 'TE_VERDE',
+      prioridad: 35,
+      regla: 'hambre_cut',
+      motivo: 'Hambre alta en corte: una taza a media mañana ocupa el hueco sin calorías.',
+      cambiaria: 'Pasar mejor la media mañana. En el peso, el efecto es pequeño.',
+    });
+    suma({
+      supplement: 'JAMAICA',
+      prioridad: 33,
+      regla: 'hambre_cut',
+      motivo: 'Hambre alta en corte: sin azúcar llena y no suma calorías.',
+      cambiaria: 'Pasar mejor entre comidas y llegar a tu agua del día.',
+    });
+  }
+  if (energiaBaja && !suenoCorto) {
+    suma({
+      supplement: 'TE_VERDE',
+      prioridad: 42,
+      regla: 'energia_baja',
+      motivo: 'Energía baja sin sueño corto: una taza por la mañana en vez de sumar más cafeína.',
+      cambiaria: 'Algo de ánimo por la mañana sin el bajón de un café más.',
+    });
+  }
+  if (suenoCorto) {
+    suma({
+      supplement: 'MANZANILLA',
+      prioridad: 45,
+      regla: 'sueno_corto',
+      motivo: 'Duermes poco: una taza tibia después de cenar ayuda a bajar el ritmo.',
+      cambiaria: 'Algo más de calidad de sueño; las horas las da la hora de acostarte.',
+    });
+    suma({
+      supplement: 'TILA',
+      prioridad: 40,
+      regla: 'sueno_corto',
+      motivo: 'Duermes poco: la tila es el sedante más suave para antes de dormir.',
+      cambiaria: 'Un ritual para desconectar; el efecto es suave.',
+    });
+  }
+  if (keto || input.dieta === 'ayuno') {
+    suma({
+      supplement: 'JAMAICA',
+      prioridad: 30,
+      regla: 'ayuno_keto',
+      motivo: input.dieta === 'ayuno'
+        ? 'Durante la ventana de ayuno: sin azúcar no rompe el ayuno y quita la ansiedad de "algo en la boca".'
+        : 'En keto: sin azúcar no suma carbohidrato y ayuda a llegar al agua del día.',
+      cambiaria: 'Pasar la ventana de ayuno con menos hambre.',
+    });
+  }
+
   // Energia baja: no es un suplemento, es una pregunta.
   if (energiaBaja) {
     const tieneLabs = buscaLab(labs, LABS_FERRITINA) || buscaLab(labs, LABS_VITAMINA_D);
@@ -517,7 +600,7 @@ export function sugerirSuplementos(input: EntradaSugerencias): ResultadoSugerenc
     }
   }
 
-  // 7. Filtrar, desempatar y recortar.
+  // 8. Filtrar, desempatar y recortar.
   const elecciones = input.elecciones ?? {};
   const tomando = new Set(input.suplementos);
   for (const [id, registro] of Object.entries(elecciones)) {
@@ -534,15 +617,19 @@ export function sugerirSuplementos(input: EntradaSugerencias): ResultadoSugerenc
     if (!previa || c.prioridad > previa.prioridad) mejor.set(c.supplement, c);
   }
 
+  const quiereInfusiones = input.quiereInfusiones ?? true;
   const sugerencias: Sugerencia[] = [];
   for (const c of mejor.values()) {
     const ficha = fichaDe(c.supplement) as FichaSuplemento;
+    if (ficha.categoria === 'INFUSION' && !quiereInfusiones) continue;
     if (tomando.has(c.supplement)) continue;
     if (descartadoVigente(elecciones[c.supplement], input.hoy)) continue;
     if (ficha.frenos.some((f) => condiciones.has(f) || frenosDinamicos.has(f))) continue;
     const afin = ficha.objetivos.some((o) => objetivos.includes(o)) ? 5 : 0;
+    const aviso = c.aviso ?? ficha.aviso;
     sugerencias.push({
       supplement: c.supplement,
+      categoria: ficha.categoria,
       nombre: ficha.nombre,
       motivo: c.motivo,
       evidencia: ficha.evidencia,
@@ -551,12 +638,29 @@ export function sugerirSuplementos(input: EntradaSugerencias): ResultadoSugerenc
       prioridad: c.prioridad + afin,
       cambiaria: c.cambiaria,
       regla: c.regla,
-      ...(c.aviso ? { aviso: c.aviso } : {}),
+      ...(aviso ? { aviso } : {}),
+      ...(ficha.preparacion ? { preparacion: ficha.preparacion } : {}),
     });
   }
 
-  sugerencias.sort((a, b) => b.prioridad - a.prioridad || a.supplement.localeCompare(b.supplement));
-  return { freno: null, sugerencias: sugerencias.slice(0, MAX_SUGERENCIAS), notas };
+  const orden = (a: Sugerencia, b: Sugerencia) => b.prioridad - a.prioridad || a.supplement.localeCompare(b.supplement);
+  sugerencias.sort(orden);
+  return { freno: null, sugerencias: recorta(sugerencias).sort(orden), notas };
+}
+
+/**
+ * Tres en total. Si compiten suplementos e infusiones, entran los dos
+ * suplementos mas fuertes y la mejor infusion: una taza de manzanilla no
+ * debe desplazar al hierro, pero tampoco desaparecer detras de tres
+ * suplementos. Los huecos se llenan con lo que siga en prioridad.
+ */
+function recorta(ordenadas: Sugerencia[]): Sugerencia[] {
+  const sup = ordenadas.filter((s) => s.categoria === 'SUPLEMENTO');
+  const inf = ordenadas.filter((s) => s.categoria === 'INFUSION');
+  if (inf.length === 0 || sup.length === 0) return ordenadas.slice(0, MAX_SUGERENCIAS);
+  const elegidas = [...sup.slice(0, MAX_SUGERENCIAS - 1), inf[0]!];
+  const resto = ordenadas.filter((s) => !elegidas.includes(s));
+  return [...elegidas, ...resto].slice(0, MAX_SUGERENCIAS);
 }
 
 // ---------------------------------------------------------------------------
@@ -579,9 +683,9 @@ function esObjeto(valor: unknown): valor is Record<string, unknown> {
  * descarte caduque a los 90 dias. Las llaves con `_` son preferencias, no
  * suplementos.
  */
-export function parseElecciones(json: unknown): { elecciones: EleccionesSuplementos } {
+export function parseElecciones(json: unknown): { elecciones: EleccionesSuplementos; quiereInfusiones: boolean } {
   const elecciones: EleccionesSuplementos = {};
-  if (!esObjeto(json)) return { elecciones };
+  if (!esObjeto(json)) return { elecciones, quiereInfusiones: true };
   for (const [llave, valor] of Object.entries(json)) {
     if (!esSuplemento(llave)) continue;
     if (esEleccion(valor)) {
@@ -593,7 +697,18 @@ export function parseElecciones(json: unknown): { elecciones: EleccionesSuplemen
       };
     }
   }
-  return { elecciones };
+  return { elecciones, quiereInfusiones: json[LLAVE_INFUSIONES] !== false };
+}
+
+/** La preferencia de infusiones vive en el mismo JSON, como `_infusiones: false`. */
+const LLAVE_INFUSIONES = '_infusiones';
+
+/** Apaga o prende las infusiones. Prendidas es el default: la llave se quita. */
+export function fijaInfusiones(json: unknown, quiere: boolean): Record<string, unknown> {
+  const base = esObjeto(json) ? { ...json } : {};
+  if (quiere) delete base[LLAVE_INFUSIONES];
+  else base[LLAVE_INFUSIONES] = false;
+  return base;
 }
 
 /** El JSON nuevo con la eleccion registrada hoy; lo demas queda intacto. */

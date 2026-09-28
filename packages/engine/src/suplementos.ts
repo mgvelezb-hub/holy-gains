@@ -42,6 +42,20 @@ export const SUPPLEMENTS = [
   'MULTIVITAMINICO',
   'MELATONINA',
   'PROBIOTICO',
+  // Tes e infusiones: lo que una nutriologa clinica manda de rutina. Mismo
+  // registro, misma regla de senal y freno; otra seccion en pantalla.
+  'TE_VERDE',
+  'MANZANILLA',
+  'MENTA',
+  'JENGIBRE',
+  'CANELA',
+  'HIERBABUENA',
+  'TILA',
+  'VALERIANA',
+  'DIENTE_DE_LEON',
+  'CURCUMA',
+  'MATE',
+  'JAMAICA',
 ] as const;
 export type Supplement = (typeof SUPPLEMENTS)[number];
 
@@ -104,6 +118,8 @@ export interface FichaSuplemento {
   objetivos: ObjetivoSuplemento[];
   /** Solo infusiones: como se prepara, en una linea. */
   preparacion?: string;
+  /** Precaucion que viaja SIEMPRE con la ficha (valeriana, jamaica). */
+  aviso?: string;
 }
 
 export const CATALOGO_SUPLEMENTOS: FichaSuplemento[] = catalogoData as FichaSuplemento[];
@@ -137,6 +153,8 @@ export type PautaSuplemento = {
   porque: string;
   evidencia: string;
   tope: string;
+  /** Solo infusiones: "1 cdita en 250 ml, 5 min". */
+  preparacion?: string;
 };
 
 /**
@@ -194,6 +212,7 @@ export function pautasDeSuplementos(input: {
       porque: ficha.porque,
       evidencia: ficha.evidencia,
       tope: ficha.tope,
+      ...(ficha.preparacion ? { preparacion: ficha.preparacion } : {}),
     };
 
     if (ficha.id === 'WHEY') {

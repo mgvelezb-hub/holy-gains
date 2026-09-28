@@ -4,7 +4,12 @@
     "categoria": "SUPLEMENTO",
     "nombre": "Proteína en polvo",
     "corto": "proteína",
-    "dosis": { "min": 20, "max": 40, "default": 30, "unidad": "g" },
+    "dosis": {
+      "min": 20,
+      "max": 40,
+      "default": 30,
+      "unidad": "g"
+    },
     "dosisTexto": "1 medida (30 g)",
     "momento": "después de entrenar",
     "ancla": "POST_ENTRENO",
@@ -12,16 +17,29 @@
     "porque": "Resuelve la proteína del día cuando llegar solo con comida entera cuesta.",
     "evidencia": "ISSN, posición sobre proteína y ejercicio (Jäger et al., JISSN 2017): 1.4–2.0 g/kg/día; el polvo es una forma cómoda de llegar, no mejor que la comida.",
     "tope": "Sin tope establecido: cuenta dentro de tu proteína del día.",
-    "frenos": ["renal"],
-    "senales": ["hambre_cut", "proteina_alta"],
-    "objetivos": ["ganar_musculo", "bajar_grasa"]
+    "frenos": [
+      "renal"
+    ],
+    "senales": [
+      "hambre_cut",
+      "proteina_alta"
+    ],
+    "objetivos": [
+      "ganar_musculo",
+      "bajar_grasa"
+    ]
   },
   {
     "id": "CREATINA",
     "categoria": "SUPLEMENTO",
     "nombre": "Creatina monohidratada",
     "corto": "creatina",
-    "dosis": { "min": 3, "max": 5, "default": 5, "unidad": "g" },
+    "dosis": {
+      "min": 3,
+      "max": 5,
+      "default": 5,
+      "unidad": "g"
+    },
     "dosisTexto": "5 g",
     "momento": "con el desayuno, todos los días",
     "ancla": "DESAYUNO",
@@ -29,16 +47,30 @@
     "porque": "Sostiene la fuerza en series largas. Funciona por acumulación, no por la hora: anclarla al desayuno es para no olvidarla.",
     "evidencia": "ISSN, posición sobre creatina (Kreider et al., JISSN 2017): 3–5 g/día suben fuerza y masa magra con entrenamiento de resistencia; segura en adultos sanos.",
     "tope": "Sin tope establecido; 5 g/día es la dosis de mantenimiento estudiada.",
-    "frenos": ["renal", "embarazo", "lactancia"],
-    "senales": ["fuerza_4"],
-    "objetivos": ["ganar_musculo", "rendimiento"]
+    "frenos": [
+      "renal",
+      "embarazo",
+      "lactancia"
+    ],
+    "senales": [
+      "fuerza_4"
+    ],
+    "objetivos": [
+      "ganar_musculo",
+      "rendimiento"
+    ]
   },
   {
     "id": "OMEGA3",
     "categoria": "SUPLEMENTO",
     "nombre": "Omega-3 (aceite de pescado)",
     "corto": "omega-3",
-    "dosis": { "min": 250, "max": 2000, "default": 1000, "unidad": "mg EPA+DHA" },
+    "dosis": {
+      "min": 250,
+      "max": 2000,
+      "default": 1000,
+      "unidad": "mg EPA+DHA"
+    },
     "dosisTexto": "1 a 2 cápsulas (≈1 g de EPA+DHA)",
     "momento": "con la comida",
     "ancla": "COMIDA",
@@ -46,16 +78,25 @@
     "porque": "Se absorbe mejor con grasa. En ayunas se aprovecha menos y suele repetir.",
     "evidencia": "NIH ODS, Omega-3 (hoja para profesionales, 2023): efecto claro en triglicéridos; en composición corporal la evidencia es débil. EFSA (2012) y FDA: hasta 5 g/día de EPA+DHA sin efectos adversos.",
     "tope": "5 g/día de EPA+DHA (FDA, EFSA).",
-    "frenos": ["anticoagulantes"],
+    "frenos": [
+      "anticoagulantes"
+    ],
     "senales": [],
-    "objetivos": ["salud"]
+    "objetivos": [
+      "salud"
+    ]
   },
   {
     "id": "VITAMINA_D3",
     "categoria": "SUPLEMENTO",
     "nombre": "Vitamina D3",
     "corto": "vitamina D",
-    "dosis": { "min": 1000, "max": 4000, "default": 2000, "unidad": "UI" },
+    "dosis": {
+      "min": 1000,
+      "max": 4000,
+      "default": 2000,
+      "unidad": "UI"
+    },
     "dosisTexto": "2000 UI",
     "momento": "con la comida",
     "ancla": "COMIDA",
@@ -63,16 +104,29 @@
     "porque": "Es liposoluble: con una comida que tenga grasa se absorbe mejor.",
     "evidencia": "Endocrine Society (Holick et al., JCEM 2011): 25(OH)D < 20 ng/mL es deficiencia y 21–29 ng/mL insuficiencia. NIH ODS: tope adulto 4000 UI/día.",
     "tope": "4000 UI/día (UL adulto, NIH ODS).",
-    "frenos": ["renal", "hipercalcemia"],
-    "senales": ["lab_vitamina_d"],
-    "objetivos": ["salud", "animo"]
+    "frenos": [
+      "renal",
+      "hipercalcemia"
+    ],
+    "senales": [
+      "lab_vitamina_d"
+    ],
+    "objetivos": [
+      "salud",
+      "animo"
+    ]
   },
   {
     "id": "MAGNESIO",
     "categoria": "SUPLEMENTO",
     "nombre": "Magnesio (glicinato)",
     "corto": "magnesio",
-    "dosis": { "min": 200, "max": 350, "default": 200, "unidad": "mg elemental" },
+    "dosis": {
+      "min": 200,
+      "max": 350,
+      "default": 200,
+      "unidad": "mg elemental"
+    },
     "dosisTexto": "200 mg de magnesio elemental",
     "momento": "con la cena",
     "ancla": "CENA",
@@ -80,16 +134,30 @@
     "porque": "El glicinato es la forma que menos afecta el estómago; de noche acompaña la rutina de sueño.",
     "evidencia": "NIH ODS, Magnesio: tope de 350 mg/día desde suplementos. En sueño, ensayos pequeños con efecto modesto (Abbasi et al., 2012); en calambres sin causa clara, Cochrane (2020) no encontró beneficio consistente.",
     "tope": "350 mg/día desde suplementos (UL, NIH ODS).",
-    "frenos": ["renal"],
-    "senales": ["sueno_corto", "calambres", "dieta_keto"],
-    "objetivos": ["sueno", "rendimiento"]
+    "frenos": [
+      "renal"
+    ],
+    "senales": [
+      "sueno_corto",
+      "calambres",
+      "dieta_keto"
+    ],
+    "objetivos": [
+      "sueno",
+      "rendimiento"
+    ]
   },
   {
     "id": "ASHWAGANDHA",
     "categoria": "SUPLEMENTO",
     "nombre": "Ashwagandha (extracto de raíz)",
     "corto": "ashwagandha",
-    "dosis": { "min": 300, "max": 600, "default": 300, "unidad": "mg" },
+    "dosis": {
+      "min": 300,
+      "max": 600,
+      "default": 300,
+      "unidad": "mg"
+    },
     "dosisTexto": "300 mg de extracto de raíz",
     "momento": "con la cena",
     "ancla": "CENA",
@@ -97,16 +165,33 @@
     "porque": "Es una opción para una temporada de estrés alto, no un básico: se prueba por semanas y se evalúa.",
     "evidencia": "Ensayos de 8 semanas con 240–600 mg de extracto de raíz bajaron el estrés percibido y el cortisol (Chandrasekhar et al., 2012; Salve et al., 2019). NIH ODS (2023): seguridad más allá de 3 meses no establecida; casos raros de daño hepático.",
     "tope": "600 mg/día y no más de 3 meses seguidos.",
-    "frenos": ["embarazo", "lactancia", "tiroides", "autoinmune", "higado", "sedantes"],
-    "senales": ["hrv_fc"],
-    "objetivos": ["animo", "sueno"]
+    "frenos": [
+      "embarazo",
+      "lactancia",
+      "tiroides",
+      "autoinmune",
+      "higado",
+      "sedantes"
+    ],
+    "senales": [
+      "hrv_fc"
+    ],
+    "objetivos": [
+      "animo",
+      "sueno"
+    ]
   },
   {
     "id": "CAFEINA",
     "categoria": "SUPLEMENTO",
     "nombre": "Cafeína (pre-entreno)",
     "corto": "cafeína",
-    "dosis": { "min": 3, "max": 6, "default": 3, "unidad": "mg/kg" },
+    "dosis": {
+      "min": 3,
+      "max": 6,
+      "default": 3,
+      "unidad": "mg/kg"
+    },
     "dosisTexto": "3 mg por kg de peso",
     "momento": "30–45 min antes de entrenar, nunca después de las 14:00",
     "ancla": "PRE_ENTRENO",
@@ -114,16 +199,33 @@
     "porque": "Sube el rendimiento de la sesión. Tarde en el día cobra en sueño lo que da en el gimnasio.",
     "evidencia": "ISSN, posición sobre cafeína (Guest et al., JISSN 2021): 3–6 mg/kg antes del ejercicio mejora el rendimiento. FDA: hasta 400 mg/día en adultos sanos. Tomada 6 h antes de dormir recorta el sueño (Drake et al., 2013).",
     "tope": "400 mg/día en total, contando café y refrescos (FDA).",
-    "frenos": ["hipertension", "arritmia", "ansiedad", "embarazo", "lactancia", "sueno_corto", "entreno_tarde"],
-    "senales": ["entreno_manana"],
-    "objetivos": ["rendimiento"]
+    "frenos": [
+      "hipertension",
+      "arritmia",
+      "ansiedad",
+      "embarazo",
+      "lactancia",
+      "sueno_corto",
+      "entreno_tarde"
+    ],
+    "senales": [
+      "entreno_manana"
+    ],
+    "objetivos": [
+      "rendimiento"
+    ]
   },
   {
     "id": "CAFEINA_L_TEANINA",
     "categoria": "SUPLEMENTO",
     "nombre": "Cafeína con L-teanina",
     "corto": "cafeína + L-teanina",
-    "dosis": { "min": 100, "max": 200, "default": 200, "unidad": "mg L-teanina" },
+    "dosis": {
+      "min": 100,
+      "max": 200,
+      "default": 200,
+      "unidad": "mg L-teanina"
+    },
     "dosisTexto": "100 mg de cafeína + 200 mg de L-teanina",
     "momento": "30–45 min antes de entrenar, nunca después de las 14:00",
     "ancla": "PRE_ENTRENO",
@@ -131,16 +233,30 @@
     "porque": "La misma cafeína con menos nerviosismo, para quien la siente fuerte.",
     "evidencia": "La combinación mejoró atención y redujo el nerviosismo frente a la cafeína sola (Owen et al., 2008; Haskell et al., 2008).",
     "tope": "400 mg/día de cafeína en total (FDA).",
-    "frenos": ["hipertension", "arritmia", "embarazo", "lactancia", "sueno_corto", "entreno_tarde"],
+    "frenos": [
+      "hipertension",
+      "arritmia",
+      "embarazo",
+      "lactancia",
+      "sueno_corto",
+      "entreno_tarde"
+    ],
     "senales": [],
-    "objetivos": ["rendimiento"]
+    "objetivos": [
+      "rendimiento"
+    ]
   },
   {
     "id": "ELECTROLITOS",
     "categoria": "SUPLEMENTO",
     "nombre": "Electrolitos (sodio, potasio, magnesio)",
     "corto": "electrolitos",
-    "dosis": { "min": 300, "max": 600, "default": 500, "unidad": "mg sodio" },
+    "dosis": {
+      "min": 300,
+      "max": 600,
+      "default": 500,
+      "unidad": "mg sodio"
+    },
     "dosisTexto": "500 mg de sodio en 500 ml de agua",
     "momento": "durante el cardio o el entreno largo",
     "ancla": "ENTRENO",
@@ -148,16 +264,32 @@
     "porque": "Con mucho sudor se va sodio, no solo agua; reponer solo agua diluye.",
     "evidencia": "ACSM, reposición de líquidos (Sawka et al., 2007): en ejercicio largo con sudoración alta, sodio además de agua. En keto, la pérdida de sodio de las primeras semanas explica dolor de cabeza y fatiga (Phinney y Volek, 2011).",
     "tope": "Sodio total < 2300 mg/día salvo sudoración alta (Guías Alimentarias EUA 2020–2025).",
-    "frenos": ["hipertension", "renal"],
-    "senales": ["dieta_keto", "keto_dolor_cabeza", "calambres", "actividad_alta", "cardio_largo"],
-    "objetivos": ["rendimiento"]
+    "frenos": [
+      "hipertension",
+      "renal"
+    ],
+    "senales": [
+      "dieta_keto",
+      "keto_dolor_cabeza",
+      "calambres",
+      "actividad_alta",
+      "cardio_largo"
+    ],
+    "objetivos": [
+      "rendimiento"
+    ]
   },
   {
     "id": "FIBRA",
     "categoria": "SUPLEMENTO",
     "nombre": "Fibra (psyllium)",
     "corto": "psyllium",
-    "dosis": { "min": 5, "max": 10, "default": 5, "unidad": "g" },
+    "dosis": {
+      "min": 5,
+      "max": 10,
+      "default": 5,
+      "unidad": "g"
+    },
     "dosisTexto": "5 g en 250 ml de agua",
     "momento": "antes de la comida, con un vaso grande de agua",
     "ancla": "COMIDA",
@@ -165,16 +297,30 @@
     "porque": "Llena y ordena el intestino. Sin agua suficiente hace lo contrario.",
     "evidencia": "Metaanálisis en estreñimiento crónico: el psyllium mejora frecuencia y consistencia (Suares y Ford, 2011). Meta de fibra: 14 g por cada 1000 kcal (IOM).",
     "tope": "Subir de 5 en 5 g, máximo 10 g al día desde suplemento, siempre con agua.",
-    "frenos": ["disfagia", "obstruccion_intestinal"],
-    "senales": ["estrenimiento", "hambre_cut"],
-    "objetivos": ["bajar_grasa", "digestion"]
+    "frenos": [
+      "disfagia",
+      "obstruccion_intestinal"
+    ],
+    "senales": [
+      "estrenimiento",
+      "hambre_cut"
+    ],
+    "objetivos": [
+      "bajar_grasa",
+      "digestion"
+    ]
   },
   {
     "id": "ZINC",
     "categoria": "SUPLEMENTO",
     "nombre": "Zinc",
     "corto": "zinc",
-    "dosis": { "min": 8, "max": 15, "default": 10, "unidad": "mg" },
+    "dosis": {
+      "min": 8,
+      "max": 15,
+      "default": 10,
+      "unidad": "mg"
+    },
     "dosisTexto": "10 mg",
     "momento": "con la cena",
     "ancla": "CENA",
@@ -183,15 +329,24 @@
     "evidencia": "NIH ODS, Zinc (con los topes del IOM, 2001): quien no come carne puede necesitar hasta 50 % más por los fitatos de granos y leguminosas. Tope adulto 40 mg/día; el exceso sostenido baja el cobre.",
     "tope": "40 mg/día (UL adulto, NIH ODS).",
     "frenos": [],
-    "senales": ["dieta_vegetariana"],
-    "objetivos": ["salud"]
+    "senales": [
+      "dieta_vegetariana"
+    ],
+    "objetivos": [
+      "salud"
+    ]
   },
   {
     "id": "VITAMINA_B12",
     "categoria": "SUPLEMENTO",
     "nombre": "Vitamina B12",
     "corto": "B12",
-    "dosis": { "min": 25, "max": 250, "default": 250, "unidad": "mcg" },
+    "dosis": {
+      "min": 25,
+      "max": 250,
+      "default": 250,
+      "unidad": "mcg"
+    },
     "dosisTexto": "250 mcg",
     "momento": "con el desayuno",
     "ancla": "DESAYUNO",
@@ -200,15 +355,26 @@
     "evidencia": "NIH ODS, B12 (con las referencias del IOM, 1998): vegetarianos y veganos son el grupo de mayor riesgo; no tiene UL porque el exceso se elimina. Nivel bajo: < 200 pg/mL.",
     "tope": "Sin UL establecido (NIH ODS).",
     "frenos": [],
-    "senales": ["dieta_vegetariana", "lab_b12"],
-    "objetivos": ["salud", "animo"]
+    "senales": [
+      "dieta_vegetariana",
+      "lab_b12"
+    ],
+    "objetivos": [
+      "salud",
+      "animo"
+    ]
   },
   {
     "id": "HIERRO",
     "categoria": "SUPLEMENTO",
     "nombre": "Hierro",
     "corto": "hierro",
-    "dosis": { "min": 18, "max": 45, "default": 18, "unidad": "mg elemental" },
+    "dosis": {
+      "min": 18,
+      "max": 45,
+      "default": 18,
+      "unidad": "mg elemental"
+    },
     "dosisTexto": "la que indique tu médico",
     "momento": "lejos del café, el té y los lácteos",
     "ancla": "LIBRE",
@@ -216,16 +382,28 @@
     "porque": "Solo tiene sentido con ferritina baja confirmada: sin deficiencia, el hierro de más se acumula.",
     "evidencia": "NIH ODS, Hierro: tope 45 mg/día de hierro elemental. La OMS (2020) define reservas bajas con ferritina < 15 µg/L; en la práctica clínica < 30 ng/mL ya las sugiere.",
     "tope": "45 mg/día de hierro elemental sin supervisión (UL, NIH ODS).",
-    "frenos": ["hemocromatosis"],
-    "senales": ["lab_ferritina"],
-    "objetivos": ["salud", "animo"]
+    "frenos": [
+      "hemocromatosis"
+    ],
+    "senales": [
+      "lab_ferritina"
+    ],
+    "objetivos": [
+      "salud",
+      "animo"
+    ]
   },
   {
     "id": "MULTIVITAMINICO",
     "categoria": "SUPLEMENTO",
     "nombre": "Multivitamínico",
     "corto": "multivitamínico",
-    "dosis": { "min": 1, "max": 1, "default": 1, "unidad": "tableta" },
+    "dosis": {
+      "min": 1,
+      "max": 1,
+      "default": 1,
+      "unidad": "tableta"
+    },
     "dosisTexto": "1 tableta",
     "momento": "con el desayuno",
     "ancla": "DESAYUNO",
@@ -234,15 +412,24 @@
     "evidencia": "NIH ODS, multivitamínicos: útiles para cubrir huecos con dietas restringidas. USPSTF (2022): no se recomiendan para prevenir enfermedad cardiovascular ni cáncer.",
     "tope": "Una al día; no se suma a otros productos con las mismas vitaminas sin revisar topes.",
     "frenos": [],
-    "senales": ["kcal_baja"],
-    "objetivos": ["salud"]
+    "senales": [
+      "kcal_baja"
+    ],
+    "objetivos": [
+      "salud"
+    ]
   },
   {
     "id": "MELATONINA",
     "categoria": "SUPLEMENTO",
     "nombre": "Melatonina (dosis baja)",
     "corto": "melatonina",
-    "dosis": { "min": 0.5, "max": 3, "default": 0.5, "unidad": "mg" },
+    "dosis": {
+      "min": 0.5,
+      "max": 3,
+      "default": 0.5,
+      "unidad": "mg"
+    },
     "dosisTexto": "0.5 mg",
     "momento": "30 min antes de dormir",
     "ancla": "DORMIR",
@@ -250,16 +437,32 @@
     "porque": "Ayuda a conciliar, no a dormir más horas. Dosis bajas funcionan igual que altas y dejan menos resaca.",
     "evidencia": "Metaanálisis: adelanta el inicio del sueño ~7 min y alarga el total ~8 min (Ferracioli-Oda et al., 2013). La AASM (2017) no la recomienda para insomnio crónico: es apoyo, no tratamiento.",
     "tope": "3 mg por noche en este plan.",
-    "frenos": ["embarazo", "lactancia", "autoinmune", "anticoagulantes", "epilepsia", "sedantes"],
-    "senales": ["sueno_corto"],
-    "objetivos": ["sueno"]
+    "frenos": [
+      "embarazo",
+      "lactancia",
+      "autoinmune",
+      "anticoagulantes",
+      "epilepsia",
+      "sedantes"
+    ],
+    "senales": [
+      "sueno_corto"
+    ],
+    "objetivos": [
+      "sueno"
+    ]
   },
   {
     "id": "PROBIOTICO",
     "categoria": "SUPLEMENTO",
     "nombre": "Probiótico",
     "corto": "probiótico",
-    "dosis": { "min": 1, "max": 1, "default": 1, "unidad": "cápsula" },
+    "dosis": {
+      "min": 1,
+      "max": 1,
+      "default": 1,
+      "unidad": "cápsula"
+    },
     "dosisTexto": "1 cápsula (≥ 1×10⁹ UFC)",
     "momento": "con el desayuno",
     "ancla": "DESAYUNO",
@@ -267,8 +470,387 @@
     "porque": "Es una prueba acotada: 4 semanas y se evalúa si la distensión cambió.",
     "evidencia": "AGA (Su et al., 2020): evidencia insuficiente para la mayoría de los usos digestivos; si se prueba, por tiempo definido.",
     "tope": "Una al día, 4 semanas y evaluar.",
-    "frenos": ["inmunosupresion"],
-    "senales": ["distension"],
-    "objetivos": ["digestion"]
+    "frenos": [
+      "inmunosupresion"
+    ],
+    "senales": [
+      "distension"
+    ],
+    "objetivos": [
+      "digestion"
+    ]
+  },
+  {
+    "id": "TE_VERDE",
+    "categoria": "INFUSION",
+    "nombre": "Té verde",
+    "corto": "té verde",
+    "dosis": {
+      "min": 1,
+      "max": 3,
+      "default": 1,
+      "unidad": "taza"
+    },
+    "dosisTexto": "1 taza (250 ml)",
+    "momento": "a media mañana, antes de las 14:00",
+    "ancla": "MEDIA_MANANA",
+    "conComida": null,
+    "preparacion": "1 bolsita o 1 cdita en 250 ml a 80 °C, 3 min",
+    "porque": "Cafeína suave (≈30 mg por taza) sin calorías. En ayunas, con estómago sensible, cae pesado.",
+    "evidencia": "Cochrane (Jurgens et al., 2012): el efecto del té verde en el peso es pequeño y poco consistente. EFSA (2018): el riesgo hepático es de extractos con ≥ 800 mg/día de EGCG; en taza no se llega.",
+    "tope": "3 tazas al día; nunca en extracto concentrado.",
+    "frenos": [
+      "embarazo",
+      "lactancia",
+      "sueno_corto",
+      "gastritis"
+    ],
+    "senales": [
+      "hambre_cut",
+      "energia_baja"
+    ],
+    "objetivos": [
+      "bajar_grasa",
+      "rendimiento"
+    ]
+  },
+  {
+    "id": "MANZANILLA",
+    "categoria": "INFUSION",
+    "nombre": "Té de manzanilla",
+    "corto": "té de manzanilla",
+    "dosis": {
+      "min": 1,
+      "max": 2,
+      "default": 1,
+      "unidad": "taza"
+    },
+    "dosisTexto": "1 taza (250 ml)",
+    "momento": "después de la cena",
+    "ancla": "CENA",
+    "conComida": null,
+    "preparacion": "1 bolsita en 250 ml, 5 min, tapada",
+    "porque": "Ritual tibio para cerrar el día; ayuda algo a la calidad del sueño, no a dormir más horas.",
+    "evidencia": "Metaanálisis (Hieu et al., 2019): mejora modesta en la calidad del sueño; sin efecto claro en insomnio.",
+    "tope": "2 tazas al día.",
+    "frenos": [
+      "embarazo",
+      "alergia_asteraceas",
+      "anticoagulantes"
+    ],
+    "senales": [
+      "sueno_corto"
+    ],
+    "objetivos": [
+      "sueno",
+      "digestion"
+    ]
+  },
+  {
+    "id": "MENTA",
+    "categoria": "INFUSION",
+    "nombre": "Té de menta",
+    "corto": "té de menta",
+    "dosis": {
+      "min": 1,
+      "max": 2,
+      "default": 1,
+      "unidad": "taza"
+    },
+    "dosisTexto": "1 taza (250 ml)",
+    "momento": "después de la comida",
+    "ancla": "COMIDA",
+    "conComida": null,
+    "preparacion": "1 bolsita o 5 hojas en 250 ml, 5 min",
+    "porque": "Relaja el tubo digestivo y alivia la distensión. Por lo mismo empeora el reflujo.",
+    "evidencia": "El aceite de menta tiene evidencia en colon irritable (ACG, Lacy et al., 2021); la infusión es más suave y con menos estudios (McKay y Blumberg, 2006).",
+    "tope": "3 tazas al día.",
+    "frenos": [
+      "reflujo"
+    ],
+    "senales": [
+      "distension",
+      "estrenimiento",
+      "saciedad_baja"
+    ],
+    "objetivos": [
+      "digestion"
+    ]
+  },
+  {
+    "id": "JENGIBRE",
+    "categoria": "INFUSION",
+    "nombre": "Té de jengibre",
+    "corto": "té de jengibre",
+    "dosis": {
+      "min": 1,
+      "max": 2,
+      "default": 1,
+      "unidad": "taza"
+    },
+    "dosisTexto": "1 taza (250 ml)",
+    "momento": "después de la comida",
+    "ancla": "COMIDA",
+    "conComida": null,
+    "preparacion": "3–4 rodajas de raíz fresca en 250 ml, 10 min",
+    "porque": "Acelera el vaciado del estómago y calma la náusea.",
+    "evidencia": "Metaanálisis: reduce la náusea (Viljoen et al., 2014); en voluntarios acelera el vaciado gástrico (Hu et al., 2011).",
+    "tope": "Hasta 4 g de raíz al día.",
+    "frenos": [
+      "anticoagulantes",
+      "calculos_biliares"
+    ],
+    "senales": [
+      "distension",
+      "estrenimiento",
+      "saciedad_baja"
+    ],
+    "objetivos": [
+      "digestion"
+    ]
+  },
+  {
+    "id": "CANELA",
+    "categoria": "INFUSION",
+    "nombre": "Té de canela",
+    "corto": "canela",
+    "dosis": {
+      "min": 1,
+      "max": 1,
+      "default": 1,
+      "unidad": "taza"
+    },
+    "dosisTexto": "1 taza (250 ml)",
+    "momento": "con la comida",
+    "ancla": "COMIDA",
+    "conComida": true,
+    "preparacion": "1 raja o ½ cdita en 250 ml, 10 min",
+    "porque": "Da sabor dulce sin azúcar. La cassia (la común) trae cumarina: por eso el tope.",
+    "evidencia": "EFSA (2008): la cumarina tiene una ingesta tolerable de 0.1 mg/kg/día; una cucharadita de canela cassia puede pasarla. La de Ceilán casi no tiene.",
+    "tope": "1 cdita al día si es cassia; preferir Ceilán.",
+    "frenos": [
+      "higado",
+      "anticoagulantes"
+    ],
+    "senales": [],
+    "objetivos": [
+      "salud"
+    ]
+  },
+  {
+    "id": "HIERBABUENA",
+    "categoria": "INFUSION",
+    "nombre": "Té de hierbabuena",
+    "corto": "té de hierbabuena",
+    "dosis": {
+      "min": 1,
+      "max": 2,
+      "default": 1,
+      "unidad": "taza"
+    },
+    "dosisTexto": "1 taza (250 ml)",
+    "momento": "después de la comida",
+    "ancla": "COMIDA",
+    "conComida": null,
+    "preparacion": "5–6 hojas frescas en 250 ml, 5 min",
+    "porque": "Como la menta pero más suave; para después de comer pesado.",
+    "evidencia": "Evidencia escasa: se extrapola de la menta, de la misma familia (McKay y Blumberg, 2006).",
+    "tope": "3 tazas al día.",
+    "frenos": [
+      "reflujo"
+    ],
+    "senales": [],
+    "objetivos": [
+      "digestion"
+    ]
+  },
+  {
+    "id": "TILA",
+    "categoria": "INFUSION",
+    "nombre": "Té de tila",
+    "corto": "té de tila",
+    "dosis": {
+      "min": 1,
+      "max": 1,
+      "default": 1,
+      "unidad": "taza"
+    },
+    "dosisTexto": "1 taza (250 ml)",
+    "momento": "30 min antes de dormir",
+    "ancla": "DORMIR",
+    "conComida": null,
+    "preparacion": "1 cda de flor en 250 ml, 5 min, tapada",
+    "porque": "Sedante suave de uso tradicional; un ritual para bajar el ritmo antes de dormir.",
+    "evidencia": "EMA (monografía de Tiliae flos, 2012): uso tradicional para síntomas leves de estrés y sueño; sin ensayos clínicos sólidos.",
+    "tope": "1–2 tazas al día.",
+    "frenos": [
+      "embarazo",
+      "lactancia",
+      "sedantes"
+    ],
+    "senales": [
+      "sueno_corto"
+    ],
+    "objetivos": [
+      "sueno"
+    ]
+  },
+  {
+    "id": "VALERIANA",
+    "categoria": "INFUSION",
+    "nombre": "Té de valeriana",
+    "corto": "té de valeriana",
+    "dosis": {
+      "min": 1,
+      "max": 1,
+      "default": 1,
+      "unidad": "taza"
+    },
+    "dosisTexto": "1 taza (250 ml)",
+    "momento": "30 min antes de dormir",
+    "ancla": "DORMIR",
+    "conComida": null,
+    "preparacion": "1 cdita de raíz en 250 ml, 10 min, tapada",
+    "porque": "Más fuerte que la tila; por eso con aviso y no junto con otros sedantes.",
+    "evidencia": "Metaanálisis (Bent et al., 2006): mejora subjetiva del sueño pequeña e inconsistente. EMA (2015): uso tradicional; no combinar con sedantes.",
+    "tope": "1 taza por noche; no más de 4 semanas seguidas.",
+    "frenos": [
+      "sedantes",
+      "embarazo",
+      "lactancia",
+      "higado"
+    ],
+    "senales": [],
+    "objetivos": [
+      "sueno"
+    ],
+    "aviso": "No la combines con pastillas para dormir, sedantes ni alcohol."
+  },
+  {
+    "id": "DIENTE_DE_LEON",
+    "categoria": "INFUSION",
+    "nombre": "Té de diente de león",
+    "corto": "té de diente de león",
+    "dosis": {
+      "min": 1,
+      "max": 2,
+      "default": 1,
+      "unidad": "taza"
+    },
+    "dosisTexto": "1 taza (250 ml)",
+    "momento": "por la mañana",
+    "ancla": "DESAYUNO",
+    "conComida": null,
+    "preparacion": "1 cdita de hoja seca en 250 ml, 5 min",
+    "porque": "Diurético suave: hace orinar más, no quema grasa. De noche interrumpe el sueño.",
+    "evidencia": "Un estudio piloto mostró más diuresis tras la infusión (Clare et al., 2009); la evidencia es mínima.",
+    "tope": "2 tazas al día.",
+    "frenos": [
+      "diureticos",
+      "renal",
+      "calculos_biliares",
+      "embarazo"
+    ],
+    "senales": [],
+    "objetivos": [
+      "salud"
+    ],
+    "aviso": "Si tomas diuréticos o medicamento para la presión, no la combines sin consultar."
+  },
+  {
+    "id": "CURCUMA",
+    "categoria": "INFUSION",
+    "nombre": "Cúrcuma con pimienta",
+    "corto": "cúrcuma con pimienta",
+    "dosis": {
+      "min": 1,
+      "max": 1,
+      "default": 1,
+      "unidad": "taza"
+    },
+    "dosisTexto": "1 taza (250 ml)",
+    "momento": "con la comida",
+    "ancla": "COMIDA",
+    "conComida": true,
+    "preparacion": "½ cdita de cúrcuma + una pizca de pimienta negra en 250 ml de agua o leche caliente",
+    "porque": "La pimienta hace que la cúrcuma se absorba; sola apenas pasa. Con comida se tolera mejor.",
+    "evidencia": "Metaanálisis en osteoartritis: alivio del dolor parecido a antiinflamatorios en estudios pequeños (Daily et al., 2016). La piperina multiplica su absorción (Shoba et al., 1998).",
+    "tope": "1 taza al día en forma de especia; los extractos concentrados son otra cosa.",
+    "frenos": [
+      "anticoagulantes",
+      "calculos_biliares",
+      "higado",
+      "embarazo"
+    ],
+    "senales": [],
+    "objetivos": [
+      "salud"
+    ]
+  },
+  {
+    "id": "MATE",
+    "categoria": "INFUSION",
+    "nombre": "Mate",
+    "corto": "mate",
+    "dosis": {
+      "min": 1,
+      "max": 2,
+      "default": 1,
+      "unidad": "taza"
+    },
+    "dosisTexto": "1 taza (250 ml)",
+    "momento": "a media mañana, antes de las 14:00",
+    "ancla": "MEDIA_MANANA",
+    "conComida": null,
+    "preparacion": "1 cda de yerba en 250 ml a 70–80 °C, 5 min; tibio, nunca hirviendo",
+    "porque": "Cafeína parecida al café (≈80 mg por taza). Muy caliente irrita el esófago.",
+    "evidencia": "Heck y de Mejia (2007): cafeína comparable al café. IARC (2016): bebidas muy calientes (> 65 °C) son probable carcinógeno de esófago.",
+    "tope": "400 mg/día de cafeína en total, contando café (FDA).",
+    "frenos": [
+      "hipertension",
+      "arritmia",
+      "ansiedad",
+      "embarazo",
+      "lactancia",
+      "sueno_corto",
+      "entreno_tarde"
+    ],
+    "senales": [],
+    "objetivos": [
+      "rendimiento"
+    ]
+  },
+  {
+    "id": "JAMAICA",
+    "categoria": "INFUSION",
+    "nombre": "Agua de jamaica sin azúcar",
+    "corto": "agua de jamaica",
+    "dosis": {
+      "min": 1,
+      "max": 3,
+      "default": 2,
+      "unidad": "taza"
+    },
+    "dosisTexto": "2 tazas (500 ml) sin azúcar",
+    "momento": "con la comida o en la ventana de ayuno",
+    "ancla": "COMIDA",
+    "conComida": null,
+    "preparacion": "1 cda de flor en 500 ml, 10 min; fría o caliente, sin azúcar",
+    "porque": "Sin calorías si va sin azúcar, y ayuda a llegar al agua del día. Con azúcar es refresco.",
+    "evidencia": "Metaanálisis (Serban et al., 2015): baja la presión sistólica ~7 mmHg en ensayos pequeños.",
+    "tope": "3 tazas al día.",
+    "frenos": [
+      "antihipertensivos",
+      "embarazo"
+    ],
+    "senales": [
+      "hambre_cut",
+      "ayuno_keto"
+    ],
+    "objetivos": [
+      "bajar_grasa",
+      "salud"
+    ],
+    "aviso": "Si tomas medicamento para la presión, consulta: puede sumarse al efecto."
   }
 ]
