@@ -9,7 +9,8 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./data/foods.json": "./data/foods.json"
+    "./data/foods.json": "./data/foods.json",
+    "./data/preparaciones.json": "./data/preparaciones.json"
   },
   "files": [
     "src",

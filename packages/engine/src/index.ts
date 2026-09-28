@@ -53,6 +53,7 @@ export {
   normalize,
   terminosDeBusqueda,
 } from './foods.js';
+export { PREPARACIONES } from './preparaciones.js';
 export {
   SUPPLEMENTS,
   pautasDeSuplementos,

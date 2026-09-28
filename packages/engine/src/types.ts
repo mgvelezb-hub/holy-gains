@@ -125,6 +125,18 @@ export interface Profile {
    * Sin ella, el ayuno usa 12:00-20:00, que es el 16/8 mas comun.
    */
   fastingWindow?: { startHour: number; endHour: number };
+  /**
+   * Que platillos compuestos acepta el menu. Sin el campo, todos: la
+   * preparacion es una forma de servir los mismos alimentos, no otra dieta.
+   * Los caldos van con las sopas —para quien cocina son lo mismo—.
+   */
+  preparaciones?: PreferenciaPreparaciones;
+}
+
+export interface PreferenciaPreparaciones {
+  licuados: boolean;
+  sopas: boolean;
+  cremas: boolean;
 }
 
 import type { Supplement } from './suplementos.js';
@@ -373,6 +385,57 @@ export interface MenuItem {
   /** "2 cditas de aceite de oliva (10 g)". Lo que se lee primero. */
   display: string;
   why: MenuItemWhy;
+  /** Presente si el alimento es ingrediente de un platillo (licuado, sopa). */
+  preparacion?: PreparacionRef;
+}
+
+export type TipoPreparacion = 'licuado' | 'sopa' | 'crema' | 'caldo';
+
+/**
+ * Un ingrediente de una preparacion. Sale del catalogo de alimentos: o es un
+ * alimento concreto (`foodId`) o se elige de una lista corta (`opciones`, que
+ * tienen que ser de alguno de los roles de `rolePool`). Nunca un rol suelto:
+ * "cualquier proteina magra" meteria la pechuga en el licuado.
+ */
+export interface IngredientePreparacion {
+  foodId?: string;
+  rolePool?: FoodRole[];
+  opciones?: string[];
+  /** Cotas de porcion propias del platillo, dentro de la medida casera del alimento. */
+  minUnits?: number;
+  maxUnits?: number;
+  /** Entra si o si con una porcion fija: la taza de leche del licuado. */
+  fijo?: boolean;
+  /** Gramos de la porcion fija, para lo que no tiene medida casera (verduras). */
+  gramos?: number;
+  /** Si el slot no lo admite (sin carbohidrato denso), se omite sin tirar el platillo. */
+  opcional?: boolean;
+}
+
+/**
+ * Un platillo compuesto de alimentos del catalogo: el licuado del desayuno,
+ * la sopa de la comida. No es un alimento nuevo con macros propios —esos
+ * mentirian en cuanto cambie la porcion—: es una forma de agrupar alimentos
+ * que el motor resuelve con sus mismas reglas.
+ */
+export interface Preparacion {
+  id: string;
+  nombre: string;
+  tipo: TipoPreparacion;
+  slots: MealSlotId[];
+  ingredientes: IngredientePreparacion[];
+  /** Minutos de cocina el dia que se come. */
+  prepMin: number;
+  /** `vegetariano`, `keto_ok`, `ayuno_ok`, `meal_prep`... */
+  tags: string[];
+  costRel: 1 | 2 | 3;
+}
+
+/** La preparacion a la que pertenece un alimento del menu. */
+export interface PreparacionRef {
+  id: string;
+  nombre: string;
+  tipo: TipoPreparacion;
 }
 
 export interface Equivalence {
@@ -402,6 +465,11 @@ export interface MenuMeal {
   equivalences: Equivalence[];
   totals: MacroTargets;
   target: MacroTargets;
+  /**
+   * El platillo de la comida, si lo lleva, con su renglon agrupado: "Licuado
+   * de fresa con avena — 1 taza de fresa · 40 g de avena". Nunca hay dos.
+   */
+  preparacion?: PreparacionRef & { display: string };
 }
 
 export interface Menu {
@@ -424,6 +492,8 @@ export interface ShoppingItem {
    * pero marcado, para que nadie lo vuelva a comprar.
    */
   enDespensa?: boolean;
+  /** Los platillos para los que se compra ("Crema de calabacita"). */
+  preparaciones?: string[];
 }
 
 export interface MenuPlan {

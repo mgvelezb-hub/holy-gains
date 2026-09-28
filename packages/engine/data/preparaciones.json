@@ -1,0 +1,223 @@
+[
+  {
+    "id": "licuado_proteina_fruta_avena",
+    "nombre": "Licuado de proteína con fruta y avena",
+    "tipo": "licuado",
+    "slots": ["PRE", "DESAYUNO", "SNACK", "POST"],
+    "ingredientes": [
+      { "rolePool": ["proteina_magra"], "opciones": ["whey_isolate", "proteina_vegetal", "yogur_griego_0"] },
+      { "rolePool": ["fruta"], "opciones": ["platano", "fresa", "mango", "papaya", "pina", "manzana"] },
+      { "rolePool": ["carbo_pre"], "opciones": ["avena", "amaranto"], "maxUnits": 60 },
+      { "foodId": "leche_descremada", "fijo": true, "minUnits": 1, "maxUnits": 1 }
+    ],
+    "prepMin": 5,
+    "tags": ["vegetariano", "ayuno_ok"],
+    "costRel": 2
+  },
+  {
+    "id": "licuado_platano_cacahuate",
+    "nombre": "Licuado de plátano con crema de cacahuate",
+    "tipo": "licuado",
+    "slots": ["DESAYUNO", "SNACK", "PRE", "POST"],
+    "ingredientes": [
+      { "rolePool": ["proteina_magra"], "opciones": ["whey_isolate", "proteina_vegetal", "yogur_griego_0"] },
+      { "foodId": "platano" },
+      { "foodId": "crema_cacahuate" },
+      { "foodId": "leche_descremada", "fijo": true, "minUnits": 1, "maxUnits": 1 }
+    ],
+    "prepMin": 5,
+    "tags": ["vegetariano", "ayuno_ok"],
+    "costRel": 2
+  },
+  {
+    "id": "licuado_verde",
+    "nombre": "Licuado verde",
+    "tipo": "licuado",
+    "slots": ["PRE", "DESAYUNO", "SNACK", "POST"],
+    "ingredientes": [
+      { "foodId": "espinaca", "fijo": true, "gramos": 60 },
+      { "foodId": "pepino", "fijo": true, "gramos": 100 },
+      { "foodId": "manzana" },
+      { "rolePool": ["proteina_magra"], "opciones": ["whey_isolate", "proteina_vegetal", "yogur_griego_0"] }
+    ],
+    "prepMin": 5,
+    "tags": ["vegetariano", "ayuno_ok"],
+    "costRel": 2
+  },
+  {
+    "id": "licuado_fresa_avena",
+    "nombre": "Licuado de fresa con avena",
+    "tipo": "licuado",
+    "slots": ["PRE", "DESAYUNO", "SNACK", "POST"],
+    "ingredientes": [
+      { "rolePool": ["proteina_magra"], "opciones": ["whey_isolate", "proteina_vegetal", "yogur_griego_0"] },
+      { "foodId": "fresa" },
+      { "foodId": "avena", "maxUnits": 60 },
+      { "foodId": "leche_descremada", "fijo": true, "minUnits": 1, "maxUnits": 1 }
+    ],
+    "prepMin": 5,
+    "tags": ["vegetariano", "ayuno_ok"],
+    "costRel": 2
+  },
+  {
+    "id": "licuado_mango_yogur",
+    "nombre": "Licuado de mango con yogur",
+    "tipo": "licuado",
+    "slots": ["PRE", "DESAYUNO", "SNACK", "POST"],
+    "ingredientes": [
+      { "foodId": "yogur_griego_0" },
+      { "foodId": "mango" },
+      { "rolePool": ["carbo_pre"], "opciones": ["avena", "amaranto"], "maxUnits": 60, "opcional": true }
+    ],
+    "prepMin": 5,
+    "tags": ["vegetariano", "ayuno_ok"],
+    "costRel": 2
+  },
+  {
+    "id": "sopa_verduras_pollo",
+    "nombre": "Sopa de verduras con pollo",
+    "tipo": "sopa",
+    "slots": ["COMIDA", "CENA"],
+    "ingredientes": [
+      { "foodId": "pechuga_pollo" },
+      { "foodId": "calabacita", "fijo": true, "gramos": 100 },
+      { "foodId": "zanahoria", "fijo": true, "gramos": 60 },
+      { "foodId": "chayote", "fijo": true, "gramos": 80 },
+      { "foodId": "papa", "opcional": true }
+    ],
+    "prepMin": 35,
+    "tags": ["meal_prep", "ayuno_ok"],
+    "costRel": 2
+  },
+  {
+    "id": "sopa_lentejas",
+    "nombre": "Sopa de lentejas",
+    "tipo": "sopa",
+    "slots": ["COMIDA", "CENA"],
+    "ingredientes": [
+      { "foodId": "lenteja" },
+      { "foodId": "jitomate", "fijo": true, "gramos": 60 },
+      { "foodId": "zanahoria", "fijo": true, "gramos": 40 },
+      { "foodId": "cebolla", "fijo": true, "gramos": 30 }
+    ],
+    "prepMin": 40,
+    "tags": ["meal_prep", "vegetariano", "ayuno_ok"],
+    "costRel": 1
+  },
+  {
+    "id": "sopa_frijol_olla",
+    "nombre": "Sopa de frijol de olla",
+    "tipo": "sopa",
+    "slots": ["COMIDA", "CENA"],
+    "ingredientes": [
+      { "foodId": "frijol_negro" },
+      { "foodId": "cebolla", "fijo": true, "gramos": 30 },
+      { "foodId": "jitomate", "fijo": true, "gramos": 60 }
+    ],
+    "prepMin": 30,
+    "tags": ["meal_prep", "vegetariano", "ayuno_ok"],
+    "costRel": 1
+  },
+  {
+    "id": "sopa_pasta_verdura",
+    "nombre": "Sopa de pasta ligera con verdura",
+    "tipo": "sopa",
+    "slots": ["COMIDA"],
+    "ingredientes": [
+      { "foodId": "pasta_integral", "maxUnits": 1 },
+      { "foodId": "jitomate", "fijo": true, "gramos": 80 },
+      { "foodId": "calabacita", "fijo": true, "gramos": 80 }
+    ],
+    "prepMin": 25,
+    "tags": ["meal_prep", "vegetariano", "ayuno_ok"],
+    "costRel": 2
+  },
+  {
+    "id": "crema_calabacita",
+    "nombre": "Crema de calabacita",
+    "tipo": "crema",
+    "slots": ["COMIDA", "CENA"],
+    "ingredientes": [
+      { "foodId": "calabacita", "fijo": true, "gramos": 200 },
+      { "foodId": "leche_descremada", "fijo": true, "minUnits": 1, "maxUnits": 1 },
+      { "foodId": "aceite_oliva", "fijo": true, "minUnits": 1, "maxUnits": 1 }
+    ],
+    "prepMin": 20,
+    "tags": ["meal_prep", "vegetariano", "ayuno_ok"],
+    "costRel": 1
+  },
+  {
+    "id": "crema_espinaca",
+    "nombre": "Crema de espinaca",
+    "tipo": "crema",
+    "slots": ["COMIDA", "CENA"],
+    "ingredientes": [
+      { "foodId": "espinaca", "fijo": true, "gramos": 150 },
+      { "foodId": "leche_descremada", "fijo": true, "minUnits": 1, "maxUnits": 1 },
+      { "foodId": "aceite_oliva", "fijo": true, "minUnits": 1, "maxUnits": 1 }
+    ],
+    "prepMin": 20,
+    "tags": ["meal_prep", "vegetariano", "ayuno_ok"],
+    "costRel": 1
+  },
+  {
+    "id": "crema_champinon",
+    "nombre": "Crema de champiñón",
+    "tipo": "crema",
+    "slots": ["COMIDA", "CENA"],
+    "ingredientes": [
+      { "foodId": "champinon", "fijo": true, "gramos": 200 },
+      { "foodId": "leche_descremada", "fijo": true, "minUnits": 0.5, "maxUnits": 0.5 },
+      { "foodId": "aceite_oliva", "fijo": true, "minUnits": 1, "maxUnits": 1 }
+    ],
+    "prepMin": 20,
+    "tags": ["meal_prep", "vegetariano", "keto_ok", "ayuno_ok"],
+    "costRel": 2
+  },
+  {
+    "id": "crema_elote",
+    "nombre": "Crema de elote",
+    "tipo": "crema",
+    "slots": ["COMIDA"],
+    "ingredientes": [
+      { "foodId": "elote", "maxUnits": 1 },
+      { "foodId": "leche_descremada", "fijo": true, "minUnits": 1, "maxUnits": 1 },
+      { "foodId": "aceite_oliva", "fijo": true, "minUnits": 1, "maxUnits": 1 },
+      { "foodId": "cebolla", "fijo": true, "gramos": 30 }
+    ],
+    "prepMin": 25,
+    "tags": ["meal_prep", "vegetariano", "ayuno_ok"],
+    "costRel": 1
+  },
+  {
+    "id": "caldo_pollo_verdura",
+    "nombre": "Caldo de pollo con verdura",
+    "tipo": "caldo",
+    "slots": ["COMIDA", "CENA"],
+    "ingredientes": [
+      { "foodId": "pechuga_pollo" },
+      { "foodId": "calabacita", "fijo": true, "gramos": 100 },
+      { "foodId": "chayote", "fijo": true, "gramos": 80 },
+      { "foodId": "apio", "fijo": true, "gramos": 30 }
+    ],
+    "prepMin": 45,
+    "tags": ["meal_prep", "keto_ok", "ayuno_ok"],
+    "costRel": 2
+  },
+  {
+    "id": "caldo_tlalpeno",
+    "nombre": "Caldo tlalpeño ligero",
+    "tipo": "caldo",
+    "slots": ["COMIDA", "CENA"],
+    "ingredientes": [
+      { "foodId": "pechuga_pollo" },
+      { "foodId": "garbanzo", "maxUnits": 0.5, "opcional": true },
+      { "foodId": "zanahoria", "fijo": true, "gramos": 50 },
+      { "foodId": "jitomate", "fijo": true, "gramos": 60 },
+      { "foodId": "chile_poblano", "fijo": true, "gramos": 30 }
+    ],
+    "prepMin": 45,
+    "tags": ["meal_prep", "ayuno_ok"],
+    "costRel": 2
+  }
+]
