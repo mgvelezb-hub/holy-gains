@@ -16,9 +16,22 @@ import { Card } from "@/components/Card";
 import { InfoTip, TextoInfo } from "@/components/InfoTip";
 import { Parrafo } from "@/components/Parrafo";
 import { EmptyState, ErrorState, LoadingState } from "@/components/States";
+import { TomasDeLaComida, useTomasDeHoy } from "@/components/TomasDelDia";
 import { useTheme } from "@/context/theme";
-import { ApiError, getNutrition, postSwap, type Menu, type MenuItem, type MenuMeal } from "@/lib/api";
+import {
+  ApiError,
+  getNutrition,
+  getOpcionesPlatillo,
+  postCambiarPlatillo,
+  postSwap,
+  type Menu,
+  type MenuItem,
+  type MenuMeal,
+  type OpcionPlatillo,
+  type TomaDelDia,
+} from "@/lib/api";
 import { agruparComida } from "@/lib/preparaciones";
+import { tomasDeComida } from "@/lib/tomas-comida";
 import { fonts, radius, spacing, type as typeScale, type Palette } from "@/lib/theme";
 
 /**
@@ -71,6 +84,9 @@ export default function MenuScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const menuNumber = Number(numero);
+  // Las tomas de suplementos van dentro de la comida a la que se amarran:
+  // el menú es donde se planea el día, y ahí tiene que decir cuándo tomarlas.
+  const { tomas, cargar: cargarTomas, alternar: alternarToma } = useTomasDeHoy();
 
   const load = useCallback(async () => {
     try {
@@ -85,12 +101,13 @@ export default function MenuScreen() {
   useFocusEffect(
     useCallback(() => {
       void load();
-    }, [load]),
+      void cargarTomas();
+    }, [load, cargarTomas]),
   );
 
   async function onRefresh() {
     setRefreshing(true);
-    await load();
+    await Promise.all([load(), cargarTomas()]);
     setRefreshing(false);
   }
 
@@ -120,7 +137,13 @@ export default function MenuScreen() {
         ) : (
           menu.meals.map((meal) => (
             <Card key={meal.slot}>
-              <ComidaDelMenu meal={meal} menuNumber={menu.menuNumber} onSwapped={load} />
+              <ComidaDelMenu
+                meal={meal}
+                menuNumber={menu.menuNumber}
+                onSwapped={load}
+                tomas={tomasDeComida(tomas, meal.slot)}
+                onToggleToma={(supplement) => void alternarToma(supplement)}
+              />
             </Card>
           ))
         )}
@@ -146,16 +169,26 @@ function ComidaDelMenu({
   meal,
   menuNumber,
   onSwapped,
+  tomas,
+  onToggleToma,
 }: {
   meal: MenuMeal;
   menuNumber: number;
   onSwapped: () => Promise<void>;
+  /** Las tomas de hoy amarradas a esta comida. */
+  tomas: TomaDelDia[];
+  onToggleToma: (supplement: string) => void;
 }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [abierto, setAbierto] = useState<string | null>(null);
   const [cambiando, setCambiando] = useState<string | null>(null);
   const [errorCambio, setErrorCambio] = useState<string | null>(null);
+  // "Ya había aguacate: se sumó": el cambio no duplicó, lo dice una vez.
+  const [aviso, setAviso] = useState<string | null>(null);
+  // Sopa por sopa: las opciones del platillo se piden al abrirlo.
+  const [opcionesPlatillo, setOpcionesPlatillo] = useState<OpcionPlatillo[] | null>(null);
+  const [platilloAbierto, setPlatilloAbierto] = useState(false);
 
   const equivalenciaDe = (nombre: string) =>
     meal.equivalences.find((equivalencia) => equivalencia.forName === nombre) ?? null;
@@ -165,11 +198,46 @@ function ComidaDelMenu({
     setErrorCambio(null);
     setCambiando(toName);
     try {
-      await postSwap({ menuNumber, slot: meal.slot, forName, toName });
+      const respuesta = await postSwap({ menuNumber, slot: meal.slot, forName, toName });
+      setAviso(respuesta.aviso ?? null);
       await onSwapped();
       setAbierto(null);
     } catch (error) {
       setErrorCambio(error instanceof ApiError ? error.message : "No se pudo hacer el cambio");
+    } finally {
+      setCambiando(null);
+    }
+  }
+
+  async function abrirPlatillo() {
+    setErrorCambio(null);
+    if (platilloAbierto) {
+      setPlatilloAbierto(false);
+      return;
+    }
+    setAbierto(null);
+    setPlatilloAbierto(true);
+    setOpcionesPlatillo(null);
+    try {
+      const { opciones } = await getOpcionesPlatillo(menuNumber, meal.slot);
+      setOpcionesPlatillo(opciones);
+    } catch (error) {
+      setOpcionesPlatillo([]);
+      setErrorCambio(error instanceof ApiError ? error.message : "No se pudieron cargar las opciones");
+    }
+  }
+
+  async function cambiarPlatillo(preparacionId: string) {
+    if (cambiando) return;
+    setErrorCambio(null);
+    setCambiando(preparacionId);
+    try {
+      await postCambiarPlatillo({ menuNumber, slot: meal.slot, preparacionId });
+      setAviso(null);
+      await onSwapped();
+      setPlatilloAbierto(false);
+    } catch (error) {
+      setErrorCambio(error instanceof ApiError ? error.message : "No se pudo cambiar el platillo");
     } finally {
       setCambiando(null);
     }
@@ -281,15 +349,52 @@ function ComidaDelMenu({
           debajo, uno por renglón —sin acordeón—. Lo suelto sigue después. */}
       {grupo.platillo ? (
         <>
-          <Text style={styles.platillo} numberOfLines={2}>
-            {grupo.platillo.nombre}
-          </Text>
+          {/* "cambiar" en el NOMBRE cambia el platillo entero (sopa por
+              sopa); en un ingrediente, solo dentro del platillo. */}
+          <Pressable onPress={() => void abrirPlatillo()} style={styles.itemFila}>
+            <Text style={[styles.platillo, styles.itemNombre]} numberOfLines={2}>
+              {grupo.platillo.nombre}
+            </Text>
+            <Text style={styles.itemCambio}>{platilloAbierto ? "−" : "cambiar"}</Text>
+          </Pressable>
+          {platilloAbierto && (
+            <View style={styles.equivalenciaWrap}>
+              {opcionesPlatillo === null ? (
+                <ActivityIndicator size="small" color={colors.champan} />
+              ) : opcionesPlatillo.length === 0 ? (
+                <Parrafo style={styles.equivalenciaAviso}>
+                  No hay otro platillo que quepa en esta comida con tus macros.
+                </Parrafo>
+              ) : (
+                opcionesPlatillo.map((opcion) => (
+                  <Pressable
+                    key={opcion.id}
+                    onPress={() => void cambiarPlatillo(opcion.id)}
+                    disabled={cambiando !== null}
+                    style={[styles.equivalenciaOpcion, cambiando === opcion.id && styles.equivalenciaOpcionOn]}
+                  >
+                    <Text style={styles.equivalenciaOpcionTexto} numberOfLines={1}>
+                      {opcion.nombre}
+                    </Text>
+                    {cambiando === opcion.id ? (
+                      <ActivityIndicator size="small" color={colors.champan} />
+                    ) : (
+                      <Text style={styles.equivalenciaAprox}>{Math.round(opcion.totals.kcal)} kcal</Text>
+                    )}
+                  </Pressable>
+                ))
+              )}
+            </View>
+          )}
           <View style={styles.platilloIngredientes}>
             {grupo.ingredientes.map((item) => renglon(item))}
           </View>
         </>
       ) : null}
       {grupo.sueltos.map((item) => renglon(item))}
+      <TomasDeLaComida tomas={tomas} onToggle={onToggleToma} />
+      {aviso && <Text style={styles.equivalenciaAviso}>{aviso}</Text>}
+      {platilloAbierto && errorCambio && <Text style={styles.equivalenciaError}>{errorCambio}</Text>}
     </View>
   );
 }
