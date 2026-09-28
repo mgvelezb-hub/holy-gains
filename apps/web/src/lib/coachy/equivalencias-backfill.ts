@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { equivalenciasDeAlimento } from "engine";
+import { FOODS, equivalenciasDeAlimento, familiaDe, normalize } from "engine";
 import type { Profile as EngineProfile } from "engine";
 
 /**
@@ -17,6 +17,15 @@ import type { Profile as EngineProfile } from "engine";
  *  - Un alimento con pocas opciones recibe las que le faltan, AGREGADAS al
  *    final; las que ya estaban no se tocan ni se reordenan, porque entre
  *    ellas está la opción de "volver" que dejó un intercambio anterior.
+ *
+ * Y dos reglas que valen también para lo ya guardado:
+ *
+ *  - El ingrediente de un platillo (la lenteja de la sopa) solo ofrece
+ *    hermanos del platillo: sus opciones se rehacen desde la receta y se
+ *    descartan las que no pertenecen (el arroz suelto que ofrecía antes).
+ *  - Ninguna opción repite la proteína principal o el cereal de OTRA comida
+ *    del día: cambiar el pollo de la comida por el atún de la cena es comer
+ *    atún dos veces.
  *
  * Es una transformación pura sobre el JSON: no sabe de Prisma, así que se
  * prueba sin base de datos. Quien la llama decide si vale la pena guardar
@@ -48,10 +57,21 @@ export function rellenaEquivalencias(
 
   let cambiado = false;
 
-  const nuevasMeals: JsonRecord[] = meals.map((meal) => {
+  const nuevasMeals: JsonRecord[] = meals.map((meal, mealIndex) => {
     const items = asRecordArray(meal.items);
     const equivalences = asRecordArray(meal.equivalences);
     const porNombre = new Map(equivalences.map((e) => [String(e.forName ?? ""), e]));
+    const platilloDeLaComida = preparacionIdDe(meal.preparacion);
+
+    // Lo que hay en las OTRAS comidas del día: sus familias no se ofrecen.
+    const enElDia = meals
+      .filter((_, index) => index !== mealIndex)
+      .flatMap((otra) => asRecordArray(otra.items))
+      .map((otro) => String(otro.foodId ?? otro.name ?? ""))
+      .filter((valor) => valor !== "");
+    const familiasFuera = new Set(
+      enElDia.map((valor) => familiaDeValor(valor)).filter((f): f is string => f !== undefined),
+    );
 
     for (const item of items) {
       const nombre = String(item.name ?? "");
@@ -59,13 +79,36 @@ export function rellenaEquivalencias(
       if (nombre === "" || gramos <= 0) continue;
 
       const existente = porNombre.get(nombre);
-      const opcionesActuales = existente ? asRecordArray(existente.options) : [];
+      const guardadas = existente ? asRecordArray(existente.options) : [];
+      const preparacionId = preparacionIdDe(item.preparacion) ?? undefined;
+      const esDePlatillo = preparacionId !== undefined && preparacionId === platilloDeLaComida;
+
+      const frescas = equivalenciasDeAlimento(nombre, gramos, profile, undefined, undefined, {
+        enElDia,
+        ...(esDePlatillo ? { preparacionId } : {}),
+      });
+
+      // Las guardadas que rompen una regla se van: las de fuera del platillo
+      // y las que repiten la familia de otra comida (salvo la propia).
+      const propia = familiaDeValor(String(item.foodId ?? nombre));
+      const validas = new Set((frescas?.options ?? []).map((o) => o.name));
+      const opcionesActuales = guardadas.filter((opcion) => {
+        if (esDePlatillo) return validas.has(String(opcion.name ?? ""));
+        const familia = familiaDeValor(String(opcion.foodId ?? opcion.name ?? ""));
+        return familia === undefined || familia === propia || !familiasFuera.has(familia);
+      });
+      const depuradas = opcionesActuales.length !== guardadas.length;
+
+      if (depuradas && frescas === null) {
+        porNombre.set(nombre, { ...(existente ?? {}), forName: nombre, options: opcionesActuales });
+        if (opcionesActuales.length === 0) porNombre.delete(nombre);
+        cambiado = true;
+        continue;
+      }
 
       // Ya tiene de dónde elegir: no se toca. Rellenar de más movería una
       // lista que la persona ya conoce sin que ella haya pedido nada.
-      if (opcionesActuales.length >= 3) continue;
-
-      const frescas = equivalenciasDeAlimento(nombre, gramos, profile);
+      if (!depuradas && opcionesActuales.length >= 3) continue;
       if (frescas === null) continue;
 
       // Las que ya estaban se conservan tal cual —incluida la opción de
@@ -83,7 +126,7 @@ export function rellenaEquivalencias(
           ...(opcion.aproximada === true ? { aproximada: true } : {}),
         }));
 
-      if (agregadas.length === 0) continue;
+      if (agregadas.length === 0 && !depuradas) continue;
 
       const opciones = [...opcionesActuales, ...agregadas];
       const aproximada =
@@ -117,4 +160,19 @@ export function rellenaEquivalencias(
     equivalencesJson: plano as unknown as Prisma.JsonValue,
     cambiado: true,
   };
+}
+
+/** El id del platillo guardado en la comida o en el renglón, si lo hay. */
+function preparacionIdDe(valor: unknown): string | null {
+  if (typeof valor !== "object" || valor === null) return null;
+  const id = (valor as JsonRecord).id;
+  return typeof id === "string" ? id : null;
+}
+
+/** La familia (proteína principal o cereal) de un id o nombre del catálogo. */
+function familiaDeValor(valor: string): string | undefined {
+  const buscado = normalize(valor);
+  const food =
+    FOODS.find((f) => f.id === valor) ?? FOODS.find((f) => normalize(f.name) === buscado);
+  return food ? familiaDe(food) : undefined;
 }
