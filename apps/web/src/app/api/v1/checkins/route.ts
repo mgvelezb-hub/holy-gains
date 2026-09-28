@@ -3,6 +3,7 @@ import type { ZodError } from "zod";
 
 import { apiUser, unauthorized } from "@/lib/api/auth";
 import { runCoachy } from "@/lib/coachy";
+import { correrAlGuardar } from "@/lib/api/checkin-flujo";
 import { persistCheckIn } from "@/lib/checkin-write";
 import { fromISODate, decimalToNumber, isoFromDateColumn } from "@/lib/format";
 import { puntoCeroDe } from "@/lib/checkins";
@@ -145,13 +146,19 @@ export async function POST(request: Request): Promise<NextResponse> {
   // Mismo patrón que la server action: Coachy corre después de contestarle al
   // cliente, y si truena la cola de `/api/coachy/run` lo reintenta. Sin
   // `revalidatePath` — el cliente nativo no tiene RSC cache.
-  after(async () => {
-    try {
-      await runCoachy(checkIn.id);
-    } catch (error) {
-      console.error("[coachy] falló el análisis del check-in (api)", checkIn.id, error);
-    }
-  });
+  //
+  // Con `fotosPendientes: true` no corre aquí: lo dispara
+  // `POST /checkins/:id/listo` cuando las fotos ya están arriba
+  // (`lib/api/checkin-flujo.ts`).
+  if (correrAlGuardar(raw)) {
+    after(async () => {
+      try {
+        await runCoachy(checkIn.id);
+      } catch (error) {
+        console.error("[coachy] falló el análisis del check-in (api)", checkIn.id, error);
+      }
+    });
+  }
 
   return NextResponse.json(
     { id: checkIn.id, date: isoFromDateColumn(checkIn.date) },
