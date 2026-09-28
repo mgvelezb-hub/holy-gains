@@ -9,12 +9,84 @@ import type { BloqueMensual, EstadoAnalisis, ProximoMensual } from "@/lib/api";
 export const SONDEO_MS = 5000;
 
 /**
- * A cuánto se programa el aviso local si la persona sale de la app antes de
- * que el análisis esté. Sin APNs no hay push real: el teléfono no puede
- * preguntarle al servidor cuando la app está en segundo plano, así que el
+ * A cuánto se programa el aviso local. Sin APNs no hay push real: con la app
+ * en segundo plano el teléfono no puede preguntarle al servidor, así que el
  * aviso se programa a ciegas con un margen que casi siempre alcanza.
  */
 export const AVISO_ANALISIS_SEGUNDOS = 180;
+
+/** Cuántas veces se mueve el aviso +3 min si la retro no está a tiempo. */
+export const MAX_REPROGRAMACIONES = 3;
+
+/**
+ * Cuánto antes de que venza se reprograma el aviso con la app abierta. Tiene
+ * que cubrir más de un sondeo: si no, el aviso viejo suena antes de moverse.
+ */
+export const MARGEN_REPROGRAMAR_MS = 15_000;
+
+export type AccionAviso = { tipo: "programar"; segundos: number } | { tipo: "cancelar" } | { tipo: "nada" };
+
+/** El aviso de "tu retro está lista", mientras el servidor analiza. */
+export interface AvisoAnalisis {
+  terminado: boolean;
+  /** Cuándo suena el aviso programado (ms). */
+  venceEn: number;
+  reprogramaciones: number;
+  /** Ya venció una vez sin retro: la pantalla dice "sigo con ello". */
+  sigoConEllo: boolean;
+}
+
+export type EventoAviso =
+  | { tipo: "sondeo"; estado: EstadoAnalisis; ahora: number }
+  | { tipo: "revisionHumana" };
+
+/**
+ * Al enviar el check-in, antes de cualquier transición: programar al irse a
+ * segundo plano es una carrera async que iOS puede cortar suspendiendo la app.
+ */
+export function alEnviar(ahora: number): { aviso: AvisoAnalisis; accion: AccionAviso } {
+  return {
+    aviso: {
+      terminado: false,
+      venceEn: ahora + AVISO_ANALISIS_SEGUNDOS * 1000,
+      reprogramaciones: 0,
+      sigoConEllo: false,
+    },
+    accion: { tipo: "programar", segundos: AVISO_ANALISIS_SEGUNDOS },
+  };
+}
+
+/**
+ * Cada sondeo en primer plano (incluido el de volver a la app): si ya está,
+ * se cancela y se navega; si está por vencer sin retro, se mueve +3 min.
+ */
+export function pasoAviso(
+  aviso: AvisoAnalisis,
+  evento: EventoAviso,
+): { aviso: AvisoAnalisis; accion: AccionAviso; navegar: boolean } {
+  const nada = { aviso, accion: { tipo: "nada" } as const, navegar: false };
+  if (aviso.terminado) return nada;
+
+  const terminado = { ...aviso, terminado: true };
+  if (evento.tipo === "revisionHumana") return { aviso: terminado, accion: { tipo: "cancelar" }, navegar: false };
+  if (evento.estado === "lista") return { aviso: terminado, accion: { tipo: "cancelar" }, navegar: true };
+
+  if (evento.ahora < aviso.venceEn - MARGEN_REPROGRAMAR_MS) return nada;
+  if (aviso.reprogramaciones >= MAX_REPROGRAMACIONES) {
+    return { ...nada, aviso: { ...aviso, sigoConEllo: true } };
+  }
+
+  return {
+    aviso: {
+      terminado: false,
+      venceEn: evento.ahora + AVISO_ANALISIS_SEGUNDOS * 1000,
+      reprogramaciones: aviso.reprogramaciones + 1,
+      sigoConEllo: true,
+    },
+    accion: { tipo: "programar", segundos: AVISO_ANALISIS_SEGUNDOS },
+    navegar: false,
+  };
+}
 
 export function textoAnalizando(opciones: { conFotos: boolean; esMensual: boolean }): string {
   const extras = [
@@ -27,16 +99,6 @@ export function textoAnalizando(opciones: { conFotos: boolean; esMensual: boolea
   if (extras.length === 2) cruce = `tus números, ${extras[0]} y ${extras[1]}`;
 
   return `Estoy cruzando ${cruce}. Puedes salir de la app; te aviso cuando esté listo.`;
-}
-
-/** Qué hacer al volver al primer plano (o en cada sondeo). */
-export function alVolver(estado: EstadoAnalisis): {
-  cancelarAviso: boolean;
-  navegar: boolean;
-  seguirSondeando: boolean;
-} {
-  const lista = estado === "lista";
-  return { cancelarAviso: lista, navegar: lista, seguirSondeando: !lista };
 }
 
 /** La línea de la tarjeta de Hoy, con el contador del servidor. */

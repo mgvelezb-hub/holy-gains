@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   AVISO_ANALISIS_SEGUNDOS,
+  MARGEN_REPROGRAMAR_MS,
+  MAX_REPROGRAMACIONES,
   SONDEO_MS,
-  alVolver,
+  alEnviar,
+  pasoAviso,
   flechaDelta,
   lineaCheckin,
   resumenEsteMes,
@@ -25,16 +28,90 @@ describe("textoAnalizando", () => {
   });
 });
 
-describe("alVolver", () => {
-  it("si ya está, cancela el aviso y navega", () => {
-    expect(alVolver("lista")).toEqual({ cancelarAviso: true, navegar: true, seguirSondeando: false });
-  });
-  it("si no, sigue sondeando", () => {
-    expect(alVolver("analizando")).toEqual({ cancelarAviso: false, navegar: false, seguirSondeando: true });
-  });
-  it("sondea cada 5 s y avisa a los 3 min", () => {
+describe("el aviso de la retro", () => {
+  const T0 = 1_000_000;
+  const TRES_MIN = AVISO_ANALISIS_SEGUNDOS * 1000;
+
+  it("sondea cada 5 s y avisa a los 3 min, hasta 3 reprogramaciones", () => {
     expect(SONDEO_MS).toBe(5000);
     expect(AVISO_ANALISIS_SEGUNDOS).toBe(180);
+    expect(MAX_REPROGRAMACIONES).toBe(3);
+    // El margen tiene que cubrir al menos un sondeo: si no, el aviso viejo
+    // se dispara antes de que el sondeo alcance a moverlo.
+    expect(MARGEN_REPROGRAMAR_MS).toBeGreaterThan(SONDEO_MS);
+  });
+
+  it("se programa en cuanto se envía, no al irse a segundo plano", () => {
+    const { aviso, accion } = alEnviar(T0);
+    expect(accion).toEqual({ tipo: "programar", segundos: AVISO_ANALISIS_SEGUNDOS });
+    expect(aviso).toEqual({ terminado: false, venceEn: T0 + TRES_MIN, reprogramaciones: 0, sigoConEllo: false });
+  });
+
+  it("si el sondeo la encuentra lista, cancela y navega", () => {
+    const { aviso } = alEnviar(T0);
+    const paso = pasoAviso(aviso, { tipo: "sondeo", estado: "lista", ahora: T0 + 60_000 });
+    expect(paso.accion).toEqual({ tipo: "cancelar" });
+    expect(paso.navegar).toBe(true);
+    expect(paso.aviso.terminado).toBe(true);
+  });
+
+  it("antes de vencer, sin retro, no toca el aviso", () => {
+    const { aviso } = alEnviar(T0);
+    const paso = pasoAviso(aviso, { tipo: "sondeo", estado: "analizando", ahora: T0 + 60_000 });
+    expect(paso.accion).toEqual({ tipo: "nada" });
+    expect(paso.navegar).toBe(false);
+    expect(paso.aviso).toEqual(aviso);
+  });
+
+  it("a punto de vencer en primer plano y sin retro: reprograma +3 min y dice 'sigo con ello'", () => {
+    const { aviso } = alEnviar(T0);
+    const ahora = T0 + TRES_MIN - MARGEN_REPROGRAMAR_MS;
+    const paso = pasoAviso(aviso, { tipo: "sondeo", estado: "analizando", ahora });
+    expect(paso.accion).toEqual({ tipo: "programar", segundos: AVISO_ANALISIS_SEGUNDOS });
+    expect(paso.aviso).toEqual({
+      terminado: false,
+      venceEn: ahora + TRES_MIN,
+      reprogramaciones: 1,
+      sigoConEllo: true,
+    });
+  });
+
+  it("al volver después de que el aviso ya sonó y sin retro, lo vuelve a poner", () => {
+    const { aviso } = alEnviar(T0);
+    const paso = pasoAviso(aviso, { tipo: "sondeo", estado: "analizando", ahora: T0 + 10 * 60_000 });
+    expect(paso.accion.tipo).toBe("programar");
+    expect(paso.aviso.reprogramaciones).toBe(1);
+  });
+
+  it("reprograma máximo 3 veces; después deja el último aviso en pie", () => {
+    let { aviso } = alEnviar(T0);
+    const programadas: number[] = [];
+    for (let minuto = 1; minuto <= 30; minuto++) {
+      const paso = pasoAviso(aviso, { tipo: "sondeo", estado: "analizando", ahora: T0 + minuto * 60_000 });
+      if (paso.accion.tipo === "programar") programadas.push(minuto);
+      expect(paso.accion.tipo).not.toBe("cancelar");
+      aviso = paso.aviso;
+    }
+    expect(programadas).toEqual([3, 6, 9]);
+    expect(aviso.reprogramaciones).toBe(MAX_REPROGRAMACIONES);
+    expect(aviso.sigoConEllo).toBe(true);
+  });
+
+  it("en revisión humana cancela y no navega", () => {
+    const { aviso } = alEnviar(T0);
+    const paso = pasoAviso(aviso, { tipo: "revisionHumana" });
+    expect(paso.accion).toEqual({ tipo: "cancelar" });
+    expect(paso.navegar).toBe(false);
+    expect(paso.aviso.terminado).toBe(true);
+  });
+
+  it("ya terminado, nada lo mueve", () => {
+    const { aviso } = alEnviar(T0);
+    const fin = pasoAviso(aviso, { tipo: "sondeo", estado: "lista", ahora: T0 }).aviso;
+    const paso = pasoAviso(fin, { tipo: "sondeo", estado: "analizando", ahora: T0 + TRES_MIN });
+    expect(paso.accion).toEqual({ tipo: "nada" });
+    expect(paso.navegar).toBe(false);
+    expect(paso.aviso).toEqual(fin);
   });
 });
 

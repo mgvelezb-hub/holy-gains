@@ -4,31 +4,34 @@ import { ActivityIndicator, AppState, StyleSheet, Text, View } from "react-nativ
 
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/context/theme";
-import { AVISO_ANALISIS_SEGUNDOS, SONDEO_MS, alVolver, textoAnalizando } from "@/lib/analisis-checkin";
+import { SONDEO_MS, pasoAviso, textoAnalizando, type AvisoAnalisis } from "@/lib/analisis-checkin";
 import { getDecision, postCheckinListo } from "@/lib/api";
-import { cancelarAvisoAnalisis, pedirPermisoNotificaciones, programarAvisoAnalisis } from "@/lib/recordatorio";
+import { aplicarAccionAviso } from "@/lib/recordatorio";
 import { fonts, spacing, type as typeScale, type Palette } from "@/lib/theme";
 
 /**
  * "Analizando tu check-in…": lo que se ve entre enviar y tener la retro.
  *
- * Con la app en primer plano pregunta al servidor cada 5 s
- * (`GET /decision?desde=`) y en cuanto está, abre `/decision`. Si la persona
- * se va a otra app antes, se programa un aviso local a 3 min; al volver se
- * verifica: si ya está, se cancela el aviso y se navega; si no, se sigue
- * preguntando. Salir de esta pantalla sin que esté lista también deja el
- * aviso programado: la promesa es "te aviso", no "espera aquí".
+ * El aviso local ya viene programado desde el envío (`alEnviar`): irse a
+ * segundo plano o salir de aquí no programa nada, porque esa cadena async es
+ * justo la que iOS corta al suspender la app. Con la app en primer plano se
+ * pregunta al servidor cada 5 s (`GET /decision?desde=`); `pasoAviso` decide
+ * si se cancela y se abre `/decision`, o si el aviso se mueve +3 min porque
+ * la retro no llegó a tiempo ("sigo con ello").
  *
  * Sin APNs no hay push de verdad (ver `programarAvisoAnalisis`): el aviso es
- * local y a ciegas, y por eso existe la verificación al volver.
+ * local y a ciegas, y por eso existe la verificación en cada sondeo.
  */
 export function AnalizandoCheckin({
   checkInId,
+  aviso: avisoInicial,
   listoPendiente,
   conFotos,
   esMensual,
 }: {
   checkInId: string;
+  /** El aviso que se programó al enviar (`alEnviar`). */
+  aviso: AvisoAnalisis;
   /**
    * El aviso de "fotos listas" no llegó al servidor (sin señal): se reintenta
    * en cada sondeo hasta que entre una vez. Solo entonces — reintentar a
@@ -42,11 +45,12 @@ export function AnalizandoCheckin({
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [enRevision, setEnRevision] = useState(false);
-  const terminado = useRef(false);
+  const [sigoConEllo, setSigoConEllo] = useState(false);
+  const aviso = useRef(avisoInicial);
   const faltaListo = useRef(listoPendiente);
 
   const revisar = useCallback(async () => {
-    if (terminado.current) return;
+    if (aviso.current.terminado) return;
     if (faltaListo.current) {
       faltaListo.current = await postCheckinListo(checkInId).then(
         () => false,
@@ -58,27 +62,24 @@ export function AnalizandoCheckin({
       if (respuesta.enRevisionHumana) {
         // Espera a su coach humano: ni sondeo ni aviso — la IA no es quien
         // la va a publicar, y prometer "te aviso" sería mentir.
-        terminado.current = true;
+        const paso = pasoAviso(aviso.current, { tipo: "revisionHumana" });
+        aviso.current = paso.aviso;
         setEnRevision(true);
-        await cancelarAvisoAnalisis();
+        await aplicarAccionAviso(paso.accion);
         return;
       }
 
-      const paso = alVolver(respuesta.estado);
-      if (paso.cancelarAviso) await cancelarAvisoAnalisis();
-      if (paso.navegar) {
-        terminado.current = true;
-        router.replace("/decision");
-      }
+      const paso = pasoAviso(aviso.current, { tipo: "sondeo", estado: respuesta.estado, ahora: Date.now() });
+      aviso.current = paso.aviso;
+      setSigoConEllo(paso.aviso.sigoConEllo);
+      await aplicarAccionAviso(paso.accion);
+      if (paso.navegar) router.replace("/decision");
     } catch {
       // Sin señal se vuelve a intentar en el siguiente sondeo.
     }
   }, [checkInId, router]);
 
   useEffect(() => {
-    // El permiso se pide aquí, en primer plano: al irse a segundo plano iOS
-    // ya no puede mostrar el diálogo.
-    void pedirPermisoNotificaciones();
     void revisar();
 
     let intervalo: ReturnType<typeof setInterval> | null =
@@ -87,7 +88,7 @@ export function AnalizandoCheckin({
     const sub = AppState.addEventListener("change", (estado) => {
       if (estado === "active") {
         void revisar();
-        if (intervalo === null && !terminado.current) {
+        if (intervalo === null && !aviso.current.terminado) {
           intervalo = setInterval(() => void revisar(), SONDEO_MS);
         }
         return;
@@ -95,14 +96,12 @@ export function AnalizandoCheckin({
       if (estado === "background") {
         if (intervalo !== null) clearInterval(intervalo);
         intervalo = null;
-        if (!terminado.current) void programarAvisoAnalisis(AVISO_ANALISIS_SEGUNDOS);
       }
     });
 
     return () => {
       if (intervalo !== null) clearInterval(intervalo);
       sub.remove();
-      if (!terminado.current) void programarAvisoAnalisis(AVISO_ANALISIS_SEGUNDOS);
     };
   }, [revisar]);
 
@@ -124,6 +123,7 @@ export function AnalizandoCheckin({
       <ActivityIndicator size="large" color={colors.champan} />
       <Text style={styles.title}>Analizando tu check-in…</Text>
       <Text style={styles.message}>{textoAnalizando({ conFotos, esMensual })}</Text>
+      {sigoConEllo ? <Text style={styles.nota}>Tarda más de lo normal; sigo con ello.</Text> : null}
       <PrimaryButton label="Volver a Hoy" onPress={() => router.replace("/")} />
     </View>
   );
@@ -151,5 +151,11 @@ const makeStyles = (colors: Palette) =>
       color: colors.marfil,
       textAlign: "center",
       lineHeight: 24,
+    },
+    nota: {
+      fontFamily: fonts.sans,
+      ...typeScale.bodySm,
+      color: colors.paloRosa,
+      textAlign: "center",
     },
   });

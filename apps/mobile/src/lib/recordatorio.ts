@@ -1,6 +1,8 @@
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 
+import type { AccionAviso } from "@/lib/analisis-checkin";
+
 /**
  * El recordatorio del check-in.
  *
@@ -95,9 +97,9 @@ export const AVISO_ANALISIS_ID = "analisis-checkin";
  * **Límite conocido:** es un aviso LOCAL programado a ciegas. Sin APNs el
  * servidor no puede despertar al teléfono, y con la app en segundo plano el
  * teléfono no puede preguntar si ya está; así que se programa a `segundos`
- * (3 min, que casi siempre alcanza) y al volver al primer plano la pantalla
- * verifica: si ya está lo cancela y navega, si no sigue sondeando. Con la app
- * abierta no hace falta aviso: el sondeo navega solo.
+ * (3 min, que casi siempre alcanza) en cuanto se envía el check-in, y el
+ * sondeo en primer plano lo cancela al encontrar la retro o lo mueve +3 min
+ * si está por vencer sin ella (reglas en `pasoAviso`).
  */
 export async function programarAvisoAnalisis(segundos: number): Promise<boolean> {
   if (Platform.OS === "web") return false;
@@ -124,6 +126,12 @@ export async function programarAvisoAnalisis(segundos: number): Promise<boolean>
 export async function cancelarAvisoAnalisis(): Promise<void> {
   if (Platform.OS === "web") return;
   await Notifications.cancelScheduledNotificationAsync(AVISO_ANALISIS_ID).catch(() => {});
+}
+
+/** Ejecuta lo que decidió `pasoAviso` / `alEnviar` (`lib/analisis-checkin.ts`). */
+export async function aplicarAccionAviso(accion: AccionAviso): Promise<void> {
+  if (accion.tipo === "programar") await programarAvisoAnalisis(accion.segundos);
+  if (accion.tipo === "cancelar") await cancelarAvisoAnalisis();
 }
 
 // ---------------------------------------------------------------------------

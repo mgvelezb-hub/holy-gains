@@ -34,7 +34,8 @@ import {
   type Symptom,
 } from "@/lib/api";
 import { useSession } from "@/context/session";
-import { tocaMensual } from "@/lib/analisis-checkin";
+import { alEnviar, tocaMensual, type AvisoAnalisis } from "@/lib/analisis-checkin";
+import { aplicarAccionAviso } from "@/lib/recordatorio";
 import { supabase } from "@/lib/supabase";
 import { fonts, radius, spacing, type Palette, type as typeScale } from "@/lib/theme";
 
@@ -63,6 +64,7 @@ export default function CheckinScreen() {
   /** El check-in ya se envió: su id, para sondear el análisis. */
   const [enviado, setEnviado] = useState<{
     id: string;
+    aviso: AvisoAnalisis;
     /** `listo` no llegó al servidor: la pantalla de análisis lo reintenta. */
     listoPendiente: boolean;
     conFotos: boolean;
@@ -325,6 +327,12 @@ export default function CheckinScreen() {
         periodStarted,
       });
 
+      // El aviso de "tu retro está lista" se programa YA, con la app en primer
+      // plano: dejarlo para cuando se vaya a segundo plano es una carrera que
+      // iOS puede cortar suspendiéndola antes de que termine.
+      const inicioAviso = alEnviar(Date.now());
+      const avisoProgramado = aplicarAccionAviso(inicioAviso.accion);
+
       // Con fotos, el servidor espera a `listo` para analizar con ellas. Si la
       // subida falla se avisa igual: mejor análisis sin fotos que sin decisión.
       let listoPendiente = false;
@@ -338,8 +346,10 @@ export default function CheckinScreen() {
       }
 
       const trajoMensuales = [legLeftCm, legRightCm, armLeftCm, armRightCm].some((v) => v.trim() !== "");
+      await avisoProgramado;
       setEnviado({
         id: creado.id,
+        aviso: inicioAviso.aviso,
         listoPendiente,
         conFotos: hayFotos,
         esMensual: trajoMensuales || esMesDeMedidas,
@@ -376,6 +386,7 @@ export default function CheckinScreen() {
     return (
       <AnalizandoCheckin
         checkInId={enviado.id}
+        aviso={enviado.aviso}
         listoPendiente={enviado.listoPendiente}
         conFotos={enviado.conFotos}
         esMensual={enviado.esMensual}
