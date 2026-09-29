@@ -59,7 +59,7 @@ describe("diaCodigoAWeekday", () => {
 });
 
 describe("resumenMenu", () => {
-  it("usa display si existe, si no el name, máximo 4", () => {
+  it("usa display si existe, si no el name, sin tope: el quinto también sale", () => {
     const items = [
       { name: "Pechuga de pollo", display: "Pechuga" },
       { name: "Arroz" },
@@ -67,7 +67,7 @@ describe("resumenMenu", () => {
       { name: "Aguacate" },
       { name: "Tortilla" },
     ];
-    expect(resumenMenu(items)).toBe("Pechuga, Arroz, Brócoli, Aguacate");
+    expect(resumenMenu(items)).toBe("Pechuga, Arroz, Brócoli, Aguacate, Tortilla");
   });
 
   it("sin items regresa vacío", () => {

@@ -253,10 +253,13 @@ export interface ItemMenuAviso {
   display?: string;
 }
 
-/** El resumen del menú que va en el cuerpo del "Prepárate": nombres, sin gramos, máximo 4. */
+/**
+ * El resumen del menú que va en el cuerpo del "Prepárate": nombres, sin
+ * gramos, TODOS. Antes cortaba a 4 y el quinto alimento no aparecía en ningún
+ * lado; iOS acomoda el cuerpo largo al expandir el aviso.
+ */
 export function resumenMenu(items: ItemMenuAviso[]): string {
   return items
-    .slice(0, 4)
     .map((item) => item.display ?? item.name)
     .join(", ");
 }

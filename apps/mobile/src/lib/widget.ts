@@ -22,6 +22,10 @@
 import { Platform } from "react-native";
 import { ExtensionStorage } from "@bacons/apple-targets";
 
+import { parseTimeHintMinutes, type SiguienteComida } from "@/lib/siguiente-comida";
+
+export { parseTimeHintMinutes };
+
 const APP_GROUP = "group.com.holygains.app";
 
 /**
@@ -46,8 +50,14 @@ export type WidgetPayload = {
   /** Nombre del tiempo de comida ya elegido (ver `pickNextMeal`). */
   comidaLabel?: string | null;
   comidaHora?: string | null;
-  /** Ya formateados: ["Naranja — 180 g", "Pollo — 150 g"]. Máx. 3 se pintan. */
+  /** Ya formateados: ["Naranja — 180 g", "Pollo — 150 g"]. TODOS: el widget decide cuántos caben y avisa "+N más". */
   comidaItems?: string[] | null;
+  /**
+   * La siguiente comida completa (`siguienteComida`), en JSON: renglones con
+   * el platillo marcado y las tomas ("Ashwagandha 300 mg"). El widget la
+   * prefiere sobre `comidaItems`, que queda para builds viejos del widget.
+   */
+  comidaDetalle?: SiguienteComida | null;
 };
 
 /** `undefined` no toca la llave; `null` la borra; un valor la escribe (transformado por `toStored`). */
@@ -83,6 +93,7 @@ export function syncWidgetData(payload: WidgetPayload): void {
   writeField(storage, "comidaLabel", payload.comidaLabel, (value) => value);
   writeField(storage, "comidaHora", payload.comidaHora, (value) => value);
   writeField(storage, "comidaItems", payload.comidaItems, (value) => value.join("|"));
+  writeField(storage, "comidaDetalle", payload.comidaDetalle, (value) => JSON.stringify(value));
 
   storage.set("actualizado", new Date().toISOString());
 
@@ -112,27 +123,6 @@ export function formatMealItem(item: WidgetMealItem): string {
   if (item.free) return `${item.name} (libre)`;
   // En el widget cabe una línea por alimento: gana la unidad en que se sirve.
   return item.portion ? item.portion : `${item.name} — ${item.grams} g`;
-}
-
-/**
- * `timeHint` es texto libre que redacta el motor de Coachy (p. ej. "7:00 am",
- * "19:30", "7 pm"). Devuelve minutos desde medianoche, o `null` si el texto
- * no trae una hora reconocible.
- */
-export function parseTimeHintMinutes(timeHint: string): number | null {
-  const match = timeHint.match(/(\d{1,2})(?::(\d{2}))?\s*(a\.?\s?m\.?|p\.?\s?m\.?)?/i);
-  if (!match) return null;
-
-  let hours = Number(match[1]);
-  const minutes = match[2] ? Number(match[2]) : 0;
-  const meridiem = match[3]?.replace(/[.\s]/g, "").toLowerCase();
-
-  if (hours > 23 || minutes > 59) return null;
-
-  if (meridiem === "pm" && hours < 12) hours += 12;
-  if (meridiem === "am" && hours === 12) hours = 0;
-
-  return hours * 60 + minutes;
 }
 
 /**

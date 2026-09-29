@@ -62,7 +62,8 @@ import {
 import { CambiarBloque } from "@/components/CambiarBloque";
 import { nombreDelRecorte, ordenarBloquesDelDia } from "@/lib/entrenamiento";
 import { formatMealItem, pickNextMeal, syncWidgetData } from "@/lib/widget";
-import { enviarResumenAlReloj } from "@/lib/reloj-nativo";
+import { enviarResumenAlReloj, enviarSiguienteComidaAlReloj } from "@/lib/reloj-nativo";
+import { comidasPendientesDesde, renglonesPlanos, type PlanParaSiguienteComida } from "@/lib/siguiente-comida";
 
 /**
  * "Hoy" — la pantalla de lo que se hace en las próximas horas.
@@ -209,7 +210,18 @@ export default function HoyScreen() {
       setError(null);
 
       try {
-        const nextMeal = pickNextMeal(nutrition?.menus[0]?.meals ?? []);
+        // `GET /nutrition` ya es el plan canónico (menú de hoy, horas de hoy,
+        // tomas amarradas); `NutritionResponse` solo declara las llaves viejas.
+        // Sin `hoy` (API viejo) se cae al menú 1 como antes.
+        const plan = nutrition as (typeof nutrition & PlanParaSiguienteComida) | null;
+        const pendientes = plan?.hoy ? comidasPendientesDesde(plan) : [];
+        const legado = plan?.hoy ? null : pickNextMeal(nutrition?.menus[0]?.meals ?? []);
+        const siguiente = pendientes[0] ?? null;
+        const comidaLabel = siguiente?.nombre ?? legado?.label ?? null;
+        const comidaHora = siguiente?.hora ?? legado?.timeHint ?? null;
+        // TODOS los renglones: cada superficie decide cuántos caben y avisa
+        // "+N más". Antes aquí se cortaba a 3 y el cuarto no llegaba a nadie.
+        const comidaItems = siguiente ? renglonesPlanos(siguiente) : legado ? legado.items.map(formatMealItem) : null;
         syncWidgetData({
           racha: streak,
           mejorRacha: bestStreak(days),
@@ -219,9 +231,10 @@ export default function HoyScreen() {
           hoyEjercicios: todayCard?.exerciseCount ?? null,
           hoyEsquema: todayCard?.schemeLabel ?? null,
           hoyHecho: todayCard?.completed ?? false,
-          comidaLabel: nextMeal?.label ?? null,
-          comidaHora: nextMeal?.timeHint ?? null,
-          comidaItems: nextMeal ? nextMeal.items.slice(0, 3).map(formatMealItem) : null,
+          comidaLabel,
+          comidaHora,
+          comidaItems,
+          comidaDetalle: siguiente,
         });
 
         // El reloj recibe lo mismo, por el otro canal. Se manda desde aquí y
@@ -234,11 +247,14 @@ export default function HoyScreen() {
             (primeraOtra ? DISCIPLINE_LABELS[primeraOtra.discipline] : "Descanso"),
           ejercicios: todayCard?.exerciseCount ?? null,
           hecho: todayCard?.completed ?? false,
-          comida: nextMeal?.label ?? null,
-          comidaHora: nextMeal?.timeHint ?? null,
-          comidaItems: nextMeal ? nextMeal.items.slice(0, 3).map(formatMealItem) : null,
+          comida: comidaLabel,
+          comidaHora,
+          comidaItems,
           racha: streak,
         });
+        // La lista completa con tomas, para la pantalla "Siguiente comida"
+        // del reloj y su complicación.
+        enviarSiguienteComidaAlReloj(pendientes);
       } catch {
         // Sincronizar el widget o el reloj nunca debe tumbar la pantalla de Hoy.
       }

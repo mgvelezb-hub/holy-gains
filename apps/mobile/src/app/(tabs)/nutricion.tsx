@@ -37,8 +37,9 @@ import {
 } from "@/lib/plan-nutricion";
 import { programarComidas } from "@/lib/recordatorio";
 import { fonts, radius, spacing, type as typeScale, type Palette } from "@/lib/theme";
-import { actualizarComidaEnElReloj } from "@/lib/reloj-nativo";
-import { formatMealItem, pickNextMeal, syncWidgetData } from "@/lib/widget";
+import { actualizarComidaEnElReloj, enviarSiguienteComidaAlReloj } from "@/lib/reloj-nativo";
+import { comidaCompleta, comidasPendientesDesde, itemsParaAviso, renglonesPlanos } from "@/lib/siguiente-comida";
+import { syncWidgetData } from "@/lib/widget";
 
 /**
  * Nutrición — tablero de scorecards de una línea.
@@ -91,32 +92,38 @@ export default function NutricionScreen() {
       // El widget y el reloj reciben la próxima comida del menú de HOY (el
       // que dice el plan), con la hora de hoy ya resuelta.
       try {
-        const menuHoy = nuevo.menus.find((menu) => menu.menuNumber === nuevo.menuDeHoy) ?? nuevo.menus[0];
-        const horas = nuevo.horariosPorDia[nuevo.hoy.dia] ?? {};
-        const comidas = (menuHoy?.meals ?? []).map((meal) => ({ ...meal, timeHint: horas[meal.slot] ?? meal.timeHint }));
-        const nextMeal = pickNextMeal(comidas);
+        const pendientes = comidasPendientesDesde(nuevo);
+        const siguiente = pendientes[0] ?? null;
         const datos = {
-          comidaLabel: nextMeal?.label ?? null,
-          comidaHora: nextMeal?.timeHint ?? null,
-          comidaItems: nextMeal ? nextMeal.items.slice(0, 3).map(formatMealItem) : null,
+          comidaLabel: siguiente?.nombre ?? null,
+          comidaHora: siguiente?.hora ?? null,
+          comidaItems: siguiente ? renglonesPlanos(siguiente) : null,
+          comidaDetalle: siguiente,
         };
         syncWidgetData(datos);
         actualizarComidaEnElReloj({ comida: datos.comidaLabel, comidaHora: datos.comidaHora, comidaItems: datos.comidaItems });
+        enviarSiguienteComidaAlReloj(pendientes);
       } catch {
         // Sincronizar el widget o el reloj nunca debe tumbar Nutrición.
       }
 
       // Los avisos de comida llegan escritos del servidor: el "Prepárate" con
-      // su menú y sus tomas, y la hora de cada día (el sábado distinto).
+      // su menú y sus tomas, y la hora de cada día (el sábado distinto). Los
+      // renglones salen de la misma fuente que el widget y el reloj (el
+      // platillo con sus ingredientes); si el slot no está en el menú de hoy,
+      // se quedan los del servidor.
       void programarComidas(
-        nuevo.recordatorios.map((rec) => ({
-          slot: rec.slot,
-          label: rec.label,
-          extras: rec.extras,
-          menuNumber: rec.menuNumber,
-          items: rec.items,
-          horaPorDia: rec.horaPorDia,
-        })),
+        nuevo.recordatorios.map((rec) => {
+          const completa = comidaCompleta(nuevo, rec.slot);
+          return {
+            slot: rec.slot,
+            label: rec.label,
+            extras: rec.extras,
+            menuNumber: rec.menuNumber,
+            items: completa ? itemsParaAviso(completa) : rec.items,
+            horaPorDia: rec.horaPorDia,
+          };
+        }),
       );
     } catch (e) {
       if (e instanceof ApiError && e.status === 403) {

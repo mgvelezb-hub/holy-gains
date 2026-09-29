@@ -1,5 +1,7 @@
 import { requireOptionalNativeModule } from "expo";
 
+import type { SiguienteComida } from "@/lib/siguiente-comida";
+
 /**
  * Puente con el Apple Watch — la cara de JavaScript.
  *
@@ -30,6 +32,8 @@ type NativoReloj = {
   drenar(): string[];
   /** Opcional: los builds nativos anteriores a I2 no lo traen. */
   enviarFin?(): boolean;
+  /** Opcional: los builds nativos anteriores a M1 no lo traen. */
+  enviarSiguienteComida?(json: string): boolean;
   addListener(evento: "onSerieCerrada", oyente: () => void): Suscripcion;
   addListener(evento: "onFrecuencia", oyente: (lectura: { bpm: number; t: number }) => void): Suscripcion;
 };
@@ -167,6 +171,25 @@ export function actualizarComidaEnElReloj(comida: {
 }): boolean {
   if (!ultimoResumen) return false;
   return enviarResumenAlReloj({ ...ultimoResumen, ...comida });
+}
+
+/**
+ * La siguiente comida completa para el reloj y su complicación: llave
+ * `siguienteComida` del `applicationContext`, JSON del objeto de
+ * `siguienteComida()` más `luego` (las que siguen hoy, para que la
+ * complicación avance sola a la hora de cada comida sin esperar al teléfono).
+ *
+ * Contrato con `Conectividad.aplicar` del target `watch`: si se renombra un
+ * campo aquí, se renombra allá.
+ */
+export function enviarSiguienteComidaAlReloj(pendientes: readonly SiguienteComida[]): boolean {
+  if (!nativo?.enviarSiguienteComida) return false;
+  const [siguiente, ...luego] = pendientes;
+  try {
+    return nativo.enviarSiguienteComida(siguiente ? JSON.stringify({ ...siguiente, luego }) : "null");
+  } catch {
+    return false;
+  }
 }
 
 /** Avisa que hay algo nuevo que recoger. No trae los datos: llama a drenar. */
