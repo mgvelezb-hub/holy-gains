@@ -320,8 +320,21 @@ export const EQUIPOS_CARDIO = [
 ] as const;
 export type EquipoCardio = (typeof EQUIPOS_CARDIO)[number];
 
-/** HIIT (intervalos) o continuo (zona 2). */
-export const TIPOS_CARDIO = ["HIIT", "CONTINUO"] as const;
+/**
+ * La modalidad de la sesión (P1). `CONTINUO` es el nombre viejo de `ZONA2`:
+ * se sigue aceptando porque hay perfiles guardados con él. `VARIADO` alterna
+ * modalidades en la semana según el objetivo (`disciplinas/cardio.ts`).
+ */
+export const TIPOS_CARDIO = [
+  "HIIT",
+  "CONTINUO",
+  "ZONA2",
+  "TEMPO",
+  "NORUEGO",
+  "PIRAMIDAL",
+  "RECUPERACION",
+  "VARIADO",
+] as const;
 export type TipoCardio = (typeof TIPOS_CARDIO)[number];
 
 /** Nivel de cardio: decide el nivel sugerido de la máquina, no la duración. */
@@ -343,6 +356,22 @@ export type PreferenciasCardio = {
    * default; mph para las máquinas que solo marcan millas.
    */
   unidadVelocidad?: "kmh" | "mph";
+  /**
+   * El nivel base por máquina (P1): con qué va "moderado" la persona —
+   * resistencia, ritmo /500 m o watts. Lo que falte se calibra en la primera
+   * sesión de esa máquina. Ver `disciplinas/maquinas-cardio.ts`.
+   */
+  nivelBase?: NivelesBaseCardio;
+};
+
+/** El "moderado" personal de cada máquina que lo necesita (la caminadora no). */
+export type NivelesBaseCardio = {
+  ELIPTICA?: number;
+  BICI?: number;
+  ESCALERA?: number;
+  REMO?: { ritmo500: string };
+  SKI_ERG?: { ritmo500: string };
+  BICI_AIRE?: { watts: number };
 };
 
 /** Nivel en el agua. Igual que `SwimLevel` en el schema. */

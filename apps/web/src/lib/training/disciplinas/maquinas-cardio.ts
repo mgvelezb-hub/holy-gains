@@ -4,7 +4,7 @@ import {
   NIVEL_MAXIMO_HIIT,
   type EsfuerzoHiit,
 } from "@/lib/training/disciplinas/hiit-caminadora";
-import type { EquipoCardio } from "@/lib/training/types";
+import type { EquipoCardio, NivelesBaseCardio } from "@/lib/training/types";
 
 /**
  * Las máquinas de cardio y los controles que de verdad traen (P1) — puro.
@@ -57,14 +57,7 @@ export const NOMBRE_MAQUINA: Record<EquipoCardio, string> = {
  * SkiErg) o watts (bici de aire). La caminadora no necesita: sus km/h salen
  * de los protocolos reales de Mau por nivel.
  */
-export type NivelesBase = {
-  ELIPTICA?: number;
-  BICI?: number;
-  ESCALERA?: number;
-  REMO?: { ritmo500: string };
-  SKI_ERG?: { ritmo500: string };
-  BICI_AIRE?: { watts: number };
-};
+export type NivelesBase = NivelesBaseCardio;
 export type MaquinaConBase = keyof NivelesBase;
 export type NivelBase = number | { ritmo500: string } | { watts: number };
 

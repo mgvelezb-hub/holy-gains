@@ -93,8 +93,20 @@ export function esCardioIntenso(bloque: BloqueDia): boolean {
 export function intensidadDeCardio(prefs?: PreferenciasCardio): IntensidadCardio | undefined {
   if (!prefs || (prefs.tipo === undefined && prefs.nivel === undefined)) return undefined;
   const avanzado = prefs.nivel === "AVANZADO";
-  if (prefs.tipo === "CONTINUO") return avanzado ? "media" : "baja";
-  return avanzado ? "alta" : "media";
+  switch (prefs.tipo) {
+    case "RECUPERACION":
+      return "baja";
+    case "CONTINUO":
+    case "ZONA2":
+      return avanzado ? "media" : "baja";
+    case "TEMPO":
+      return "media";
+    case "NORUEGO":
+      return "alta";
+    default:
+      // HIIT, piramidal, variado (que casi siempre trae un HIIT) o sin tipo.
+      return avanzado ? "alta" : "media";
+  }
 }
 
 function esAltoImpacto(bloque: BloqueDia): boolean {

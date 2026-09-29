@@ -74,6 +74,7 @@ export function prescribirSesion(input: {
       objetivo: input.objetivo,
       prefs: input.cardio,
       nivelDisciplina: input.nivel,
+      ordinal: input.ordinal,
       ...(input.historialCardio ? { historial: input.historialCardio } : {}),
     });
   }

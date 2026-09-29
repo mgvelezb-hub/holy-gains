@@ -6,6 +6,7 @@ import {
   EQUIPOS_CARDIO,
   NIVELES_CARDIO,
   TIPOS_CARDIO,
+  type NivelesBaseCardio,
   type PreferenciasCardio,
 } from "@/lib/training/types";
 
@@ -19,12 +20,27 @@ import {
  * cardio de Mau nunca se anexaba al gimnasio (H2). Un solo schema es lo que
  * evita que una ruta se vuelva a quedar atrás cuando la carga crezca.
  */
+/** Rangos de captura: el nivel de consola de las máquinas comerciales llega a 20–25; 40 deja holgura. */
+const NIVEL_MAQUINA = z.number().int().min(1).max(40);
+const RITMO_500 = z.object({ ritmo500: z.string().regex(/^\d{1,2}:[0-5]\d$/) });
+const WATTS = z.object({ watts: z.number().int().min(20).max(2000) });
+
+export const nivelBaseSchema = z.object({
+  ELIPTICA: NIVEL_MAQUINA.optional(),
+  BICI: NIVEL_MAQUINA.optional(),
+  ESCALERA: NIVEL_MAQUINA.optional(),
+  REMO: RITMO_500.optional(),
+  SKI_ERG: RITMO_500.optional(),
+  BICI_AIRE: WATTS.optional(),
+});
+
 export const preferenciasCardioSchema = z.object({
   equipo: z.enum(EQUIPOS_CARDIO).optional(),
   tipo: z.enum(TIPOS_CARDIO).optional(),
   nivel: z.enum(NIVELES_CARDIO).optional(),
   minutos: z.number().int().min(10).max(60).optional(),
   unidadVelocidad: z.enum(["kmh", "mph"]).optional(),
+  nivelBase: nivelBaseSchema.optional(),
 });
 
 export const cargaDisciplinaSchema = z.object({
@@ -48,7 +64,7 @@ export const cargaDisciplinaSchema = z.object({
  */
 export function parsePreferenciasCardio(raw: unknown): PreferenciasCardio | undefined {
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return undefined;
-  const { equipo, tipo, nivel, minutos, unidadVelocidad } = raw as Record<string, unknown>;
+  const { equipo, tipo, nivel, minutos, unidadVelocidad, nivelBase } = raw as Record<string, unknown>;
 
   const prefs: PreferenciasCardio = {};
   if (typeof equipo === "string" && (EQUIPOS_CARDIO as readonly string[]).includes(equipo)) {
@@ -64,5 +80,20 @@ export function parsePreferenciasCardio(raw: unknown): PreferenciasCardio | unde
     prefs.minutos = Math.max(10, Math.min(60, Math.round(minutos)));
   }
   if (unidadVelocidad === "kmh" || unidadVelocidad === "mph") prefs.unidadVelocidad = unidadVelocidad;
+  const bases = parseNivelBase(nivelBase);
+  if (bases) prefs.nivelBase = bases;
   return Object.keys(prefs).length > 0 ? prefs : undefined;
+}
+
+/** El nivel base por máquina, máquina por máquina: la que no valida se descarta sola. */
+function parseNivelBase(raw: unknown): NivelesBaseCardio | undefined {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const bases: Record<string, unknown> = {};
+  for (const [maquina, forma] of Object.entries(nivelBaseSchema.shape)) {
+    const valor = (raw as Record<string, unknown>)[maquina];
+    if (valor === undefined) continue;
+    const leido = forma.safeParse(valor);
+    if (leido.success && leido.data !== undefined) bases[maquina] = leido.data;
+  }
+  return Object.keys(bases).length > 0 ? (bases as NivelesBaseCardio) : undefined;
 }

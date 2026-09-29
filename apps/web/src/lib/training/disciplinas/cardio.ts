@@ -2,64 +2,77 @@ import {
   factorDeSemana,
   notaDeObjetivo,
   type BloqueSesion,
-  type DetalleCardio,
   type NivelDisciplina,
   type ObjetivoAtleta,
   type SesionDisciplina,
 } from "@/lib/training/disciplinas/tipos";
 import {
-  CAMINATA_SUAVE_KMH,
   nivelHiitDeSemana,
-  protocoloParaBloque,
-  textoVelocidad,
+  protocoloDelCatalogo,
   type SemanaCardio,
-  type UnidadVelocidad,
 } from "@/lib/training/disciplinas/hiit-caminadora";
+import {
+  controlDe,
+  necesitaBase,
+  NOMBRE_MAQUINA,
+  ritmoATexto,
+  segundosDeRitmo,
+  type ControlMaquina,
+  type MaquinaConBase,
+  type NivelBase,
+} from "@/lib/training/disciplinas/maquinas-cardio";
+import {
+  conPulso,
+  fcMaxima,
+  INFO_MODALIDAD,
+  notaDeMaquina,
+  programaCardio,
+  type ModalidadCardio,
+  type ProgramaCardio,
+} from "@/lib/training/disciplinas/modalidades-cardio";
+import { duracionValida, ENFRIAMIENTO_MIN, type TramoCardio } from "@/lib/training/disciplinas/plantillas-hiit";
 import type { EquipoCardio, NivelCardio, PreferenciasCardio, TipoCardio } from "@/lib/training/types";
 
 /**
- * Cardio en máquina — el bloque de 15–20 min que va DESPUÉS de pesas (H2).
+ * Cardio en máquina — el bloque de después de pesas (H2) o de día propio.
  *
- * `running.ts` prescribe correr como disciplina: rodajes, series, el tendón
- * que se adapta lento. Esto es otra cosa: la caminadora (o escalera, bici,
- * elíptica) al terminar la rutina, que es lo que Mau hace y con lo que siente
- * que ya entrenó. Por eso la carga se dice en el NIVEL de la máquina, que es
- * lo que la persona ve en la pantalla, y la duración la pone ella.
+ * `running.ts` prescribe correr como disciplina. Esto es la máquina del gym
+ * al terminar la rutina, que es lo que Mau hace y con lo que siente que ya
+ * entrenó.
  *
- * **HIIT o continuo.** Para pérdida de grasa las dos rinden lo mismo: los
- * meta-análisis de Keating et al. 2017 (Obes Rev) y Wewege et al. 2017 (Obes
- * Rev) no encuentran diferencia en grasa perdida entre intervalos y trabajo
- * continuo moderado. La diferencia es el tiempo: el HIIT llega al mismo
- * resultado con ~40 % menos minutos, y por eso es el default de un bloque que
- * tiene que caber después del gym. El continuo (zona 2, "puedes hablar")
- * queda para quien prefiere no subir el pulso tras pierna pesada.
+ * **P1: toda máquina, toda modalidad.** La sesión es un `ProgramaCardio`
+ * minuto a minuto (`modalidades-cardio.ts`): HIIT por nivel 0–5, zona 2,
+ * tempo, 4×4, piramidal o recuperación, con los controles de la máquina ya
+ * calculados. La caminadora corre los protocolos reales de Mau cuando
+ * existen (10/15/25 min); lo demás es plantilla.
  *
- * **Progresión: +1 nivel cada semana, o +5 min si el día los tiene** — la
- * regla del coach de Becca. Tres semanas subiendo y la cuarta de descarga,
- * el mismo ciclo que el resto de disciplinas (`factorDeSemana`).
+ * **La intensidad se ancla en un nivel base personal** por máquina (lo que
+ * es "moderado" para esa persona en esa máquina). Si falta, la primera
+ * sesión de la semana es de **calibración**: 5 min subiendo un paso por
+ * minuto y la persona marca "aquí voy moderado"; eso se guarda en
+ * `nivelBase`. Mientras tanto, el resto de sesiones usa una base estimada
+ * por nivel declarado y lo dice.
  *
- * **Caminadora HIIT (N1): por velocidad real.** La caminadora no tiene
- * "niveles": marca km/h (o mph). Ahí el bloque corre un protocolo del
- * catálogo de Mau (`hiit-caminadora.ts`): la mayor duración de 10/15/25 que
- * quepa, al nivel 0–5 que sale del declarado más las semanas cumplidas
- * (`nivelHiitDeSemana`), y lo que sobre del bloque se camina suave a 5–6
- * km/h. El nivel de máquina de arriba queda para elíptica, bici y escalera.
+ * **Progresión del HIIT: +1 nivel por semana cumplida (≥ 80 %)**, la misma
+ * regla de la caminadora (`nivelHiitDeSemana`), para toda máquina. La 4.ª
+ * semana descarga: HIIT un nivel abajo; tempo, 4×4 y pirámide pasan a
+ * recuperación.
+ *
+ * **HIIT o continuo.** Para pérdida de grasa rinden lo mismo (Keating 2017,
+ * Wewege 2017); el HIIT en menos tiempo. Por eso sigue siendo el default.
  */
 
-export const DEFAULTS_CARDIO: Required<PreferenciasCardio> = {
+export const DEFAULTS_CARDIO = {
   equipo: "CAMINADORA",
   tipo: "HIIT",
   nivel: "BASICO",
   minutos: 20,
   unidadVelocidad: "kmh",
-};
-
-/** Nivel de máquina de arranque por nivel de cardio: básico 6–8, medio 9–12, avanzado 13+. */
-const NIVEL_BASE: Record<NivelCardio, number> = { BASICO: 6, MEDIO: 9, AVANZADO: 13 };
+} as const satisfies PreferenciasCardio;
 
 export const NOMBRE_EQUIPO: Record<EquipoCardio, string> = {
   CAMINADORA: "caminadora",
-  ESCALERA: "escalera",
+  ESCALERA: "escaladora",
   BICI: "bici",
   ELIPTICA: "elíptica",
   REMO: "remo",
@@ -68,7 +81,17 @@ export const NOMBRE_EQUIPO: Record<EquipoCardio, string> = {
   LIBRE: "libre",
 };
 
-export const NOMBRE_TIPO: Record<TipoCardio, string> = { HIIT: "HIIT", CONTINUO: "continuo" };
+export const NOMBRE_TIPO: Record<TipoCardio | "CALIBRACION", string> = {
+  HIIT: "HIIT",
+  CONTINUO: "zona 2",
+  ZONA2: "zona 2",
+  TEMPO: "tempo",
+  NORUEGO: "4×4",
+  PIRAMIDAL: "piramidal",
+  RECUPERACION: "recuperación",
+  VARIADO: "variado",
+  CALIBRACION: "calibración",
+};
 
 /** Del nivel genérico de disciplina al de cardio, cuando no se declaró uno propio. */
 const DESDE_NIVEL_DISCIPLINA: Record<NivelDisciplina, NivelCardio> = {
@@ -83,22 +106,177 @@ const NIVEL_DISCIPLINA: Record<NivelCardio, NivelDisciplina> = {
   AVANZADO: "AVANZADO",
 };
 
-type IntervalosCardio = NonNullable<DetalleCardio["intervalos"]>;
-
 export type CardioInput = {
-  /** Minutos que tiene el bloque ese día (los que el gym le cedió). */
+  /** Minutos que tiene el bloque ese día. */
   minutes: number;
   isoWeek: number;
   objetivo: ObjetivoAtleta;
   prefs?: PreferenciasCardio;
   /** Respaldo si `prefs.nivel` no se declaró. */
   nivelDisciplina?: NivelDisciplina;
-  /** Semanas anteriores de cardio: de ahí sube el nivel del HIIT de caminadora. */
+  /** Semanas anteriores de cardio: de ahí sube el nivel del HIIT. */
   historial?: readonly SemanaCardio[];
+  /** Qué sesión de cardio es en la semana (1.ª, 2.ª…): rota el `VARIADO` y decide la calibración. */
+  ordinal?: number;
+  /** Con edad, cada tramo trae su zona de pulso. */
+  edad?: number;
 };
 
-/** La etiqueta corta del bloque: "Cardio HIIT caminadora". */
-export function etiquetaCardio(prefs?: PreferenciasCardio): string {
+/* ------------------------------------------------------------------------ */
+/* Variado y descarga                                                        */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * `VARIADO`: qué modalidad toca en cada sesión de la semana según el
+ * objetivo, rotando por ordinal.
+ *
+ * - Bajar grasa: 2 HIIT + 1 zona 2 + 1 recuperación — el HIIT rinde lo
+ *   mismo en menos tiempo (Keating 2017) y la zona 2 suma gasto sin fatiga.
+ * - Recomposición: como bajar grasa, con la pirámide en lugar de un HIIT.
+ * - Ganar músculo: cardio que no compita con la pierna — la interferencia
+ *   crece con la frecuencia y la duración del cardio (Wilson 2012, J
+ *   Strength Cond Res), así que manda la zona 2.
+ * - Salud: mayoría zona 2 con un HIIT, el reparto polarizado (Seiler 2010).
+ * - Rendimiento: 4×4, zona 2, tempo y pirámide.
+ */
+export const ROTACION_VARIADO: Record<ObjetivoAtleta, ModalidadCardio[]> = {
+  PERDIDA_GRASA: ["HIIT", "ZONA2", "HIIT", "RECUPERACION"],
+  RECOMPOSICION: ["HIIT", "ZONA2", "PIRAMIDAL", "RECUPERACION"],
+  GANANCIA_MUSCULO: ["ZONA2", "HIIT", "RECUPERACION"],
+  SALUD: ["ZONA2", "HIIT", "ZONA2", "RECUPERACION"],
+  RENDIMIENTO: ["NORUEGO", "ZONA2", "TEMPO", "PIRAMIDAL"],
+};
+
+/** La modalidad pedida, con `CONTINUO` (nombre viejo) como zona 2 y `VARIADO` ya resuelto. */
+export function modalidadDeSesion(tipo: TipoCardio, objetivo: ObjetivoAtleta, ordinal: number): ModalidadCardio {
+  if (tipo === "CONTINUO") return "ZONA2";
+  if (tipo !== "VARIADO") return tipo;
+  const rotacion = ROTACION_VARIADO[objetivo];
+  return rotacion[(Math.max(1, ordinal) - 1) % rotacion.length]!;
+}
+
+/** Semana de descarga: lo intenso que no es HIIT pasa a recuperación (el HIIT baja un nivel por su lado). */
+export function modalidadEnDescarga(modalidad: ModalidadCardio): ModalidadCardio {
+  return modalidad === "TEMPO" || modalidad === "NORUEGO" || modalidad === "PIRAMIDAL" ? "RECUPERACION" : modalidad;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Nivel base y calibración                                                  */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * La base con la que se arranca mientras la persona no calibra. Son
+ * conjeturas de la app a partir del nivel declarado —de eso existe la
+ * calibración—: resistencia 6/9/12 (el "básico 6–8, medio 9–12, avanzado
+ * 13+" que usaba H2 como nivel de trabajo), remo 2:40/2:25/2:10 por 500 m y
+ * bici de aire 80/110/150 W.
+ */
+export function baseEstimada(maquina: MaquinaConBase, nivel: NivelCardio): NivelBase {
+  const i = nivel === "BASICO" ? 0 : nivel === "MEDIO" ? 1 : 2;
+  switch (maquina) {
+    case "ELIPTICA":
+    case "BICI":
+    case "ESCALERA":
+      return [6, 9, 12][i]!;
+    case "REMO":
+    case "SKI_ERG":
+      return { ritmo500: ["2:40", "2:25", "2:10"][i]! };
+    case "BICI_AIRE":
+      return { watts: [80, 110, 150][i]! };
+  }
+}
+
+export const MINUTOS_CALIBRACION = 5;
+
+/**
+ * Los 5 pasos de la calibración, uno por minuto, alrededor de la base
+ * estimada: resistencia −2…+2, ritmo +10…−10 s/500 m, watts −40…+40.
+ */
+export function pasosDeCalibracion(maquina: MaquinaConBase, nivel: NivelCardio): NivelBase[] {
+  const centro = baseEstimada(maquina, nivel);
+  return [-2, -1, 0, 1, 2].map((paso) => {
+    if (typeof centro === "number") return Math.max(1, centro + paso);
+    if ("ritmo500" in centro) return { ritmo500: ritmoATexto(segundosDeRitmo(centro.ritmo500)! - paso * 5) };
+    return { watts: Math.max(20, centro.watts + paso * 20) };
+  });
+}
+
+/**
+ * La sesión de calibración: 5 min subiendo un paso por minuto (la persona
+ * toca "Aquí voy moderado" cuando solo puede hablar en frases cortas: la
+ * prueba del habla, ACSM 2021), el resto en zona 2 a lo que marcó y 2 min
+ * de enfriamiento.
+ */
+export function programaCalibracion(input: {
+  maquina: MaquinaConBase;
+  duracion: number;
+  nivel: NivelCardio;
+  edad?: number;
+}): ProgramaCardio {
+  const duracion = Math.max(MINUTOS_CALIBRACION + ENFRIAMIENTO_MIN + 1, duracionValida(input.duracion));
+  const valores = pasosDeCalibracion(input.maquina, input.nivel);
+  const esfuerzos = ["Fácil", "Fácil", "Moderado", "Moderado", "Moderado Alto"] as const;
+  const pasos = valores.map((valor, i) => ({
+    desdeMin: i,
+    hastaMin: i + 1,
+    control: controlDe(input.maquina, "Moderado", { base: valor }),
+    valor,
+  }));
+  const marcado = (texto: string): ControlMaquina => ({ maquina: input.maquina, texto });
+  const tramos: TramoCardio[] = [
+    ...pasos.map((paso, i) => ({
+      desdeMin: paso.desdeMin,
+      hastaMin: paso.hastaMin,
+      esfuerzo: esfuerzos[i]!,
+      fase: "calibracion" as const,
+      control: paso.control,
+    })),
+    {
+      desdeMin: MINUTOS_CALIBRACION,
+      hastaMin: duracion - ENFRIAMIENTO_MIN,
+      esfuerzo: "Moderado",
+      fase: "continuo",
+      control: marcado("El que marcaste"),
+    },
+    {
+      desdeMin: duracion - ENFRIAMIENTO_MIN,
+      hastaMin: duracion,
+      esfuerzo: "Fácil",
+      fase: "enfriamiento",
+      control: marcado("Un poco menos que el que marcaste"),
+    },
+  ];
+  const nombre = NOMBRE_MAQUINA[input.maquina];
+  return {
+    maquina: input.maquina,
+    modalidad: "CALIBRACION",
+    nivel: null,
+    duracion,
+    titulo: `Calibración · ${duracion}' · ${nombre}`,
+    fuente: "plantilla",
+    porque: "Una vez por máquina: fija tu nivel base, el \"moderado\" del que salen todos los esfuerzos (prueba del habla, ACSM 2021).",
+    paraQuien: `La primera vez que la app te prescribe ${nombre.toLowerCase()}.`,
+    tramos: conPulso(tramos, input.edad, "CALIBRACION"),
+    notaMaquina: notaDeMaquina(input.maquina),
+    base: null,
+    baseEstimada: true,
+    calibracion: {
+      maquina: input.maquina,
+      instruccion:
+        "Sube un paso cada minuto. Cuando ya solo puedas hablar en frases cortas, toca «Aquí voy moderado»: ese es tu nivel base en esta máquina.",
+      pasos,
+    },
+    ajuste: null,
+    fcMaxima: input.edad !== undefined ? fcMaxima(input.edad) : null,
+  };
+}
+
+/* ------------------------------------------------------------------------ */
+/* Prescripción                                                              */
+/* ------------------------------------------------------------------------ */
+
+/** "Cardio HIIT caminadora", "Cardio zona 2 remo". */
+export function etiquetaCardio(prefs?: { equipo?: EquipoCardio; tipo?: TipoCardio | "CALIBRACION" }): string {
   const equipo = prefs?.equipo ?? DEFAULTS_CARDIO.equipo;
   const tipo = NOMBRE_TIPO[prefs?.tipo ?? DEFAULTS_CARDIO.tipo];
   return equipo === "LIBRE" ? `Cardio ${tipo}` : `Cardio ${tipo} ${NOMBRE_EQUIPO[equipo]}`;
@@ -106,187 +284,157 @@ export function etiquetaCardio(prefs?: PreferenciasCardio): string {
 
 export function prescribirCardio(input: CardioInput): SesionDisciplina {
   const { isoWeek, objetivo } = input;
-  const equipo = input.prefs?.equipo ?? DEFAULTS_CARDIO.equipo;
-  const tipo = input.prefs?.tipo ?? DEFAULTS_CARDIO.tipo;
+  const prefs = input.prefs ?? {};
+  const equipo = prefs.equipo ?? DEFAULTS_CARDIO.equipo;
   const nivel =
-    input.prefs?.nivel ?? (input.nivelDisciplina ? DESDE_NIVEL_DISCIPLINA[input.nivelDisciplina] : DEFAULTS_CARDIO.nivel);
+    prefs.nivel ?? (input.nivelDisciplina ? DESDE_NIVEL_DISCIPLINA[input.nivelDisciplina] : DEFAULTS_CARDIO.nivel);
   const minutes = Math.max(10, Math.round(input.minutes));
+  const ordinal = input.ordinal ?? 1;
+  const unidad = prefs.unidadVelocidad ?? DEFAULTS_CARDIO.unidadVelocidad;
 
-  if (equipo === "CAMINADORA" && tipo === "HIIT") {
-    return hiitEnCaminadora({ ...input, minutes }, nivel, input.prefs?.unidadVelocidad ?? DEFAULTS_CARDIO.unidadVelocidad);
-  }
-
-  // Semanas 1-3 del ciclo suben un nivel cada una; la 4.ª descarga un nivel
-  // por debajo del arranque.
+  const progreso = nivelHiitDeSemana({ nivel, isoWeek, historial: input.historial ?? [] });
   const { deload } = factorDeSemana(isoWeek);
-  const paso = deload ? -1 : (isoWeek % 4) - 1;
-  const base = NIVEL_BASE[nivel] + paso;
+  const pedida = modalidadDeSesion(prefs.tipo ?? DEFAULTS_CARDIO.tipo, objetivo, ordinal);
+  const modalidad = progreso.descarga ? modalidadEnDescarga(pedida) : pedida;
 
-  const calentamiento = minutes >= 20 ? 3 : 2;
-  const enfriamiento = 2;
-  const principal = Math.max(4, minutes - calentamiento - enfriamiento);
-  const suave = Math.max(1, base - 3);
-  const libre = equipo === "LIBRE";
-  const nivelTexto = (n: number) => (libre ? "" : ` · nivel ${n}`);
-
-  let intervalos: IntervalosCardio | null = null;
-  let bloquePrincipal: BloqueSesion;
-  let nivelMaquina: number;
-
-  if (tipo === "HIIT") {
-    nivelMaquina = base + 2;
-    intervalos = {
-      rondas: Math.floor(principal / 2),
-      fuerteSeg: 60,
-      suaveSeg: 60,
-      nivelFuerte: nivelMaquina,
-      nivelSuave: suave,
-    };
-    bloquePrincipal = {
-      title: "Intervalos",
-      detail: `${intervalos.rondas} × 1 min fuerte${nivelTexto(nivelMaquina)} / 1 min suave${nivelTexto(suave)}`,
-      carga: intervalos.rondas * 2,
-      restSeconds: 60,
-      note: "Fuerte es que te cueste hablar, no un esprint. Si la última ronda ya no sale, baja un nivel la semana que viene.",
-    };
+  const guardada = necesitaBase(equipo) ? prefs.nivelBase?.[equipo] : undefined;
+  const edad = input.edad !== undefined ? { edad: input.edad } : {};
+  let programa: ProgramaCardio;
+  if (necesitaBase(equipo) && guardada === undefined && ordinal === 1) {
+    programa = programaCalibracion({ maquina: equipo, duracion: minutes, nivel, ...edad });
   } else {
-    nivelMaquina = base + 1;
-    bloquePrincipal = {
-      title: "Zona 2",
-      detail: `${principal} min continuos${nivelTexto(nivelMaquina)}`,
-      carga: principal,
-      restSeconds: null,
-      note: "Ritmo de conversación: puedes decir una frase entera. Si no, baja un nivel.",
+    const base = guardada ?? (necesitaBase(equipo) ? baseEstimada(equipo, nivel) : undefined);
+    programa = {
+      ...programaCardio({
+        maquina: equipo,
+        modalidad,
+        duracion: minutes,
+        nivelHiit: progreso.nivel,
+        ...(base !== undefined ? { base } : {}),
+        ...edad,
+      }),
+      baseEstimada: necesitaBase(equipo) && guardada === undefined,
     };
   }
 
-  const blocks: BloqueSesion[] = [
-    {
-      title: "Calentamiento",
-      detail: `${calentamiento} min suave${nivelTexto(suave)}`,
-      carga: calentamiento,
-      restSeconds: null,
-      note: "Subir el pulso poco a poco: llegas de pesas, no en frío, pero la máquina sí es nueva.",
-    },
-    bloquePrincipal,
-    {
-      title: "Enfriamiento",
-      detail: `${enfriamiento} min muy suave${nivelTexto(Math.max(1, suave - 1))}`,
-      carga: enfriamiento,
-      restSeconds: null,
-      note: "Nunca bajarse en seco después de intervalos.",
-    },
-  ];
-
-  const notes = [
-    "Progresión: +1 nivel cada semana. Si el día te da minutos de sobra, súmale 5 min en vez de subir nivel.",
-    "HIIT y continuo queman grasa igual por sesión (Keating 2017, Wewege 2017); el HIIT lo logra en menos tiempo.",
-  ];
-  if (deload) notes.push("Semana de descarga: un nivel por debajo del arranque, mismos minutos.");
+  const blocks = bloquesDe(programa);
+  const notes: string[] = [programa.porque];
+  if (programa.modalidad === "HIIT") {
+    notes.push(
+      "Progresión: +1 nivel por cada semana en que registres al menos el 80 % de tus sesiones de cardio; la 4.ª semana baja un nivel para descargar.",
+    );
+  }
+  if (programa.calibracion) notes.push(programa.calibracion.instruccion);
+  if (programa.baseEstimada && !programa.calibracion) {
+    notes.push(`Base estimada: la calibras en tu primera sesión de ${NOMBRE_EQUIPO[equipo]} de la semana.`);
+  }
+  if (programa.ajuste) notes.push(programa.ajuste);
+  if (programa.notaMaquina) notes.push(programa.notaMaquina);
+  if (progreso.descarga) {
+    notes.push(
+      pedida === modalidad
+        ? "Semana de descarga: un nivel abajo, mismos minutos."
+        : `Semana de descarga: hoy toca recuperación en vez de ${INFO_MODALIDAD[pedida].nombre}.`,
+    );
+  }
   const porObjetivo = notaDeObjetivo(objetivo);
   if (porObjetivo) notes.push(porObjetivo);
+
+  const real = programa.fuente === "catalogo" ? protocoloDelCatalogo(programa.duracion, programa.nivel ?? 0) : null;
+  const calentamientoMin = sumaMin(programa.tramos, ["calentamiento", "calibracion"]);
+  const enfriamientoMin = sumaMin(programa.tramos, ["enfriamiento"]);
+  const tipoResuelto = programa.modalidad === "CALIBRACION" ? "CALIBRACION" : programa.modalidad;
 
   return {
     discipline: "CARDIO",
     nivel: NIVEL_DISCIPLINA[nivel],
-    focus: tipo === "HIIT" ? "HIIT" : "Zona 2",
+    focus: programa.modalidad === "CALIBRACION" ? "Calibración" : INFO_MODALIDAD[programa.modalidad].nombre,
     unidad: "min",
     cargaTotal: blocks.reduce((suma, bloque) => suma + (bloque.carga ?? 0), 0),
     minutes,
     blocks,
-    deload,
+    deload: progreso.descarga || deload,
     notes,
     cardio: {
       equipo,
-      tipo,
-      nivelMaquina,
-      etiqueta: etiquetaCardio({ equipo, tipo }),
-      intervalos,
-      calentamientoSeg: calentamiento * 60,
-      enfriamientoSeg: enfriamiento * 60,
+      tipo: programa.modalidad === "HIIT" ? "HIIT" : "CONTINUO",
+      modalidad: programa.modalidad,
+      nivelMaquina: programa.nivel ?? (typeof programa.base === "number" ? programa.base : 0),
+      etiqueta: etiquetaCardio({ equipo, tipo: tipoResuelto }),
+      intervalos: null,
+      calentamientoSeg: calentamientoMin * 60,
+      enfriamientoSeg: enfriamientoMin * 60,
+      ...(real ? { protocolo: { ...real, recortado: false, caminataMin: 0 } } : {}),
+      ...(equipo === "CAMINADORA" ? { unidad } : {}),
+      programa,
     },
   };
 }
 
-/**
- * El HIIT de caminadora por velocidad real (N1): un protocolo del catálogo de
- * Mau, más la caminata suave que rellene el bloque.
- */
-function hiitEnCaminadora(input: CardioInput, nivel: NivelCardio, unidad: UnidadVelocidad): SesionDisciplina {
-  const { minutes, isoWeek, objetivo } = input;
-  const progreso = nivelHiitDeSemana({ nivel, isoWeek, historial: input.historial ?? [] });
-  const protocolo = protocoloParaBloque(minutes, progreso.nivel);
-  const primero = protocolo.tramos[0]!;
-  const ultimo = protocolo.tramos.at(-1)!;
-  const medio = protocolo.tramos.slice(1, -1);
-  const tope = medio.reduce((max, tramo) => (tramo.kmh[1] > max.kmh[1] ? tramo : max), medio[0] ?? primero);
-  const dur = (tramo: { desdeMin: number; hastaMin: number }) => tramo.hastaMin - tramo.desdeMin;
-  const titulo = `HIIT ${protocolo.duracion}' · Nivel ${protocolo.nivel}`;
+function sumaMin(tramos: readonly TramoCardio[], fases: ReadonlyArray<TramoCardio["fase"]>): number {
+  return tramos.filter((t) => fases.includes(t.fase)).reduce((suma, t) => suma + t.hastaMin - t.desdeMin, 0);
+}
 
-  const blocks: BloqueSesion[] = [
-    {
+/** Los bloques de la tarjeta: lo de antes, el cuerpo y el enfriamiento. */
+function bloquesDe(programa: ProgramaCardio): BloqueSesion[] {
+  const antes = programa.tramos.filter((t) => t.fase === "calentamiento" || t.fase === "calibracion");
+  const despues = programa.tramos.filter((t) => t.fase === "enfriamiento");
+  const cuerpo = programa.tramos.filter((t) => !antes.includes(t) && !despues.includes(t));
+  const min = (tramos: TramoCardio[]) => tramos.reduce((suma, t) => suma + t.hastaMin - t.desdeMin, 0);
+  const como = (tramo: TramoCardio) => (tramo.control.texto ? ` · ${tramo.control.texto}` : "");
+  const blocks: BloqueSesion[] = [];
+
+  if (programa.calibracion) {
+    blocks.push({
+      title: "Calibración",
+      detail: `${min(antes)} min · un paso más cada minuto`,
+      carga: min(antes),
+      restSeconds: null,
+      note: "Toca «Aquí voy moderado» cuando ya solo puedas hablar en frases cortas.",
+    });
+  } else if (antes.length > 0) {
+    blocks.push({
       title: "Calentamiento",
-      detail: `${dur(primero)} min · ${textoVelocidad(primero.kmh, unidad)}`,
-      carga: dur(primero),
+      detail: `${min(antes)} min${como(antes[0]!)}`,
+      carga: min(antes),
       restSeconds: null,
       note: "Fácil: subir el pulso poco a poco. Llegas de pesas, no en frío.",
-    },
-    {
-      title: titulo,
-      detail: `${medio.length} tramos · hasta ${textoVelocidad(tope.kmh, unidad)} (${tope.esfuerzo})`,
-      carga: ultimo.desdeMin - primero.hastaMin,
-      restSeconds: null,
-      note: "Cada tramo dice su velocidad y su esfuerzo. Si el Máximo no sale, quédate en el extremo bajo del rango.",
-    },
-    {
-      title: "Enfriamiento",
-      detail: `${dur(ultimo)} min · ${textoVelocidad(ultimo.kmh, unidad)}`,
-      carga: dur(ultimo),
-      restSeconds: null,
-      note: "Nunca bajarse en seco después de intervalos.",
-    },
-  ];
-  if (protocolo.caminataMin > 0) {
-    blocks.push({
-      title: "Caminata suave",
-      detail: `${protocolo.caminataMin} min · ${textoVelocidad(CAMINATA_SUAVE_KMH, unidad)}`,
-      carga: protocolo.caminataMin,
-      restSeconds: null,
-      note: "Lo que sobra del bloque, caminando: suma gasto sin sumar fatiga.",
     });
   }
 
-  const notes = [
-    "Progresión: +1 nivel por cada semana en que registres al menos el 80 % de tus sesiones de cardio; la 4.ª semana baja un nivel para descargar.",
-    "HIIT y continuo queman grasa igual por sesión (Keating 2017, Wewege 2017); el HIIT lo logra en menos tiempo.",
-  ];
-  if (protocolo.recortado) {
-    notes.push("Tu nivel aún no tiene protocolo de 10': es el de 15' recortado a 10 y cerrando en Fácil.");
+  if (cuerpo.length > 0) {
+    const tope = cuerpo.reduce((max, t) => (ESFUERZO_ORDEN[t.esfuerzo] > ESFUERZO_ORDEN[max.esfuerzo] ? t : max), cuerpo[0]!);
+    blocks.push({
+      title: programa.calibracion ? "Zona 2" : programa.titulo,
+      detail:
+        cuerpo.length === 1
+          ? `${min(cuerpo)} min${como(cuerpo[0]!)} (${cuerpo[0]!.esfuerzo})`
+          : `${cuerpo.length} tramos · hasta ${tope.esfuerzo}${tope.control.texto ? ` (${tope.control.texto})` : ""}`,
+      carga: min(cuerpo),
+      restSeconds: null,
+      note:
+        programa.modalidad === "RECUPERACION"
+          ? "Fácil de principio a fin: si te cuesta hablar, baja."
+          : "Cada tramo dice qué poner en la máquina y el esfuerzo. Si el Máximo no sale, quédate un paso abajo.",
+    });
   }
-  if (progreso.descarga) notes.push("Semana de descarga: un nivel abajo, mismos minutos.");
-  const porObjetivo = notaDeObjetivo(objetivo);
-  if (porObjetivo) notes.push(porObjetivo);
 
-  return {
-    discipline: "CARDIO",
-    nivel: NIVEL_DISCIPLINA[nivel],
-    focus: "HIIT",
-    unidad: "min",
-    cargaTotal: blocks.reduce((suma, bloque) => suma + (bloque.carga ?? 0), 0),
-    minutes,
-    blocks,
-    deload: progreso.descarga,
-    notes,
-    cardio: {
-      equipo: "CAMINADORA",
-      tipo: "HIIT",
-      nivelMaquina: protocolo.nivel,
-      etiqueta: etiquetaCardio({ equipo: "CAMINADORA", tipo: "HIIT" }),
-      intervalos: null,
-      calentamientoSeg: dur(primero) * 60,
-      enfriamientoSeg: dur(ultimo) * 60,
-      protocolo,
-      unidad,
-    },
-  };
+  if (despues.length > 0) {
+    blocks.push({
+      title: "Enfriamiento",
+      detail: `${min(despues)} min${como(despues[0]!)}`,
+      carga: min(despues),
+      restSeconds: null,
+      note: "Nunca bajarse en seco después de intervalos.",
+    });
+  }
+  return blocks;
 }
+
+const ESFUERZO_ORDEN: Record<TramoCardio["esfuerzo"], number> = {
+  Fácil: 0,
+  Moderado: 1,
+  "Moderado Alto": 2,
+  Fuerte: 3,
+  Máximo: 4,
+};

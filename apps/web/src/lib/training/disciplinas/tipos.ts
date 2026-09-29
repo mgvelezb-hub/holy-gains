@@ -1,4 +1,5 @@
 import type { ProtocoloPrescrito, UnidadVelocidad } from "@/lib/training/disciplinas/hiit-caminadora";
+import type { ProgramaCardio } from "@/lib/training/disciplinas/modalidades-cardio";
 import type { Discipline, EquipoCardio } from "@/lib/training/types";
 
 /**
@@ -98,8 +99,20 @@ export type DetalleCardio = {
    * nivel del protocolo (0–5) e `intervalos` va en `null`.
    */
   protocolo?: ProtocoloPrescrito;
-  /** En qué unidad se leen las velocidades. Solo con `protocolo`. */
+  /** En qué unidad se leen las velocidades de la caminadora. */
   unidad?: UnidadVelocidad;
+  /**
+   * P1 — la modalidad resuelta de la sesión (el `VARIADO` ya elegido, la
+   * descarga ya aplicada). `tipo` queda en HIIT/CONTINUO para las apps que
+   * aún no leen esto.
+   */
+  modalidad?: ProgramaCardio["modalidad"];
+  /**
+   * P1 — la sesión minuto a minuto para cualquier máquina y modalidad: cada
+   * tramo con su esfuerzo, el control de la máquina ya calculado y, si hay
+   * edad, la zona de pulso. En calibración trae los pasos y lo que se guarda.
+   */
+  programa?: ProgramaCardio;
 };
 
 export type PrescripcionInput = {
