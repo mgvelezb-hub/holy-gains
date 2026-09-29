@@ -1,18 +1,23 @@
-import { useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  Animated,
+  Easing,
   Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useTheme } from "@/context/theme";
-import { fonts, radius, shadow, spacing, type as typeScale, velo, type Palette } from "@/lib/theme";
+import { destinoHoja, inicioHoja } from "@/lib/hoja-animacion";
+import { useReducirMovimiento } from "@/lib/reducir-movimiento";
+import { fonts, radius, shadow, spacing, type as typeScale, type Palette } from "@/lib/theme";
 
 /**
  * La hoja que flota encima de una pantalla — el ÚNICO contenedor de hojas y
@@ -33,6 +38,13 @@ import { fonts, radius, shadow, spacing, type as typeScale, velo, type Palette }
  *    hoja (un toque en la hoja nunca sube hasta él, no hace falta el
  *    `Pressable` vacío) y el `ScrollView` encoge dentro del alto tope, con el
  *    título y el `pie` fijos fuera del scroll.
+ *
+ * 3. **El parpadeo.** Con `animationType="fade"` toda la hoja (no solo el
+ *    velo) iba de transparente a opaca y por ~300 ms su texto se encimaba con
+ *    la pantalla de atrás, al abrir y al cerrar. Ahora el `Modal` no anima:
+ *    el velo va en opacidad y la hoja se desliza desde abajo, opaca desde el
+ *    primer cuadro (`lib/hoja-animacion.ts`). Al cerrar se queda montada
+ *    hasta que termina de salir. "Reducir movimiento": aparece sin moverse.
  *
  * `variante="abajo"` (la de siempre) sube desde el borde inferior y respeta
  * el área segura; `"centro"` es un diálogo (teclado de peso, resumen, el
@@ -65,21 +77,66 @@ export function Hoja({
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   const abajo = variante === "abajo";
+  const { height: distancia } = useWindowDimensions();
+  const reducirMovimiento = useReducirMovimiento();
+
+  // Montada mientras se ve Y mientras termina de salir.
+  const [montada, setMontada] = useState(visible);
+  const inicio = inicioHoja({ reducirMovimiento, distancia });
+  const opacidadVelo = useRef(new Animated.Value(inicio.velo)).current;
+  const desplazamiento = useRef(new Animated.Value(inicio.desplazamiento)).current;
+
+  if (visible && !montada) {
+    // Cada apertura parte de fuera: la hoja nunca se asoma a medio camino.
+    const desde = inicioHoja({ reducirMovimiento, distancia });
+    opacidadVelo.setValue(desde.velo);
+    desplazamiento.setValue(desde.desplazamiento);
+    setMontada(true);
+  }
+
+  useEffect(() => {
+    if (!montada) return;
+    const destino = destinoHoja({ visible, reducirMovimiento, distancia });
+    const curva = visible ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic);
+    const animacion = Animated.parallel([
+      Animated.timing(opacidadVelo, {
+        toValue: destino.velo,
+        duration: destino.duracionMs,
+        easing: curva,
+        useNativeDriver: true,
+      }),
+      Animated.timing(desplazamiento, {
+        toValue: destino.desplazamiento,
+        duration: destino.duracionMs,
+        easing: curva,
+        useNativeDriver: true,
+      }),
+    ]);
+    animacion.start(({ finished }) => {
+      if (finished && !visible) setMontada(false);
+    });
+    return () => animacion.stop();
+  }, [visible, montada, reducirMovimiento, distancia, opacidadVelo, desplazamiento]);
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+    <Modal visible={montada} transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
       <View style={[styles.raiz, abajo ? styles.raizAbajo : styles.raizCentro]}>
+        <Animated.View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, styles.velo, { opacity: opacidadVelo }]}
+        />
         <Pressable
           style={StyleSheet.absoluteFill}
           onPress={cerrarConVelo ? onClose : undefined}
           accessibilityRole="button"
           accessibilityLabel="Cerrar"
         />
-        <View
+        <Animated.View
           style={[
             styles.hoja,
             abajo ? [styles.hojaAbajo, { paddingBottom: spacing.lg + insets.bottom }] : styles.hojaCentro,
             hojaStyle,
+            { transform: [{ translateY: desplazamiento }] },
           ]}
           accessibilityViewIsModal
         >
@@ -97,7 +154,7 @@ export function Hoja({
             {children}
           </ScrollView>
           {pie ? <View style={styles.pie}>{pie}</View> : null}
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -105,7 +162,9 @@ export function Hoja({
 
 const makeStyles = (colors: Palette) =>
   StyleSheet.create({
-    raiz: { flex: 1, backgroundColor: velo },
+    raiz: { flex: 1 },
+    // Negro puro: la opacidad animada lo lleva hasta `VELO_OPACIDAD`.
+    velo: { backgroundColor: "#000" },
     raizAbajo: { justifyContent: "flex-end" },
     raizCentro: { justifyContent: "center", alignItems: "center", padding: spacing.lg },
     hoja: {

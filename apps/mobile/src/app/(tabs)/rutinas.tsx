@@ -643,6 +643,9 @@ function ConnectionBadge({
 /** Cómo quedó el día tras recortar, leído de la semana recargada. */
 type DiaRecortado = { ejercicios: number; minutos: number | null };
 
+/** Lo que el "Listo: …" se queda a la vista antes de que la hoja se cierre. */
+const LISTO_VISIBLE_MS = 900;
+
 function textoDelRecorte(dia: DiaRecortado): string {
   const minutos = dia.minutos !== null ? ` · ${Math.round(dia.minutos)} min` : "";
   return `Listo: ${dia.ejercicios} ejercicios${minutos}`;
@@ -675,17 +678,21 @@ function TiempoDeHoy({
 
   /**
    * La hoja se queda abierta hasta que la semana recargada confirma cómo quedó
-   * el día; solo entonces se cierra. Con error se queda abierta y lo dice.
+   * el día; deja el "Listo: …" a la vista ~900 ms y se cierra deslizándose.
+   * Con error se queda abierta y lo dice. El "Listo" NO se borra al cerrar
+   * (cambiaría el texto a media salida); se limpia al volver a abrir.
    */
   async function elegir(minutes: number | null) {
     setHecho(null);
     const dia = await onTrim(minutes);
     if (!dia) return;
     setHecho(textoDelRecorte(dia));
-    setTimeout(() => {
-      setAbierto(false);
-      setHecho(null);
-    }, 1400);
+    setTimeout(() => setAbierto(false), LISTO_VISIBLE_MS);
+  }
+
+  function abrir() {
+    setHecho(null);
+    setAbierto(true);
   }
 
   return (
@@ -708,7 +715,7 @@ function TiempoDeHoy({
             </TextoInfo>
           </InfoTip>
         }
-        onPress={() => setAbierto(true)}
+        onPress={abrir}
       />
 
       <Hoja visible={abierto} onClose={() => setAbierto(false)} titulo="¿Cuánto tiempo tienes?">
