@@ -10,5 +10,7 @@
  *
  * 1 — los menús de antes de la auditoría de 70 menús (sin versión guardada).
  * 2 — las 15 reglas culinarias de la auditoría (2116d0f, 2403fda, 6c1488c).
+ * 3 — licuados por plantilla de fruta y base agua (R1), equivalencias por
+ *     grupo SMAE y platillos mexicanos de referencia (R2).
  */
-export const MENU_ENGINE_VERSION = 2;
+export const MENU_ENGINE_VERSION = 3;
