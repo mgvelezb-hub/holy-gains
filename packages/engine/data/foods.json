@@ -27,7 +27,8 @@
       "minUnits": 100,
       "maxUnits": 200,
       "step": 5
-    }
+    },
+    "grupoSmae": "aoa_muy_bajo"
   },
   {
     "id": "pechuga_pavo",
@@ -56,7 +57,8 @@
       "minUnits": 100,
       "maxUnits": 200,
       "step": 5
-    }
+    },
+    "grupoSmae": "aoa_muy_bajo"
   },
   {
     "id": "claras_huevo",
@@ -85,7 +87,8 @@
       "minUnits": 90,
       "maxUnits": 240,
       "step": 30
-    }
+    },
+    "grupoSmae": "aoa_muy_bajo"
   },
   {
     "id": "atun_agua",
@@ -117,7 +120,8 @@
       "minUnits": 60,
       "maxUnits": 150,
       "step": 10
-    }
+    },
+    "grupoSmae": "aoa_muy_bajo"
   },
   {
     "id": "tilapia",
@@ -145,7 +149,8 @@
       "minUnits": 100,
       "maxUnits": 200,
       "step": 5
-    }
+    },
+    "grupoSmae": "aoa_muy_bajo"
   },
   {
     "id": "bacalao",
@@ -172,7 +177,8 @@
       "minUnits": 100,
       "maxUnits": 200,
       "step": 5
-    }
+    },
+    "grupoSmae": "aoa_muy_bajo"
   },
   {
     "id": "pescado_blanco",
@@ -200,7 +206,8 @@
       "minUnits": 100,
       "maxUnits": 200,
       "step": 5
-    }
+    },
+    "grupoSmae": "aoa_muy_bajo"
   },
   {
     "id": "camaron",
@@ -228,7 +235,8 @@
       "minUnits": 100,
       "maxUnits": 200,
       "step": 5
-    }
+    },
+    "grupoSmae": "aoa_muy_bajo"
   },
   {
     "id": "res_magra",
@@ -258,7 +266,8 @@
       "minUnits": 100,
       "maxUnits": 200,
       "step": 5
-    }
+    },
+    "grupoSmae": "aoa_bajo"
   },
   {
     "id": "yogur_griego_0",
@@ -287,7 +296,8 @@
       "minUnits": 120,
       "maxUnits": 250,
       "step": 10
-    }
+    },
+    "grupoSmae": "leche"
   },
   {
     "id": "cottage",
@@ -315,7 +325,8 @@
       "minUnits": 90,
       "maxUnits": 180,
       "step": 10
-    }
+    },
+    "grupoSmae": "aoa_bajo"
   },
   {
     "id": "requeson",
@@ -343,7 +354,8 @@
       "minUnits": 60,
       "maxUnits": 150,
       "step": 10
-    }
+    },
+    "grupoSmae": "aoa_bajo"
   },
   {
     "id": "jamon_pavo",
@@ -372,7 +384,8 @@
       "minUnits": 2,
       "maxUnits": 6,
       "step": 1
-    }
+    },
+    "grupoSmae": "aoa_bajo"
   },
   {
     "id": "whey_isolate",
@@ -401,7 +414,8 @@
       "minUnits": 1,
       "maxUnits": 2,
       "step": 1
-    }
+    },
+    "grupoSmae": "aoa_muy_bajo"
   },
   {
     "id": "proteina_vegetal",
@@ -429,7 +443,8 @@
       "minUnits": 1,
       "maxUnits": 2,
       "step": 1
-    }
+    },
+    "grupoSmae": "aoa_muy_bajo"
   },
   {
     "id": "leche_descremada",
@@ -457,7 +472,8 @@
       "minUnits": 0.5,
       "maxUnits": 1.25,
       "step": 0.25
-    }
+    },
+    "grupoSmae": "leche"
   },
   {
     "id": "leche_entera",
@@ -485,7 +501,8 @@
       "minUnits": 0.5,
       "maxUnits": 1.25,
       "step": 0.25
-    }
+    },
+    "grupoSmae": "leche"
   },
   {
     "id": "leche_deslactosada",
@@ -513,7 +530,8 @@
       "minUnits": 0.5,
       "maxUnits": 1.25,
       "step": 0.25
-    }
+    },
+    "grupoSmae": "leche"
   },
   {
     "id": "leche_deslactosada_light",
@@ -541,7 +559,8 @@
       "minUnits": 0.5,
       "maxUnits": 1.25,
       "step": 0.25
-    }
+    },
+    "grupoSmae": "leche"
   },
   {
     "id": "clara_liquida",
@@ -568,7 +587,8 @@
       "minUnits": 90,
       "maxUnits": 240,
       "step": 30
-    }
+    },
+    "grupoSmae": "aoa_muy_bajo"
   },
   {
     "id": "huevo_entero",
@@ -597,7 +617,8 @@
       "minUnits": 1,
       "maxUnits": 3,
       "step": 1
-    }
+    },
+    "grupoSmae": "aoa_moderado"
   },
   {
     "id": "salmon",
@@ -624,7 +645,8 @@
       "minUnits": 100,
       "maxUnits": 200,
       "step": 5
-    }
+    },
+    "grupoSmae": "aoa_moderado"
   },
   {
     "id": "sardina_agua",
@@ -655,7 +677,8 @@
       "minUnits": 60,
       "maxUnits": 150,
       "step": 10
-    }
+    },
+    "grupoSmae": "aoa_bajo"
   },
   {
     "id": "muslo_pollo",
@@ -684,7 +707,8 @@
       "minUnits": 100,
       "maxUnits": 200,
       "step": 5
-    }
+    },
+    "grupoSmae": "aoa_bajo"
   },
   {
     "id": "queso_panela",
@@ -713,7 +737,8 @@
       "minUnits": 1,
       "maxUnits": 3,
       "step": 1
-    }
+    },
+    "grupoSmae": "aoa_moderado"
   },
   {
     "id": "queso_fresco",
@@ -741,7 +766,8 @@
       "minUnits": 1,
       "maxUnits": 2,
       "step": 1
-    }
+    },
+    "grupoSmae": "aoa_moderado"
   },
   {
     "id": "tofu_firme",
@@ -769,7 +795,8 @@
       "minUnits": 100,
       "maxUnits": 200,
       "step": 10
-    }
+    },
+    "grupoSmae": "aoa_moderado"
   },
   {
     "id": "edamame",
@@ -798,7 +825,8 @@
       "minUnits": 80,
       "maxUnits": 150,
       "step": 10
-    }
+    },
+    "grupoSmae": "leguminosas"
   },
   {
     "id": "atun_aceite",
@@ -829,7 +857,8 @@
       "minUnits": 60,
       "maxUnits": 150,
       "step": 10
-    }
+    },
+    "grupoSmae": "aoa_bajo"
   },
   {
     "id": "avena",
@@ -858,7 +887,8 @@
       "minUnits": 30,
       "maxUnits": 80,
       "step": 10
-    }
+    },
+    "grupoSmae": "cereales_sin_grasa"
   },
   {
     "id": "pan_integral",
@@ -888,7 +918,8 @@
       "minUnits": 1,
       "maxUnits": 3,
       "step": 1
-    }
+    },
+    "grupoSmae": "cereales_sin_grasa"
   },
   {
     "id": "miel",
@@ -916,7 +947,8 @@
       "minUnits": 1,
       "maxUnits": 4,
       "step": 1
-    }
+    },
+    "grupoSmae": "azucares"
   },
   {
     "id": "amaranto",
@@ -945,7 +977,8 @@
       "minUnits": 20,
       "maxUnits": 60,
       "step": 10
-    }
+    },
+    "grupoSmae": "cereales_sin_grasa"
   },
   {
     "id": "granola_sin_azucar",
@@ -973,7 +1006,8 @@
       "minUnits": 20,
       "maxUnits": 60,
       "step": 10
-    }
+    },
+    "grupoSmae": "cereales_con_grasa"
   },
   {
     "id": "arroz_blanco",
@@ -1005,7 +1039,8 @@
       "minUnits": 0.5,
       "maxUnits": 1.25,
       "step": 0.25
-    }
+    },
+    "grupoSmae": "cereales_sin_grasa"
   },
   {
     "id": "camote",
@@ -1037,7 +1072,8 @@
       "minUnits": 100,
       "maxUnits": 250,
       "step": 10
-    }
+    },
+    "grupoSmae": "cereales_sin_grasa"
   },
   {
     "id": "cereal_arroz_inflado",
@@ -1066,7 +1102,8 @@
       "minUnits": 1,
       "maxUnits": 3,
       "step": 1
-    }
+    },
+    "grupoSmae": "cereales_sin_grasa"
   },
   {
     "id": "papa",
@@ -1097,7 +1134,8 @@
       "minUnits": 100,
       "maxUnits": 250,
       "step": 10
-    }
+    },
+    "grupoSmae": "cereales_sin_grasa"
   },
   {
     "id": "tortilla_maiz",
@@ -1128,7 +1166,8 @@
       "minUnits": 1,
       "maxUnits": 4,
       "step": 1
-    }
+    },
+    "grupoSmae": "cereales_sin_grasa"
   },
   {
     "id": "platano_post",
@@ -1158,7 +1197,8 @@
       "minUnits": 0.5,
       "maxUnits": 1,
       "step": 0.5
-    }
+    },
+    "grupoSmae": "frutas"
   },
   {
     "id": "arroz_integral",
@@ -1190,7 +1230,8 @@
       "minUnits": 0.5,
       "maxUnits": 1.25,
       "step": 0.25
-    }
+    },
+    "grupoSmae": "cereales_sin_grasa"
   },
   {
     "id": "quinoa",
@@ -1220,7 +1261,8 @@
       "minUnits": 0.5,
       "maxUnits": 1.25,
       "step": 0.25
-    }
+    },
+    "grupoSmae": "cereales_sin_grasa"
   },
   {
     "id": "frijol_negro",
@@ -1251,7 +1293,8 @@
       "minUnits": 0.5,
       "maxUnits": 1,
       "step": 0.25
-    }
+    },
+    "grupoSmae": "leguminosas"
   },
   {
     "id": "lenteja",
@@ -1282,7 +1325,8 @@
       "minUnits": 0.5,
       "maxUnits": 1,
       "step": 0.25
-    }
+    },
+    "grupoSmae": "leguminosas"
   },
   {
     "id": "garbanzo",
@@ -1312,7 +1356,8 @@
       "minUnits": 0.5,
       "maxUnits": 1,
       "step": 0.25
-    }
+    },
+    "grupoSmae": "leguminosas"
   },
   {
     "id": "haba",
@@ -1342,7 +1387,8 @@
       "minUnits": 0.5,
       "maxUnits": 1,
       "step": 0.25
-    }
+    },
+    "grupoSmae": "leguminosas"
   },
   {
     "id": "pasta_integral",
@@ -1373,7 +1419,8 @@
       "minUnits": 0.5,
       "maxUnits": 1.25,
       "step": 0.25
-    }
+    },
+    "grupoSmae": "cereales_sin_grasa"
   },
   {
     "id": "pan_centeno",
@@ -1402,7 +1449,8 @@
       "minUnits": 1,
       "maxUnits": 3,
       "step": 1
-    }
+    },
+    "grupoSmae": "cereales_sin_grasa"
   },
   {
     "id": "elote",
@@ -1432,7 +1480,8 @@
       "minUnits": 0.5,
       "maxUnits": 1,
       "step": 0.25
-    }
+    },
+    "grupoSmae": "cereales_sin_grasa"
   },
   {
     "id": "tostada_horneada",
@@ -1464,7 +1513,8 @@
       "minUnits": 1,
       "maxUnits": 3,
       "step": 1
-    }
+    },
+    "grupoSmae": "cereales_sin_grasa"
   },
   {
     "id": "avena_cocida",
@@ -1495,7 +1545,8 @@
       "minUnits": 0.5,
       "maxUnits": 1.5,
       "step": 0.25
-    }
+    },
+    "grupoSmae": "cereales_sin_grasa"
   },
   {
     "id": "nopal_asado_carb",
@@ -1526,7 +1577,8 @@
       "minUnits": 1,
       "maxUnits": 3,
       "step": 1
-    }
+    },
+    "grupoSmae": "cereales_sin_grasa"
   },
   {
     "id": "aceite_oliva",
@@ -1555,7 +1607,8 @@
       "minUnits": 1,
       "maxUnits": 2,
       "step": 0.5
-    }
+    },
+    "grupoSmae": "grasas_sin_proteina"
   },
   {
     "id": "aguacate",
@@ -1585,7 +1638,8 @@
       "minUnits": 45,
       "maxUnits": 100,
       "step": 5
-    }
+    },
+    "grupoSmae": "grasas_sin_proteina"
   },
   {
     "id": "almendra",
@@ -1615,7 +1669,8 @@
       "minUnits": 12,
       "maxUnits": 25,
       "step": 1
-    }
+    },
+    "grupoSmae": "grasas_con_proteina"
   },
   {
     "id": "nuez",
@@ -1645,7 +1700,8 @@
       "minUnits": 6,
       "maxUnits": 12,
       "step": 1
-    }
+    },
+    "grupoSmae": "grasas_con_proteina"
   },
   {
     "id": "cacahuate",
@@ -1675,7 +1731,8 @@
       "minUnits": 15,
       "maxUnits": 30,
       "step": 5
-    }
+    },
+    "grupoSmae": "grasas_con_proteina"
   },
   {
     "id": "crema_cacahuate",
@@ -1704,7 +1761,8 @@
       "minUnits": 0.5,
       "maxUnits": 1,
       "step": 0.5
-    }
+    },
+    "grupoSmae": "grasas_con_proteina"
   },
   {
     "id": "semilla_girasol",
@@ -1733,7 +1791,8 @@
       "minUnits": 1,
       "maxUnits": 2,
       "step": 0.5
-    }
+    },
+    "grupoSmae": "grasas_con_proteina"
   },
   {
     "id": "chia",
@@ -1763,7 +1822,8 @@
       "minUnits": 0.5,
       "maxUnits": 2,
       "step": 0.5
-    }
+    },
+    "grupoSmae": "grasas_con_proteina"
   },
   {
     "id": "linaza",
@@ -1793,7 +1853,8 @@
       "minUnits": 0.5,
       "maxUnits": 2,
       "step": 0.5
-    }
+    },
+    "grupoSmae": "grasas_con_proteina"
   },
   {
     "id": "ajonjoli",
@@ -1823,7 +1884,8 @@
       "minUnits": 0.5,
       "maxUnits": 2,
       "step": 0.5
-    }
+    },
+    "grupoSmae": "grasas_con_proteina"
   },
   {
     "id": "mantequilla",
@@ -1853,7 +1915,8 @@
       "minUnits": 1,
       "maxUnits": 3,
       "step": 0.5
-    }
+    },
+    "grupoSmae": "grasas_sin_proteina"
   },
   {
     "id": "avellana",
@@ -1882,7 +1945,8 @@
       "minUnits": 10,
       "maxUnits": 20,
       "step": 1
-    }
+    },
+    "grupoSmae": "grasas_con_proteina"
   },
   {
     "id": "aceite_aguacate",
@@ -1911,7 +1975,8 @@
       "minUnits": 1,
       "maxUnits": 2,
       "step": 0.5
-    }
+    },
+    "grupoSmae": "grasas_sin_proteina"
   },
   {
     "id": "brocoli",
@@ -1931,7 +1996,8 @@
       "vegetariano"
     ],
     "servingG": 200,
-    "unit": "g"
+    "unit": "g",
+    "grupoSmae": "verduras"
   },
   {
     "id": "espinaca",
@@ -1952,7 +2018,8 @@
       "vegetariano"
     ],
     "servingG": 150,
-    "unit": "g"
+    "unit": "g",
+    "grupoSmae": "verduras"
   },
   {
     "id": "lechuga_romana",
@@ -1974,7 +2041,8 @@
       "vegetariano"
     ],
     "servingG": 150,
-    "unit": "g"
+    "unit": "g",
+    "grupoSmae": "verduras"
   },
   {
     "id": "pepino",
@@ -1996,7 +2064,8 @@
       "vegetariano"
     ],
     "servingG": 200,
-    "unit": "g"
+    "unit": "g",
+    "grupoSmae": "verduras"
   },
   {
     "id": "nopal",
@@ -2017,7 +2086,8 @@
       "vegetariano"
     ],
     "servingG": 200,
-    "unit": "g"
+    "unit": "g",
+    "grupoSmae": "verduras"
   },
   {
     "id": "calabacita",
@@ -2038,7 +2108,8 @@
       "vegetariano"
     ],
     "servingG": 200,
-    "unit": "g"
+    "unit": "g",
+    "grupoSmae": "verduras"
   },
   {
     "id": "esparrago",
@@ -2058,7 +2129,8 @@
       "vegetariano"
     ],
     "servingG": 150,
-    "unit": "g"
+    "unit": "g",
+    "grupoSmae": "verduras"
   },
   {
     "id": "coliflor",
@@ -2078,7 +2150,8 @@
       "vegetariano"
     ],
     "servingG": 200,
-    "unit": "g"
+    "unit": "g",
+    "grupoSmae": "verduras"
   },
   {
     "id": "champinon",
@@ -2098,7 +2171,8 @@
       "vegetariano"
     ],
     "servingG": 150,
-    "unit": "g"
+    "unit": "g",
+    "grupoSmae": "verduras"
   },
   {
     "id": "rabano",
@@ -2119,7 +2193,8 @@
       "vegetariano"
     ],
     "servingG": 100,
-    "unit": "g"
+    "unit": "g",
+    "grupoSmae": "verduras"
   },
   {
     "id": "jitomate",
@@ -2140,7 +2215,8 @@
       "vegetariano"
     ],
     "servingG": 150,
-    "unit": "g"
+    "unit": "g",
+    "grupoSmae": "verduras"
   },
   {
     "id": "cebolla",
@@ -2160,7 +2236,8 @@
       "vegetariano"
     ],
     "servingG": 80,
-    "unit": "g"
+    "unit": "g",
+    "grupoSmae": "verduras"
   },
   {
     "id": "acelga",
@@ -2179,7 +2256,8 @@
       "vegetariano"
     ],
     "servingG": 150,
-    "unit": "g"
+    "unit": "g",
+    "grupoSmae": "verduras"
   },
   {
     "id": "kale",
@@ -2197,7 +2275,8 @@
       "vegetariano"
     ],
     "servingG": 120,
-    "unit": "g"
+    "unit": "g",
+    "grupoSmae": "verduras"
   },
   {
     "id": "apio",
@@ -2217,7 +2296,8 @@
       "vegetariano"
     ],
     "servingG": 120,
-    "unit": "g"
+    "unit": "g",
+    "grupoSmae": "verduras"
   },
   {
     "id": "col",
@@ -2236,7 +2316,8 @@
       "vegetariano"
     ],
     "servingG": 150,
-    "unit": "g"
+    "unit": "g",
+    "grupoSmae": "verduras"
   },
   {
     "id": "chile_poblano",
@@ -2256,7 +2337,8 @@
       "vegetariano"
     ],
     "servingG": 100,
-    "unit": "g"
+    "unit": "g",
+    "grupoSmae": "verduras"
   },
   {
     "id": "ejote",
@@ -2276,7 +2358,8 @@
       "vegetariano"
     ],
     "servingG": 150,
-    "unit": "g"
+    "unit": "g",
+    "grupoSmae": "verduras"
   },
   {
     "id": "jicama",
@@ -2297,7 +2380,8 @@
       "vegetariano"
     ],
     "servingG": 150,
-    "unit": "g"
+    "unit": "g",
+    "grupoSmae": "verduras"
   },
   {
     "id": "chayote",
@@ -2317,7 +2401,8 @@
       "vegetariano"
     ],
     "servingG": 200,
-    "unit": "g"
+    "unit": "g",
+    "grupoSmae": "verduras"
   },
   {
     "id": "zanahoria",
@@ -2337,7 +2422,8 @@
       "vegetariano"
     ],
     "servingG": 120,
-    "unit": "g"
+    "unit": "g",
+    "grupoSmae": "verduras"
   },
   {
     "id": "betabel",
@@ -2357,7 +2443,8 @@
       "vegetariano"
     ],
     "servingG": 120,
-    "unit": "g"
+    "unit": "g",
+    "grupoSmae": "verduras"
   },
   {
     "id": "germen_alfalfa",
@@ -2377,7 +2464,8 @@
       "vegetariano"
     ],
     "servingG": 80,
-    "unit": "g"
+    "unit": "g",
+    "grupoSmae": "verduras"
   },
   {
     "id": "pico_de_gallo",
@@ -2397,7 +2485,8 @@
       "vegetariano"
     ],
     "servingG": 120,
-    "unit": "g"
+    "unit": "g",
+    "grupoSmae": "verduras"
   },
   {
     "id": "manzana",
@@ -2428,7 +2517,8 @@
       "maxUnits": 1,
       "step": 0.5
     },
-    "nombreEnPlatillo": "manzana"
+    "nombreEnPlatillo": "manzana",
+    "grupoSmae": "frutas"
   },
   {
     "id": "fresa",
@@ -2458,7 +2548,8 @@
       "maxUnits": 1.25,
       "step": 0.25
     },
-    "nombreEnPlatillo": "fresa"
+    "nombreEnPlatillo": "fresa",
+    "grupoSmae": "frutas"
   },
   {
     "id": "frambuesa",
@@ -2488,7 +2579,8 @@
       "maxUnits": 1.5,
       "step": 0.25
     },
-    "nombreEnPlatillo": "frambuesa"
+    "nombreEnPlatillo": "frambuesa",
+    "grupoSmae": "frutas"
   },
   {
     "id": "arandano",
@@ -2517,7 +2609,8 @@
       "maxUnits": 1.25,
       "step": 0.25
     },
-    "nombreEnPlatillo": "arándano"
+    "nombreEnPlatillo": "arándano",
+    "grupoSmae": "frutas"
   },
   {
     "id": "frutos_rojos",
@@ -2546,7 +2639,8 @@
       "maxUnits": 1.25,
       "step": 0.25
     },
-    "nombreEnPlatillo": "frutos rojos"
+    "nombreEnPlatillo": "frutos rojos",
+    "grupoSmae": "frutas"
   },
   {
     "id": "papaya",
@@ -2576,7 +2670,8 @@
       "maxUnits": 1.25,
       "step": 0.25
     },
-    "nombreEnPlatillo": "papaya"
+    "nombreEnPlatillo": "papaya",
+    "grupoSmae": "frutas"
   },
   {
     "id": "melon",
@@ -2605,7 +2700,8 @@
       "maxUnits": 1.25,
       "step": 0.25
     },
-    "nombreEnPlatillo": "melón"
+    "nombreEnPlatillo": "melón",
+    "grupoSmae": "frutas"
   },
   {
     "id": "platano",
@@ -2636,7 +2732,8 @@
       "maxUnits": 1,
       "step": 0.5
     },
-    "nombreEnPlatillo": "plátano"
+    "nombreEnPlatillo": "plátano",
+    "grupoSmae": "frutas"
   },
   {
     "id": "naranja",
@@ -2666,7 +2763,8 @@
       "maxUnits": 1,
       "step": 0.5
     },
-    "nombreEnPlatillo": "naranja"
+    "nombreEnPlatillo": "naranja",
+    "grupoSmae": "frutas"
   },
   {
     "id": "toronja",
@@ -2697,7 +2795,8 @@
       "maxUnits": 1,
       "step": 0.5
     },
-    "nombreEnPlatillo": "toronja"
+    "nombreEnPlatillo": "toronja",
+    "grupoSmae": "frutas"
   },
   {
     "id": "mango",
@@ -2726,7 +2825,8 @@
       "maxUnits": 1.25,
       "step": 0.25
     },
-    "nombreEnPlatillo": "mango"
+    "nombreEnPlatillo": "mango",
+    "grupoSmae": "frutas"
   },
   {
     "id": "pina",
@@ -2755,7 +2855,8 @@
       "maxUnits": 1.25,
       "step": 0.25
     },
-    "nombreEnPlatillo": "piña"
+    "nombreEnPlatillo": "piña",
+    "grupoSmae": "frutas"
   },
   {
     "id": "pera",
@@ -2785,7 +2886,8 @@
       "maxUnits": 1,
       "step": 0.5
     },
-    "nombreEnPlatillo": "pera"
+    "nombreEnPlatillo": "pera",
+    "grupoSmae": "frutas"
   },
   {
     "id": "durazno",
@@ -2815,7 +2917,8 @@
       "maxUnits": 1,
       "step": 0.5
     },
-    "nombreEnPlatillo": "durazno"
+    "nombreEnPlatillo": "durazno",
+    "grupoSmae": "frutas"
   },
   {
     "id": "pasas",
@@ -2846,7 +2949,8 @@
       "maxUnits": 4,
       "step": 0.5
     },
-    "nombreEnPlatillo": "pasas"
+    "nombreEnPlatillo": "pasas",
+    "grupoSmae": "frutas"
   },
   {
     "id": "psyllium",

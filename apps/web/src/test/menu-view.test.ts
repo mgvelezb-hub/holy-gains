@@ -118,3 +118,30 @@ describe("toGroceries", () => {
     expect(toGroceries({ not: "an array" })).toEqual([]);
   });
 });
+
+describe("equivalencias por grupo SMAE en la vista", () => {
+  it("marca lo que está en casa y pasa lo que no va con su motivo", () => {
+    const view = toMenuView(1, [
+      {
+        slot: "CENA",
+        label: "Cena",
+        timeHint: "20:30",
+        items: [{ foodId: "nopal_asado_carb", name: "Tortilla de nopal", grams: 30, free: false }],
+        equivalences: [
+          {
+            forName: "Tortilla de nopal",
+            options: [
+              { foodId: "tostada_horneada", name: "Tostada de maiz horneada", grams: 15, enDespensa: true },
+              { foodId: "tortilla_maiz", name: "Tortilla de maiz", grams: 30 },
+            ],
+            noVan: [{ foodId: "arroz_blanco", name: "Arroz blanco cocido", grams: 40, motivo: "no va con tu papa" }],
+          },
+        ],
+      },
+    ]);
+    const eq = view.meals[0]!.equivalences[0]!;
+    expect(eq.options[0]).toMatchObject({ name: "Tostada de maiz horneada", enDespensa: true });
+    expect(eq.options[1]!.enDespensa).toBeUndefined();
+    expect(eq.noVan).toEqual([{ name: "Arroz blanco cocido", grams: 40, portion: null, motivo: "no va con tu papa" }]);
+  });
+});

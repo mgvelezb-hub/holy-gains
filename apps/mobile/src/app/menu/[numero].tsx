@@ -30,6 +30,7 @@ import {
   type OpcionPlatillo,
   type TomaDelDia,
 } from "@/lib/api";
+import { seccionesDeEquivalencia, textoDeOpcion, type OpcionDeEquivalencia } from "@/lib/equivalencias";
 import { agruparComida, avisoDeCambioEnPlatillo } from "@/lib/preparaciones";
 import { tomasDeComida } from "@/lib/tomas-comida";
 import { fonts, radius, spacing, type as typeScale, type Palette } from "@/lib/theme";
@@ -252,9 +253,31 @@ function ComidaDelMenu({
     (meal as ComidaConPlatillo).preparacion,
   );
 
+  function opcionDeCambio(forName: string, opcion: OpcionDeEquivalencia) {
+    const aplicando = cambiando === opcion.name;
+    return (
+      <Pressable
+        key={opcion.name}
+        onPress={() => cambiar(forName, opcion.name)}
+        disabled={cambiando !== null}
+        style={[styles.equivalenciaOpcion, aplicando && styles.equivalenciaOpcionOn]}
+      >
+        <Text style={styles.equivalenciaOpcionTexto} numberOfLines={2}>
+          {textoDeOpcion(opcion)}
+        </Text>
+        {aplicando ? (
+          <ActivityIndicator size="small" color={colors.champan} />
+        ) : opcion.aproximada ? (
+          <Text style={styles.equivalenciaAprox}>aprox.</Text>
+        ) : null}
+      </Pressable>
+    );
+  }
+
   function renglon(item: ItemDelMenu) {
     const equivalencia = equivalenciaDe(item.name);
     const avisoPlatillo = avisoDeCambioEnPlatillo(item, (meal as ComidaConPlatillo).preparacion);
+    const secciones = equivalencia ? seccionesDeEquivalencia(equivalencia) : null;
     const expandido = abierto === item.name;
     // El motor ya escribe la cantidad como se sirve —"2 cditas"—; si el
     // menú es viejo, se cae a la porción por pieza y luego a los gramos.
@@ -299,7 +322,7 @@ function ComidaDelMenu({
           ) : null}
         </Pressable>
 
-        {expandido && equivalencia && (
+        {expandido && equivalencia && secciones && (
           <View style={styles.equivalenciaWrap}>
             {equivalencia.aproximada ? (
               <Parrafo style={styles.equivalenciaAviso}>
@@ -317,26 +340,30 @@ function ComidaDelMenu({
               nestedScrollEnabled
               keyboardShouldPersistTaps="handled"
             >
-              {equivalencia.options.map((opcion) => {
-                const aplicando = cambiando === opcion.name;
-                return (
-                  <Pressable
-                    key={opcion.name}
-                    onPress={() => cambiar(equivalencia.forName, opcion.name)}
-                    disabled={cambiando !== null}
-                    style={[styles.equivalenciaOpcion, aplicando && styles.equivalenciaOpcionOn]}
-                  >
-                    <Text style={styles.equivalenciaOpcionTexto} numberOfLines={2}>
-                      {opcion.portion ?? `${opcion.name} (${opcion.grams} g)`}
-                    </Text>
-                    {aplicando ? (
-                      <ActivityIndicator size="small" color={colors.champan} />
-                    ) : opcion.aproximada ? (
-                      <Text style={styles.equivalenciaAprox}>aprox.</Text>
-                    ) : null}
-                  </Pressable>
-                );
-              })}
+              {/* El grupo SMAE completo, en tres partes: lo que ya está en
+                  casa, los equivalentes, y en gris lo que no va con esta
+                  comida y por qué. */}
+              {secciones.enDespensa.length > 0 && (
+                <Text style={styles.equivalenciaSeccion}>En tu despensa</Text>
+              )}
+              {secciones.enDespensa.map((opcion) => opcionDeCambio(equivalencia.forName, opcion))}
+              {secciones.enDespensa.length > 0 && secciones.equivalentes.length > 0 && (
+                <Text style={styles.equivalenciaSeccion}>Equivalentes</Text>
+              )}
+              {secciones.equivalentes.map((opcion) => opcionDeCambio(equivalencia.forName, opcion))}
+              {secciones.noVan.length > 0 && (
+                <Text style={styles.equivalenciaSeccion}>No van con esta comida</Text>
+              )}
+              {secciones.noVan.map((fila) => (
+                <View key={fila.texto} style={styles.equivalenciaNoVa}>
+                  <Text style={styles.equivalenciaNoVaTexto} numberOfLines={1}>
+                    {fila.texto}
+                  </Text>
+                  <Text style={styles.equivalenciaNoVaMotivo} numberOfLines={1}>
+                    {fila.motivo}
+                  </Text>
+                </View>
+              ))}
             </ScrollView>
             {errorCambio && <Text style={styles.equivalenciaError}>{errorCambio}</Text>}
           </View>
@@ -520,6 +547,23 @@ const makeStyles = (colors: Palette) =>
       ...typeScale.label,
       color: colors.paloRosa,
     },
+    equivalenciaSeccion: {
+      fontFamily: fonts.sansSemiBold,
+      ...typeScale.label,
+      color: colors.paloRosa,
+      marginTop: spacing.sm,
+      marginBottom: spacing.xs,
+    },
+    equivalenciaNoVa: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: spacing.sm,
+      paddingVertical: spacing.xs,
+      opacity: 0.6,
+    },
+    equivalenciaNoVaTexto: { flexShrink: 1, fontFamily: fonts.sans, ...typeScale.bodySm, color: colors.paloRosa },
+    equivalenciaNoVaMotivo: { fontFamily: fonts.sans, ...typeScale.label, color: colors.paloRosa },
     equivalenciaOpcionOn: {
       backgroundColor: colors.guinda,
       borderColor: colors.guindaLight,

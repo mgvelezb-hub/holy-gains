@@ -7,6 +7,7 @@ import { familiaDe } from './familias.js';
 import type {
   Equivalence,
   Food,
+  GrupoSmae,
   FoodRole,
   IngredientePreparacion,
   MacroTargets,
@@ -837,6 +838,22 @@ function primaryMacroOf(role: FoodRole): 'proteinPer100' | 'carbPer100' | 'fatPe
   return 'carbPer100';
 }
 
+/** Lo que rodea al alimento en su comida: con que va y a que hora se come. */
+interface ContextoDeComida {
+  /** Los alimentos de la comida (el propio se ignora). */
+  foods: Food[];
+  desayuno: boolean;
+  noche: boolean;
+}
+
+function contextoDe(slot: Pick<MealSlot, 'id' | 'timeHint'>, foods: Food[]): ContextoDeComida {
+  return {
+    foods,
+    desayuno: esDesayuno(slot as MealSlot),
+    noche: minutosDe(slot.timeHint) >= 21 * 60,
+  };
+}
+
 function equivalencesFor(
   slot: Slot,
   pool: Food[],
@@ -848,6 +865,7 @@ function equivalencesFor(
    * alimento no cuenta: cambiar arroz blanco por integral no repite nada.
    */
   evitar: ReadonlySet<string> = new Set(),
+  comida?: ContextoDeComida,
 ): Equivalence | null {
   const propia = familiaDe(slot.food);
   const fuera = new Set([...evitar].filter((f) => f !== propia));
@@ -890,6 +908,14 @@ function equivalencesFor(
 
     if (opciones.length === 0) return null;
     return { forFoodId: slot.food.id, forName: slot.food.name, options: opciones };
+  }
+
+  // Fuera de un platillo, el cambio es el de la nutriologa: todo el grupo de
+  // equivalentes SMAE del alimento (la tortilla de nopal por tortilla de maiz
+  // o tostada horneada, el arroz por tortilla).
+  const grupo = slot.food.grupoSmae;
+  if (grupo !== undefined && soloEntre === undefined) {
+    return equivalentesSmae(slot, grupo, pool, profile, config, fuera, comida);
   }
 
   const key = primaryMacroOf(slot.food.role);
@@ -957,6 +983,103 @@ function equivalencesFor(
   };
 }
 
+/** El macro que define cada grupo SMAE: el que la porcion equivalente conserva. */
+function macroDeGrupo(grupo: GrupoSmae): 'proteinPer100' | 'carbPer100' | 'fatPer100' {
+  if (grupo.startsWith('aoa_') || grupo === 'leche') return 'proteinPer100';
+  if (grupo.startsWith('grasas_')) return 'fatPer100';
+  return 'carbPer100';
+}
+
+/** "papa", "arroz blanco", "pechuga de pollo": el alimento como se dice en la mesa. */
+function nombreCorto(food: Food): string {
+  if (food.nombreEnPlatillo) return food.nombreEnPlatillo;
+  return food.name
+    .toLowerCase()
+    .replace(/\s+(cocid[oa]s?|crud[oa]s?|natural|drenad[oa]|en hojuelas.*|\(.*\))$/, '')
+    .trim();
+}
+
+/**
+ * El grupo SMAE completo del alimento, con la cantidad que conserva el
+ * equivalente en medida casera (1 taza de arroz = 3 tortillas).
+ *
+ * Solo se esconde lo que rompe una regla dura de la persona: su dieta, lo
+ * excluido o alergico, su presupuesto, el freno clinico (glucosa alta) y la
+ * leche que no eligio —`eligible` sin plantilla—. Lo que rompe una regla
+ * culinaria de ESTA comida (arroz con papa, cereal de desayuno con atun, lo
+ * que ya va en otra comida de hoy) no se ofrece, pero se dice en `noVan` con
+ * su motivo. El orden: lo que ya esta en casa, luego lo mexicano, luego lo
+ * demas; lo exacto antes que lo aproximado.
+ */
+function equivalentesSmae(
+  slot: Slot,
+  grupo: GrupoSmae,
+  pool: Food[],
+  profile: Profile,
+  config: EngineConfig,
+  fuera: ReadonlySet<string>,
+  comida: ContextoDeComida | undefined,
+): Equivalence | null {
+  const key = macroDeGrupo(grupo);
+  const base = slot.food[key];
+  if (base <= 0 || slot.grams <= 0) return null;
+  const objetivo = (slot.grams * base) / 100;
+  const despensa = new Set(profile.pantry ?? []);
+  const enCasa = (f: Food): boolean => despensa.has(f.id) || !IDS_DEL_CATALOGO.has(f.id);
+  const companeros = (comida?.foods ?? []).filter((f) => f.id !== slot.food.id);
+
+  const motivoDe = (f: Food): string | undefined => {
+    const choca = companeros.find((otro) => incompatibles(f, otro, config));
+    if (choca) return `no va con tu ${nombreCorto(choca)}`;
+    if (comida?.desayuno && f.tags.includes('no_desayuno')) return 'no va en el desayuno';
+    if (comida && !comida.desayuno && f.tags.includes('solo_desayuno')) return 'es de desayuno';
+    if (comida?.noche && DENSE_CARB_ROLES.includes(f.role) && !DENSE_CARB_ROLES.includes(slot.food.role)) {
+      return 'de noche no va cereal';
+    }
+    if (repiteFamilia(f, fuera)) return 'ya va en otra comida de hoy';
+    return undefined;
+  };
+
+  const candidatos = pool
+    .filter((f) => f.id !== slot.food.id && f.grupoSmae === grupo && f[key] > 0)
+    .filter((f) => eligible([f], profile, config, f.role).length === 1)
+    .map((f) => {
+      const grams = Math.max(roundingFor(f, config), quantize((slot.grams * base) / f[key], f, config));
+      const desviacion = objetivo <= 0 ? 0 : Math.abs((grams * f[key]) / 100 - objetivo) / objetivo;
+      return { food: f, grams, desviacion, motivo: motivoDe(f) };
+    })
+    .filter((c) => c.desviacion <= config.equivalenceFallbackDeviation);
+
+  const nivel = (c: { food: Food; desviacion: number }): number =>
+    (enCasa(c.food) ? 0 : 10) +
+    (c.desviacion > config.equivalenceMaxDeviation ? 2 : 0) +
+    (c.food.tags.includes('mexicano') ? 0 : 1);
+  const ofrecidas = candidatos
+    .filter((c) => c.motivo === undefined)
+    .sort((a, b) => nivel(a) - nivel(b) || a.desviacion - b.desviacion || a.food.name.localeCompare(b.food.name))
+    .slice(0, config.equivalencesPerItem);
+  const noVan = candidatos
+    .filter((c) => c.motivo !== undefined)
+    .sort((a, b) => a.desviacion - b.desviacion)
+    .map((c) => ({ foodId: c.food.id, name: c.food.name, grams: c.grams, motivo: c.motivo! }));
+  if (ofrecidas.length === 0 && noVan.length === 0) return null;
+
+  const aproximada = ofrecidas.some((c) => c.desviacion > config.equivalenceMaxDeviation);
+  return {
+    forFoodId: slot.food.id,
+    forName: slot.food.name,
+    options: ofrecidas.map((c) => ({
+      foodId: c.food.id,
+      name: c.food.name,
+      grams: c.grams,
+      ...(c.desviacion > config.equivalenceMaxDeviation ? { aproximada: true } : {}),
+      ...(enCasa(c.food) ? { enDespensa: true } : {}),
+    })),
+    ...(aproximada ? { aproximada: true } : {}),
+    ...(noVan.length > 0 ? { noVan } : {}),
+  };
+}
+
 /**
  * Equivalencias de un alimento suelto, resolviendolo por NOMBRE.
  *
@@ -982,6 +1105,10 @@ export function equivalenciasDeAlimento(
     enElDia?: string[];
     /** El platillo al que pertenece: entonces solo se cambia dentro de el. */
     preparacionId?: string;
+    /** Lo demas de ESTA comida (nombres o ids): lo que no va con ello sale en gris. */
+    enLaComida?: string[];
+    /** La comida y su hora: el desayuno y la noche tienen sus reglas. */
+    slot?: Pick<MealSlot, 'id' | 'timeHint'>;
   } = {},
 ): Equivalence | null {
   const buscado = normalize(nombre);
@@ -992,10 +1119,21 @@ export function equivalenciasDeAlimento(
   for (const otro of opciones.enElDia ?? []) {
     const n = normalize(otro);
     const encontrado = pool.find((f) => normalize(f.name) === n || normalize(f.id) === n);
-    const familia = encontrado ? familiaDe(encontrado) : undefined;
-    if (familia) evitar.add(familia);
-    if (encontrado?.role === 'fruta') evitar.add(`${MARCA_FRUTA_DEL_DIA}${encontrado.id}`);
+    if (!encontrado) continue;
+    for (const grupo of gruposDe(encontrado)) evitar.add(grupo);
+    if (encontrado.role === 'fruta') evitar.add(`${MARCA_FRUTA_DEL_DIA}${encontrado.id}`);
   }
+  const buscaEnPool = (valor: string): Food | undefined => {
+    const n = normalize(valor);
+    return pool.find((f) => normalize(f.name) === n || normalize(f.id) === n);
+  };
+  const enLaComida = (opciones.enLaComida ?? [])
+    .map(buscaEnPool)
+    .filter((f): f is Food => f !== undefined);
+  const comida =
+    opciones.slot !== undefined || enLaComida.length > 0
+      ? contextoDe(opciones.slot ?? { id: 'COMIDA', timeHint: '14:00' }, enLaComida)
+      : undefined;
 
   const slot: Slot = { food, grams: gramos, fixed: false };
   if (opciones.preparacionId !== undefined) {
@@ -1007,7 +1145,7 @@ export function equivalenciasDeAlimento(
     if (permitidos === undefined) return null;
     slot.permitidos = permitidos;
   }
-  return equivalencesFor(slot, pool, profile, config, evitar);
+  return equivalencesFor(slot, pool, profile, config, evitar, comida);
 }
 
 /**
@@ -2664,8 +2802,9 @@ function refreshMeal(
   const platillo = platilloDe(meal.items, pool);
   if (platillo) meal.preparacion = platillo;
   else delete meal.preparacion;
+  const comida = contextoDe({ id: meal.slot, timeHint: meal.timeHint }, kept.map((s) => s.food));
   meal.equivalences = kept
-    .map((s) => equivalencesFor(s, pool, profile, config, fuera))
+    .map((s) => equivalencesFor(s, pool, profile, config, fuera, comida))
     .filter((e): e is Equivalence => e !== null);
   meal.totals = meal.items.reduce<MacroTargets>(
     (acc, item) => ({

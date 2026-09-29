@@ -240,14 +240,18 @@ describe('generador de menus (spec §6)', () => {
     }
   });
 
-  it('las equivalencias son del mismo rol y nunca el mismo alimento', () => {
+  // R2: fuera de un platillo el cambio es el del grupo SMAE (la tortilla por
+  // arroz o tostada, aunque el catalogo los tenga en roles distintos).
+  it('las equivalencias son del mismo grupo SMAE y nunca el mismo alimento', () => {
     const { plan } = planFor(P);
     for (const meal of plan.menus[0].meals) {
       for (const equiv of meal.equivalences) {
-        const role = findFood(equiv.forFoodId)!.role;
+        const food = findFood(equiv.forFoodId)!;
         for (const option of equiv.options) {
           expect(option.foodId).not.toBe(equiv.forFoodId);
-          expect(findFood(option.foodId)!.role).toBe(role);
+          const otro = findFood(option.foodId)!;
+          if (food.grupoSmae) expect(otro.grupoSmae, `${food.id} -> ${otro.id}`).toBe(food.grupoSmae);
+          else expect(otro.role).toBe(food.role);
         }
       }
     }

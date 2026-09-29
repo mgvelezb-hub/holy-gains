@@ -86,9 +86,16 @@ export interface MenuMealView {
       portion: string | null;
       /** true si esa opción sola se sale del ±10 %: sirve, pero no es igual. */
       aproximada?: boolean;
+      /** Ya está en casa (despensa o alimento propio): la hoja la pone primero. */
+      enDespensa?: boolean;
     }>;
     /** true si alguna de sus opciones es aproximada; la app lo advierte. */
     aproximada?: boolean;
+    /**
+     * Equivalentes de su grupo SMAE que no van con esta comida, con el porqué
+     * ("no va con tu papa"). No se eligen; se dicen en gris.
+     */
+    noVan?: Array<{ name: string; grams: number; portion: string | null; motivo: string }>;
   }>;
 }
 
@@ -178,9 +185,25 @@ export function toMenuView(
                 // Los menús guardados antes de que existiera la marca no la
                 // traen: ausente se lee como exacta, que es lo que eran.
                 ...(item.aproximada === true ? { aproximada: true } : {}),
+                ...(item.enDespensa === true ? { enDespensa: true } : {}),
               };
             }),
             ...(row.aproximada === true ? { aproximada: true } : {}),
+            ...(Array.isArray(row.noVan) && row.noVan.length > 0
+              ? {
+                  noVan: row.noVan.map((raw) => {
+                    const fila = raw as Record<string, unknown>;
+                    const nombre = String(fila.name ?? "");
+                    const gramos = Number(fila.grams ?? 0);
+                    return {
+                      name: nombre,
+                      grams: gramos,
+                      portion: porcionNatural(nombre, gramos),
+                      motivo: String(fila.motivo ?? ""),
+                    };
+                  }),
+                }
+              : {}),
           };
         }),
       } satisfies MenuMealView;

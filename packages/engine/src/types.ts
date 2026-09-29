@@ -313,6 +313,29 @@ export type FoodRole =
   | 'suplemento';
 
 /**
+ * Grupo de equivalentes del Sistema Mexicano de Alimentos Equivalentes (SMAE,
+ * 4.a ed., Perez-Lizaur y cols., 2014). Dentro de un grupo, una porcion
+ * equivalente aporta lo mismo del macro que define al grupo: 1 tortilla = 1
+ * tostada horneada = 1/3 taza de arroz cocido = 1/2 taza de pasta (15 g de
+ * hidratos). Es lo que una nutriologa ofrece como "cambio".
+ */
+export const GRUPOS_SMAE = [
+  'cereales_sin_grasa',
+  'cereales_con_grasa',
+  'leguminosas',
+  'aoa_muy_bajo',
+  'aoa_bajo',
+  'aoa_moderado',
+  'leche',
+  'frutas',
+  'verduras',
+  'grasas_sin_proteina',
+  'grasas_con_proteina',
+  'azucares',
+] as const;
+export type GrupoSmae = (typeof GRUPOS_SMAE)[number];
+
+/**
  * Unidad casera en que se sirve un alimento. Es la referencia del SMAE
  * (Sistema Mexicano de Alimentos Equivalentes) traducida a lo que alguien
  * tiene en la cocina: cucharitas, tazas, piezas y rebanadas. `g` existe para
@@ -384,6 +407,8 @@ export interface Food {
    * Es lo que arma "Licuado de piña con avena" cuando el licuado es plantilla.
    */
   nombreEnPlatillo?: string;
+  /** Grupo de equivalentes SMAE: de aqui salen sus "cambios". */
+  grupoSmae?: GrupoSmae;
 }
 
 /**
@@ -494,7 +519,15 @@ export interface Equivalence {
     grams: number;
     /** true si esta opcion sola se sale del +-10 %: sirve, pero no es igual. */
     aproximada?: boolean;
+    /** Ya esta en casa (despensa o alimento propio): va primero. */
+    enDespensa?: boolean;
   }>;
+  /**
+   * Equivalentes de su grupo que no van con ESTA comida, con el motivo en
+   * palabras ("no va con tu papa", "ya va en otra comida de hoy"). No se
+   * ofrecen, pero se dicen: esconderlos hacia creer que no existen.
+   */
+  noVan?: Array<{ foodId: string; name: string; grams: number; motivo: string }>;
   /**
    * true cuando las opciones NO caben en el +-10% de macro que promete una
    * equivalencia normal: son lo mas cercano que existe en el catalogo

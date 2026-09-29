@@ -474,6 +474,8 @@ export type MenuMeal = {
       portion: string | null;
       /** Esta opción sola se sale del ±10%: sirve, pero no cuadra igual. */
       aproximada?: boolean;
+      /** Ya está en casa (despensa o alimento propio). */
+      enDespensa?: boolean;
     }>;
     /**
      * `true` cuando ninguna opción del catálogo cupo dentro del ±10% de
@@ -481,6 +483,8 @@ export type MenuMeal = {
      * vez de dejar al usuario sin cambio. Opcional: el API viejo no lo manda.
      */
     aproximada?: boolean;
+    /** Equivalentes de su grupo SMAE que no van con esta comida, con el porqué. */
+    noVan?: Array<{ name: string; grams: number; portion: string | null; motivo: string }>;
   }>;
 };
 export type Menu = { menuNumber: number; meals: MenuMeal[] };

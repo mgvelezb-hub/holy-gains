@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { FOODS, equivalenciasDeAlimento, familiaDe, normalize } from "engine";
-import type { Profile as EngineProfile } from "engine";
+import type { MealSlotId, Profile as EngineProfile } from "engine";
 
 /**
  * Relleno de equivalencias sobre menús YA guardados.
@@ -83,8 +83,18 @@ export function rellenaEquivalencias(
       const preparacionId = preparacionIdDe(item.preparacion) ?? undefined;
       const esDePlatillo = preparacionId !== undefined && preparacionId === platilloDeLaComida;
 
+      // Lo demás de esta comida y su hora: el arroz no se ofrece junto a la
+      // papa, ni lo que no es de desayuno a las 8 (grupo SMAE, motor R2).
+      const enLaComida = items
+        .filter((otro) => otro !== item)
+        .map((otro) => String(otro.foodId ?? otro.name ?? ""))
+        .filter((valor) => valor !== "");
       const frescas = equivalenciasDeAlimento(nombre, gramos, profile, undefined, undefined, {
         enElDia,
+        enLaComida,
+        ...(typeof meal.slot === "string" && typeof meal.timeHint === "string"
+          ? { slot: { id: meal.slot as MealSlotId, timeHint: meal.timeHint } }
+          : {}),
         ...(esDePlatillo ? { preparacionId } : {}),
       });
 
@@ -124,6 +134,7 @@ export function rellenaEquivalencias(
           name: opcion.name,
           grams: opcion.grams,
           ...(opcion.aproximada === true ? { aproximada: true } : {}),
+          ...(opcion.enDespensa === true ? { enDespensa: true } : {}),
         }));
 
       if (agregadas.length === 0 && !depuradas) continue;
