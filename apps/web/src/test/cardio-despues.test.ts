@@ -116,7 +116,7 @@ describe("H2 · el cardio después de pesas de Mau", () => {
     expect(cardio.every((sesion) => sesion.gymMinutes === 70)).toBe(true);
   });
 
-  it("N1/P1: con historial, el HIIT de caminadora sube de nivel (20' por plantilla con km/h del nivel)", () => {
+  it("N1/P1: con historial, el HIIT de caminadora sube de nivel (15' + 5 min de caminata)", () => {
     const plan = planDisciplines({
       weekStart: MONDAY,
       otherDisciplines: [
@@ -134,7 +134,8 @@ describe("H2 · el cardio después de pesas de Mau", () => {
       ],
     });
     const cardio = plan.sessions.filter((sesion) => sesion.discipline === "CARDIO");
-    expect(cardio[0]!.sesion?.cardio?.programa).toMatchObject({ duracion: 20, nivel: 2, fuente: "plantilla", titulo: "HIIT 20' · Nivel 2 · Caminadora" });
+    expect(cardio[0]!.sesion?.cardio?.protocolo).toMatchObject({ duracion: 15, nivel: 2, caminataMin: 5 });
+    expect(cardio[0]!.sesion?.cardio?.programa).toMatchObject({ duracion: 20, nivel: 2, fuente: "catalogo", caminataMin: 5 });
   });
 
   it("planDisciplines: el día de menos de 45 min se avisa con su nombre, no se tira", () => {

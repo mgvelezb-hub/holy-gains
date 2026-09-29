@@ -1,7 +1,10 @@
 import {
+  CAMINATA_SUAVE_KMH,
+  DURACIONES_HIIT,
   NIVEL_MAXIMO_HIIT,
   protocoloDelCatalogo,
   type EsfuerzoHiit,
+  type ProtocoloHiit,
 } from "@/lib/training/disciplinas/hiit-caminadora";
 import {
   controlDe,
@@ -13,8 +16,9 @@ import type { EquipoCardio } from "@/lib/training/types";
 /**
  * Plantillas HIIT por nivel 0–5 para cualquier máquina y duración (P1) — puro.
  *
- * La caminadora tiene los 14 protocolos que Mau probó; las demás máquinas
- * (y las duraciones que el catálogo no trae: 20', 30', 10' de niveles 0–3)
+ * La caminadora tiene los 14 protocolos que Mau probó y los usa siempre que
+ * uno quepa (el más largo, con caminata suave en los minutos que sobren); las
+ * demás máquinas, y la caminadora cuando ninguno cabe (10' de niveles 0–3),
  * salen de aquí. La forma imita la de sus protocolos: picos de 1 min, 1–2
  * min de recuperación que bajan por Moderado antes de Fácil, calentamiento
  * que sube de Fácil a Moderado y cierre en Fácil.
@@ -29,7 +33,15 @@ import type { EquipoCardio } from "@/lib/training/types";
  * hacer en una elíptica.
  */
 
-export type FaseTramo = "calentamiento" | "trabajo" | "recuperacion" | "continuo" | "calibracion" | "enfriamiento";
+/** `caminata` = los minutos que sobran tras un protocolo real de caminadora, a 5–6 km/h. */
+export type FaseTramo =
+  | "calentamiento"
+  | "trabajo"
+  | "recuperacion"
+  | "continuo"
+  | "calibracion"
+  | "enfriamiento"
+  | "caminata";
 
 /** Un tramo sin máquina: minutos, esfuerzo y para qué está. */
 export type TramoPlantilla = {
@@ -164,38 +176,69 @@ export function tramosConControles(
 }
 
 /**
- * El HIIT de una máquina: la caminadora corre el protocolo real de Mau si
- * existe para esa duración y nivel; todo lo demás, la plantilla.
+ * El protocolo real de Mau más largo que cabe en `duracion` minutos al
+ * `nivel` (25, 15 o 10 —el 10' solo existe en niveles 4–5—), o `null` si
+ * ninguno cabe.
+ */
+export function protocoloRealQueCabe(duracion: number, nivel: number): ProtocoloHiit | null {
+  const n = nivelHiitValido(nivel);
+  const total = duracionValida(duracion);
+  for (const minutos of [...DURACIONES_HIIT].sort((a, b) => b - a)) {
+    if (minutos > total) continue;
+    const real = protocoloDelCatalogo(minutos, n);
+    if (real) return real;
+  }
+  return null;
+}
+
+/**
+ * El HIIT de una máquina. La caminadora conserva los protocolos reales de
+ * Mau —le gustan y los probó—: corre el más largo que quepa y completa con
+ * caminata suave a 5–6 km/h los minutos que sobren (20' = 15' real + 5'
+ * caminata; 30' = 25' + 5'). Solo si ninguno cabe (10' de niveles 0–3) va la
+ * plantilla con los km/h de su nivel. Todo lo demás, la plantilla.
  */
 export function hiitParaMaquina(
   maquina: EquipoCardio,
   duracion: number,
   nivel: number,
   contexto: ContextoControl,
-): { fuente: "catalogo" | "plantilla"; tramos: TramoCardio[] } {
+): { fuente: "catalogo" | "plantilla"; tramos: TramoCardio[]; protocoloMin?: number; caminataMin?: number } {
   const n = nivelHiitValido(nivel);
   const total = duracionValida(duracion);
-  const real = maquina === "CAMINADORA" ? protocoloDelCatalogo(total, n) : null;
+  const real = maquina === "CAMINADORA" ? protocoloRealQueCabe(total, n) : null;
   if (real) {
     const ultimo = real.tramos.length - 1;
-    return {
-      fuente: "catalogo",
-      tramos: real.tramos.map((tramo, i) => ({
-        desdeMin: tramo.desdeMin,
-        hastaMin: tramo.hastaMin,
-        esfuerzo: tramo.esfuerzo,
-        fase:
-          i === 0
-            ? "calentamiento"
-            : i === ultimo
-              ? "enfriamiento"
-              : tramo.esfuerzo === "Fácil" || tramo.esfuerzo === "Moderado"
-                ? "recuperacion"
-                : "trabajo",
-        control: { maquina, kmh: [...tramo.kmh], texto: `${tramo.kmh[0]}–${tramo.kmh[1]} km/h` },
-        ...(tramo.inferido ? { inferido: true } : {}),
-      })),
-    };
+    const caminataMin = total - real.duracion;
+    const tramos: TramoCardio[] = real.tramos.map((tramo, i) => ({
+      desdeMin: tramo.desdeMin,
+      hastaMin: tramo.hastaMin,
+      esfuerzo: tramo.esfuerzo,
+      fase:
+        i === 0
+          ? "calentamiento"
+          : i === ultimo
+            ? "enfriamiento"
+            : tramo.esfuerzo === "Fácil" || tramo.esfuerzo === "Moderado"
+              ? "recuperacion"
+              : "trabajo",
+      control: { maquina, kmh: [...tramo.kmh], texto: `${tramo.kmh[0]}–${tramo.kmh[1]} km/h` },
+      ...(tramo.inferido ? { inferido: true } : {}),
+    }));
+    if (caminataMin > 0) {
+      tramos.push({
+        desdeMin: real.duracion,
+        hastaMin: total,
+        esfuerzo: "Fácil",
+        fase: "caminata",
+        control: {
+          maquina,
+          kmh: [...CAMINATA_SUAVE_KMH],
+          texto: `${CAMINATA_SUAVE_KMH[0]}–${CAMINATA_SUAVE_KMH[1]} km/h · caminata suave`,
+        },
+      });
+    }
+    return { fuente: "catalogo", tramos, protocoloMin: real.duracion, caminataMin };
   }
   return {
     fuente: "plantilla",

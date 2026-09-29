@@ -152,13 +152,69 @@ describe("HIIT en caminadora (N1 → P1)", () => {
     expect(sesion.cardio!.unidad).toBe("kmh");
   });
 
-  it("20' (lo de Mau) ya no es 15' + caminata: plantilla de 20' con km/h del nivel", () => {
+  it("los 20 min de Mau, básico, sin historial: HIIT 15' nivel 0 + 5 min de caminata suave", () => {
     const sesion = prescribirCardio({ ...base, minutes: 20, prefs: { ...caminadora, nivel: "BASICO" } });
     const programa = sesion.cardio!.programa!;
-    expect(programa).toMatchObject({ fuente: "plantilla", duracion: 20, nivel: 0, titulo: "HIIT 20' · Nivel 0 · Caminadora" });
+    expect(programa).toMatchObject({
+      fuente: "catalogo",
+      duracion: 20,
+      nivel: 0,
+      protocoloMin: 15,
+      caminataMin: 5,
+      titulo: "HIIT 15' + 5' caminata · Nivel 0 · Caminadora",
+    });
+    const protocolo = sesion.cardio!.protocolo!;
+    expect(protocolo).toMatchObject({ duracion: 15, nivel: 0, caminataMin: 5, recortado: false });
+    expect(protocolo.tramos).toEqual(protocoloDelCatalogo(15, 0)!.tramos);
+    expect(programa.tramos.at(-1)).toMatchObject({ desdeMin: 15, hastaMin: 20, esfuerzo: "Fácil", fase: "caminata" });
+    expect(programa.tramos.at(-1)!.control.kmh).toEqual([5, 6]);
+    expect(sesion.cardio!.intervalos).toBeNull();
+    expect(sesion.blocks.map((bloque) => bloque.title)).toEqual([
+      "Calentamiento",
+      "HIIT 15' · Nivel 0 · Caminadora",
+      "Enfriamiento",
+      "Caminata suave",
+    ]);
+    expect(sesion.blocks.at(-1)!.detail).toBe("5 min · 5–6 km/h");
+    expect(sesion.cargaTotal).toBe(20);
+    // Ni rastro del "nivel de máquina" de H2: aquí se habla en km/h.
+    expect(sesion.blocks.some((bloque) => /nivel \d/.test(bloque.detail))).toBe(false);
+  });
+
+  it("≥ 25 min: el 25'; justo 25 no deja caminata", () => {
+    const sesion = prescribirCardio({ ...base, minutes: 25, prefs: caminadora });
+    expect(sesion.cardio!.protocolo).toMatchObject({ duracion: 25, caminataMin: 0 });
+    expect(sesion.blocks.map((bloque) => bloque.title)).not.toContain("Caminata suave");
+  });
+
+  it("30 min: 25' real + 5' de caminata", () => {
+    const sesion = prescribirCardio({ ...base, minutes: 30, prefs: { ...caminadora, nivel: "MEDIO" } });
+    expect(sesion.cardio!.programa).toMatchObject({ fuente: "catalogo", duracion: 30, protocoloMin: 25, caminataMin: 5 });
+    expect(sesion.cardio!.protocolo).toMatchObject({ duracion: 25, nivel: 2, caminataMin: 5 });
+    expect(sesion.cardio!.programa!.tramos.at(-1)).toMatchObject({ desdeMin: 25, hastaMin: 30, fase: "caminata" });
+    expect(sesion.cargaTotal).toBe(30);
+  });
+
+  it("10' en niveles 0–3 no tiene protocolo real que quepa: plantilla con km/h del nivel", () => {
+    const sesion = prescribirCardio({ ...base, minutes: 10, prefs: { ...caminadora, nivel: "BASICO" } });
+    expect(sesion.cardio!.programa).toMatchObject({ fuente: "plantilla", duracion: 10, titulo: "HIIT 10' · Nivel 0 · Caminadora" });
     expect(sesion.cardio!.protocolo).toBeUndefined();
-    expect(programa.tramos.every((t) => t.control.kmh !== undefined)).toBe(true);
-    expect(sesion.blocks.map((b) => b.title)).not.toContain("Caminata suave");
+    // Avanzado sí tiene 10' real.
+    expect(prescribirCardio({ ...base, minutes: 12, prefs: { ...caminadora, nivel: "AVANZADO" } }).cardio!.protocolo).toMatchObject({
+      duracion: 10,
+      nivel: 4,
+      caminataMin: 2,
+    });
+  });
+
+  it("el nivel sube con las semanas cumplidas del historial y descarga la 4.ª", () => {
+    const historial = [37, 38, 39].map((isoWeek) => ({ isoWeek, planeadas: 5, registradas: 5 }));
+    const nivelEn = (isoWeek: number) =>
+      prescribirCardio({ minutes: 20, isoWeek, objetivo: "RECOMPOSICION", prefs: caminadora, historial }).cardio!.protocolo!.nivel;
+    expect(nivelEn(39)).toBe(3);
+    const descarga = prescribirCardio({ minutes: 20, isoWeek: 40, objetivo: "RECOMPOSICION", prefs: caminadora, historial });
+    expect(descarga.deload).toBe(true);
+    expect(descarga.cardio!.protocolo!.nivel).toBe(2);
   });
 
   it("medio arranca en 2 y avanzado en 4", () => {
@@ -168,9 +224,10 @@ describe("HIIT en caminadora (N1 → P1)", () => {
     expect(nivelDe("AVANZADO")).toBe(4);
   });
 
-  it("en mph si la preferencia lo pide (la app convierte los km/h)", () => {
+  it("en mph si la preferencia lo pide", () => {
     const sesion = prescribirCardio({ ...base, minutes: 20, prefs: { ...caminadora, unidadVelocidad: "mph" } });
     expect(sesion.cardio!.unidad).toBe("mph");
+    expect(sesion.blocks.at(-1)!.detail).toBe("5 min · 3.1–3.7 mph");
   });
 });
 

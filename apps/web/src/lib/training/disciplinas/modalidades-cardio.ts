@@ -291,6 +291,12 @@ export type ProgramaCardio = {
   /** Por qué la sesión no es la modalidad pedida ("el 4×4 pide 35 min"). */
   ajuste: string | null;
   fcMaxima: number | null;
+  /**
+   * Solo caminadora HIIT con protocolo real: los minutos del protocolo de Mau
+   * y los de caminata suave que completan la sesión (20' = 15 + 5).
+   */
+  protocoloMin?: number;
+  caminataMin?: number;
 };
 
 export type ProgramaInput = {
@@ -304,9 +310,18 @@ export type ProgramaInput = {
   edad?: number;
 };
 
-export function tituloPrograma(modalidad: ModalidadCardio, duracion: number, maquina: EquipoCardio, nivel: number | null): string {
+export function tituloPrograma(
+  modalidad: ModalidadCardio,
+  duracion: number,
+  maquina: EquipoCardio,
+  nivel: number | null,
+  caminataMin = 0,
+): string {
   const donde = maquina === "LIBRE" ? "" : ` · ${NOMBRE_MAQUINA[maquina]}`;
-  if (modalidad === "HIIT") return `HIIT ${duracion}' · Nivel ${nivel ?? 0}${donde}`;
+  if (modalidad === "HIIT") {
+    const minutos = caminataMin > 0 ? `${duracion - caminataMin}' + ${caminataMin}' caminata` : `${duracion}'`;
+    return `HIIT ${minutos} · Nivel ${nivel ?? 0}${donde}`;
+  }
   return `${INFO_MODALIDAD[modalidad].nombre} · ${duracion}'${donde}`;
 }
 
@@ -338,7 +353,7 @@ export function programaCardio(input: ProgramaInput): ProgramaCardio {
     modalidad: resuelto.modalidad,
     nivel: esHiit ? nivelHiit : null,
     duracion,
-    titulo: tituloPrograma(resuelto.modalidad, duracion, input.maquina, esHiit ? nivelHiit : null),
+    titulo: tituloPrograma(resuelto.modalidad, duracion, input.maquina, esHiit ? nivelHiit : null, hiit?.caminataMin ?? 0),
     fuente: hiit?.fuente ?? "plantilla",
     porque: info.porque,
     paraQuien: info.paraQuien,
@@ -349,5 +364,6 @@ export function programaCardio(input: ProgramaInput): ProgramaCardio {
     calibracion: null,
     ajuste: resuelto.ajuste,
     fcMaxima: input.edad !== undefined ? fcMaxima(input.edad) : null,
+    ...(hiit?.protocoloMin !== undefined ? { protocoloMin: hiit.protocoloMin, caminataMin: hiit.caminataMin ?? 0 } : {}),
   };
 }

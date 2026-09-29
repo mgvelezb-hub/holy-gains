@@ -9,7 +9,9 @@ import {
 import {
   nivelHiitDeSemana,
   protocoloDelCatalogo,
+  textoVelocidad,
   type SemanaCardio,
+  type UnidadVelocidad,
 } from "@/lib/training/disciplinas/hiit-caminadora";
 import {
   controlDe,
@@ -27,6 +29,7 @@ import {
   INFO_MODALIDAD,
   notaDeMaquina,
   programaCardio,
+  tituloPrograma,
   type ModalidadCardio,
   type ProgramaCardio,
 } from "@/lib/training/disciplinas/modalidades-cardio";
@@ -43,8 +46,9 @@ import type { EquipoCardio, NivelCardio, PreferenciasCardio, TipoCardio } from "
  * **P1: toda máquina, toda modalidad.** La sesión es un `ProgramaCardio`
  * minuto a minuto (`modalidades-cardio.ts`): HIIT por nivel 0–5, zona 2,
  * tempo, 4×4, piramidal o recuperación, con los controles de la máquina ya
- * calculados. La caminadora corre los protocolos reales de Mau cuando
- * existen (10/15/25 min); lo demás es plantilla.
+ * calculados. La caminadora corre el protocolo real de Mau más largo que
+ * quepa (25/15/10) y camina suave lo que sobre (20' = 15' + 5'); solo si
+ * ninguno cabe va la plantilla, como el resto de máquinas.
  *
  * **La intensidad se ancla en un nivel base personal** por máquina (lo que
  * es "moderado" para esa persona en esa máquina). Si falta, la primera
@@ -317,7 +321,7 @@ export function prescribirCardio(input: CardioInput): SesionDisciplina {
     };
   }
 
-  const blocks = bloquesDe(programa);
+  const blocks = bloquesDe(programa, equipo === "CAMINADORA" ? unidad : undefined);
   const notes: string[] = [programa.porque];
   if (programa.modalidad === "HIIT") {
     notes.push(
@@ -340,7 +344,8 @@ export function prescribirCardio(input: CardioInput): SesionDisciplina {
   const porObjetivo = notaDeObjetivo(objetivo);
   if (porObjetivo) notes.push(porObjetivo);
 
-  const real = programa.fuente === "catalogo" ? protocoloDelCatalogo(programa.duracion, programa.nivel ?? 0) : null;
+  const real =
+    programa.fuente === "catalogo" ? protocoloDelCatalogo(programa.protocoloMin ?? programa.duracion, programa.nivel ?? 0) : null;
   const calentamientoMin = sumaMin(programa.tramos, ["calentamiento", "calibracion"]);
   const enfriamientoMin = sumaMin(programa.tramos, ["enfriamiento"]);
   const tipoResuelto = programa.modalidad === "CALIBRACION" ? "CALIBRACION" : programa.modalidad;
@@ -364,7 +369,7 @@ export function prescribirCardio(input: CardioInput): SesionDisciplina {
       intervalos: null,
       calentamientoSeg: calentamientoMin * 60,
       enfriamientoSeg: enfriamientoMin * 60,
-      ...(real ? { protocolo: { ...real, recortado: false, caminataMin: 0 } } : {}),
+      ...(real ? { protocolo: { ...real, recortado: false, caminataMin: programa.caminataMin ?? 0 } } : {}),
       ...(equipo === "CAMINADORA" ? { unidad } : {}),
       programa,
     },
@@ -375,13 +380,17 @@ function sumaMin(tramos: readonly TramoCardio[], fases: ReadonlyArray<TramoCardi
   return tramos.filter((t) => fases.includes(t.fase)).reduce((suma, t) => suma + t.hastaMin - t.desdeMin, 0);
 }
 
-/** Los bloques de la tarjeta: lo de antes, el cuerpo y el enfriamiento. */
-function bloquesDe(programa: ProgramaCardio): BloqueSesion[] {
+/** Los bloques de la tarjeta: lo de antes, el cuerpo, el enfriamiento y la caminata que sobre. */
+function bloquesDe(programa: ProgramaCardio, unidad?: UnidadVelocidad): BloqueSesion[] {
   const antes = programa.tramos.filter((t) => t.fase === "calentamiento" || t.fase === "calibracion");
   const despues = programa.tramos.filter((t) => t.fase === "enfriamiento");
-  const cuerpo = programa.tramos.filter((t) => !antes.includes(t) && !despues.includes(t));
+  const caminata = programa.tramos.filter((t) => t.fase === "caminata");
+  const cuerpo = programa.tramos.filter((t) => !antes.includes(t) && !despues.includes(t) && !caminata.includes(t));
   const min = (tramos: TramoCardio[]) => tramos.reduce((suma, t) => suma + t.hastaMin - t.desdeMin, 0);
-  const como = (tramo: TramoCardio) => (tramo.control.texto ? ` · ${tramo.control.texto}` : "");
+  // En caminadora los km/h se dicen en la unidad de la persona.
+  const control = (tramo: TramoCardio) =>
+    unidad && tramo.control.kmh ? textoVelocidad(tramo.control.kmh, unidad) : tramo.control.texto;
+  const como = (tramo: TramoCardio) => (control(tramo) ? ` · ${control(tramo)}` : "");
   const blocks: BloqueSesion[] = [];
 
   if (programa.calibracion) {
@@ -404,12 +413,16 @@ function bloquesDe(programa: ProgramaCardio): BloqueSesion[] {
 
   if (cuerpo.length > 0) {
     const tope = cuerpo.reduce((max, t) => (ESFUERZO_ORDEN[t.esfuerzo] > ESFUERZO_ORDEN[max.esfuerzo] ? t : max), cuerpo[0]!);
+    const titulo =
+      programa.caminataMin && programa.protocoloMin && programa.modalidad !== "CALIBRACION"
+        ? tituloPrograma(programa.modalidad, programa.protocoloMin, programa.maquina, programa.nivel)
+        : programa.titulo;
     blocks.push({
-      title: programa.calibracion ? "Zona 2" : programa.titulo,
+      title: programa.calibracion ? "Zona 2" : titulo,
       detail:
         cuerpo.length === 1
           ? `${min(cuerpo)} min${como(cuerpo[0]!)} (${cuerpo[0]!.esfuerzo})`
-          : `${cuerpo.length} tramos · hasta ${tope.esfuerzo}${tope.control.texto ? ` (${tope.control.texto})` : ""}`,
+          : `${cuerpo.length} tramos · hasta ${tope.esfuerzo}${control(tope) ? ` (${control(tope)})` : ""}`,
       carga: min(cuerpo),
       restSeconds: null,
       note:
@@ -426,6 +439,17 @@ function bloquesDe(programa: ProgramaCardio): BloqueSesion[] {
       carga: min(despues),
       restSeconds: null,
       note: "Nunca bajarse en seco después de intervalos.",
+    });
+  }
+
+  if (caminata.length > 0) {
+    const tramo = caminata[0]!;
+    blocks.push({
+      title: "Caminata suave",
+      detail: `${min(caminata)} min · ${tramo.control.kmh ? textoVelocidad(tramo.control.kmh, unidad ?? "kmh") : tramo.control.texto}`,
+      carga: min(caminata),
+      restSeconds: null,
+      note: "Lo que sobra del bloque, caminando: suma gasto sin sumar fatiga.",
     });
   }
   return blocks;

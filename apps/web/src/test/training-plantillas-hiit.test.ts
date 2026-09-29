@@ -92,8 +92,19 @@ describe("hiitParaMaquina", () => {
     expect(hiit.tramos[0]!.control.kmh).toEqual(real.tramos[0]!.kmh);
   });
 
-  it("caminadora sin protocolo (20', 30', 10' < nivel 4): plantilla con km/h del nivel", () => {
-    for (const [duracion, nivel] of [[20, 2], [30, 1], [10, 0]] as const) {
+  it("caminadora: el protocolo real más largo que quepa y caminata suave en lo que sobra", () => {
+    for (const [duracion, nivel, real] of [[20, 2, 15], [30, 1, 25], [12, 4, 10], [25, 3, 25]] as const) {
+      const hiit = hiitParaMaquina("CAMINADORA", duracion, nivel, {});
+      expect(hiit.fuente).toBe("catalogo");
+      expect(hiit.protocoloMin).toBe(real);
+      expect(hiit.caminataMin).toBe(duracion - real);
+      expect(hiit.tramos.at(-1)!.hastaMin).toBe(duracion);
+      if (duracion > real) expect(hiit.tramos.at(-1)).toMatchObject({ desdeMin: real, fase: "caminata", esfuerzo: "Fácil" });
+    }
+  });
+
+  it("caminadora sin protocolo real que quepa (10' en niveles 0–3): plantilla con km/h del nivel", () => {
+    for (const [duracion, nivel] of [[10, 0], [12, 3], [8, 5]] as const) {
       const hiit = hiitParaMaquina("CAMINADORA", duracion, nivel, {});
       expect(hiit.fuente).toBe("plantilla");
       expect(hiit.tramos.at(-1)!.hastaMin).toBe(duracion);
