@@ -53,10 +53,14 @@ const EVENING_4: SlotTemplate[] = [
   { id: 'POST', label: 'Cena (post-entreno)', timeHint: '20:30', carbPct: 37.5, proteinPct: 25, fatPct: 0, freeVegetables: false, carbPctAggressive: 55 },
 ];
 
+// Tres comidas son desayuno, comida y cena. El entreno de la tarde queda como
+// etiqueta, no como slot: la comida de las 14:00 que se llamaba PRE heredaba
+// las reglas del pre-entreno (nada que cocinar, polvos) y no las de una
+// comida principal, y la cena POST salia sin verdura.
 const EVENING_3: SlotTemplate[] = [
   { id: 'DESAYUNO', label: 'Desayuno (bajo carbo)', timeHint: '08:30', carbPct: 20, proteinPct: 30, fatPct: 60, freeVegetables: true, carbPctAggressive: 0 },
-  { id: 'PRE', label: 'Comida (pre-entreno)', timeHint: '14:00', carbPct: 42.5, proteinPct: 32.5, fatPct: 40, freeVegetables: true, carbPctAggressive: 45 },
-  { id: 'POST', label: 'Cena (post-entreno)', timeHint: '20:30', carbPct: 37.5, proteinPct: 37.5, fatPct: 0, freeVegetables: false, carbPctAggressive: 55 },
+  { id: 'COMIDA', label: 'Comida (pre-entreno)', timeHint: '14:00', carbPct: 42.5, proteinPct: 32.5, fatPct: 40, freeVegetables: true, carbPctAggressive: 45 },
+  { id: 'CENA', label: 'Cena (post-entreno)', timeHint: '20:30', carbPct: 37.5, proteinPct: 37.5, fatPct: 0, freeVegetables: true, carbPctAggressive: 55 },
 ];
 
 const EVENING_5: SlotTemplate[] = [
