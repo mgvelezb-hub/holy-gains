@@ -42,6 +42,7 @@ import {
   type TodayCard,
 } from "@/lib/api";
 import { EngraneAjustes } from "@/components/EngraneAjustes";
+import { esCardioConPlan } from "@/lib/cardio";
 import { lineaCheckin } from "@/lib/analisis-checkin";
 import { HeroCard } from "@/components/HeroCard";
 import { InfoTip, TextoInfo } from "@/components/InfoTip";
@@ -491,8 +492,14 @@ function TodayTrainingCard({
         // El golf tiene su propia pantalla de registro (score, GIR, putts,
         // castigos) — no le sirve el destino genérico de las demás
         // secundarias, que es "Rutinas" (donde no hay nada de golf que ver).
+        // N2: el cardio con plan abre su hoja (tabla completa y "Empezar
+        // cardio"), no Rutinas.
         const onPressBloque =
-          otra.discipline === "GOLF" ? () => router.push("/golf" as never) : onPress;
+          otra.discipline === "GOLF"
+            ? () => router.push("/golf" as never)
+            : esCardioConPlan(otra)
+              ? () => router.push({ pathname: "/cardio/[fecha]", params: { fecha: otra.date } } as never)
+              : onPress;
         return (
           <View key={`otra-${otra.discipline}-${index}`}>
             <HeroCard

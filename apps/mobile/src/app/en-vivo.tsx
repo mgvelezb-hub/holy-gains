@@ -26,6 +26,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Hoja } from "@/components/Hoja";
+import { CorredorCardio } from "@/components/CorredorCardio";
 import { InfoTip, TextoInfo } from "@/components/InfoTip";
 import { Parrafo } from "@/components/Parrafo";
 import { ErrorState, LoadingState } from "@/components/States";
@@ -33,7 +34,6 @@ import { useTheme } from "@/context/theme";
 import {
   getEjercicioPrefs,
   patchEjercicioPrefs,
-  postActivities,
   type ExerciseAlternative,
   type OtherSessionView,
   type SessionSyncInput,
@@ -41,8 +41,8 @@ import {
   type WarmupStep,
   type WeekView,
 } from "@/lib/api";
-import { actividadDeCardio, pasosDeCardio, tituloTarjetaCardio } from "@/lib/cardio";
-import { colorDeEsfuerzo, debeAvisarCambio, protocoloDe, textoParaReloj, tramosDeSesion, unidadDe } from "@/lib/hiit";
+import { cardioDeLaFecha, pasosDeCardio, tituloTarjetaCardio } from "@/lib/cardio";
+import { leeCardioEnCurso, leeCardioHecho } from "@/lib/cardio-en-curso";
 import {
   alCerrarSerieEnElReloj,
   alFrecuenciaDelReloj,
@@ -235,20 +235,12 @@ export default function EnVivoScreen() {
 
   /**
    * El cardio de después de pesas de hoy (H2), si el plan lo trae. Aparece
-   * al cerrar la última serie y corre con el MISMO timer del calentamiento
-   * (`pasoCalentamiento`/`calentamientoHasta`): solo cambian los pasos.
+   * al cerrar la última serie y lo corre `CorredorCardio` (N2): el MISMO
+   * componente del cardio suelto, con su cursor, pausa y registro.
    */
   const [cardioDelDia, setCardioDelDia] = useState<OtherSessionView | null>(null);
-  const [cardioInicio, setCardioInicio] = useState<Date | null>(null);
-  const [cardioEstado, setCardioEstado] = useState<"pendiente" | "guardando" | "hecho" | "omitido">(
-    "pendiente",
-  );
+  const [cardioEstado, setCardioEstado] = useState<"pendiente" | "hecho" | "omitido">("pendiente");
   const [cardioMsg, setCardioMsg] = useState<string | null>(null);
-  /**
-   * N1: en qué paso del protocolo HIIT ya se avisó "cambia la velocidad"
-   * (una vez por tramo, 5 s antes). `null` = todavía en ninguno.
-   */
-  const [avisadoEnPaso, setAvisadoEnPaso] = useState<number | null>(null);
   const [calentamientoIniciado, setCalentamientoIniciado] = useState(false);
   const [pasoCalentamiento, setPasoCalentamiento] = useState(0);
   /**
@@ -392,12 +384,8 @@ export default function EnVivoScreen() {
 
       setSesion(encontrada);
       setDraft(guardadas);
-      setCardioDelDia(
-        semana?.otherSessions?.find(
-          (otra) =>
-            otra.date === encontrada.date && otra.discipline === "CARDIO" && otra.sesion?.cardio !== undefined,
-        ) ?? null,
-      );
+      const cardio = cardioDeLaFecha(semana?.otherSessions, encontrada.date);
+      setCardioDelDia(cardio);
 
       const base = estadoInicial(ejercicios);
 
@@ -433,6 +421,22 @@ export default function EnVivoScreen() {
           ? "calentamiento"
           : "entrenando",
       );
+
+      // N2: el cardio de hoy ya hecho (aquí o suelto) no se vuelve a ofrecer;
+      // uno a medias se retoma directo en su tramo.
+      if (cardio?.sesion?.cardio && estadoFinal.terminada) {
+        const pasosCardio = pasosDeCardio(cardio.sesion.cardio, cardio.minutes);
+        const [hecho, enCurso] = await Promise.all([
+          leeCardioHecho(encontrada.date),
+          leeCardioEnCurso(encontrada.date, pasosCardio.length),
+        ]);
+        if (hecho !== null) {
+          setCardioEstado("hecho");
+          setCardioMsg(`Cardio de hoy ya registrado · ${hecho} min.`);
+        } else if (enCurso) {
+          setFase("cardio");
+        }
+      }
       setCalentamientoIniciado(false);
       setPasoCalentamiento(0);
       setCalentamientoHasta(null);
@@ -519,36 +523,6 @@ export default function EnVivoScreen() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     avanzarCalentamiento(pasoCalentamiento + 1);
   }, [calentamientoHasta, ahoraCalentamiento]);
-
-  // N1 — el HIIT de caminadora: 5 s antes de cada cambio de velocidad, una
-  // háptica de aviso (una sola vez por tramo) para que dé tiempo de tocar
-  // los botones de la máquina.
-  const protocoloCardio = fase === "cardio" ? protocoloDe(cardioDelDia?.sesion?.cardio) : null;
-  useEffect(() => {
-    if (!protocoloCardio || calentamientoHasta === null) return;
-    const restante = Math.ceil((calentamientoHasta - ahoraCalentamiento) / 1000);
-    const hayCambio = pasoCalentamiento < tramosDeSesion(protocoloCardio).length - 1;
-    if (debeAvisarCambio({ restanteSeg: restante, avisadoEn: avisadoEnPaso, paso: pasoCalentamiento, hayCambio })) {
-      setAvisadoEnPaso(pasoCalentamiento);
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    }
-  }, [protocoloCardio, calentamientoHasta, ahoraCalentamiento, pasoCalentamiento, avisadoEnPaso]);
-
-  // Al reloj, por el canal de sesión que ya existe: el tramo actual como
-  // texto corto, al empezar cada tramo y al avisar el cambio. El reloj de hoy
-  // pinta el título; leer `cardio` aparte queda para `targets/watch`.
-  useEffect(() => {
-    if (!conReloj || !protocoloCardio || calentamientoHasta === null) return;
-    const restante = Math.max(0, Math.ceil((calentamientoHasta - Date.now()) / 1000));
-    enviarSesionAlReloj(
-      textoParaReloj({
-        protocolo: protocoloCardio,
-        paso: pasoCalentamiento,
-        restanteSeg: restante,
-        unidad: unidadDe(cardioDelDia?.sesion?.cardio),
-      }),
-    );
-  }, [conReloj, protocoloCardio, pasoCalentamiento, avisadoEnPaso, calentamientoHasta === null]);
 
   // Al volver de otra app —el video de la técnica, un mensaje— la hora se
   // pone al día de inmediato, sin esperar el siguiente tick.
@@ -769,10 +743,6 @@ export default function EnVivoScreen() {
     const siguiente = pasos[indice];
     if (!siguiente) {
       setCalentamientoHasta(null);
-      if (fase === "cardio") {
-        void registrarCardio();
-        return;
-      }
       setFase("entrenando");
       return;
     }
@@ -780,45 +750,14 @@ export default function EnVivoScreen() {
     setCalentamientoHasta(Date.now() + siguiente.segundos * 1000);
   }
 
-  /** Los pasos que corre el timer: los del calentamiento o, al final, los del cardio. */
+  /** Los pasos que corre el timer del calentamiento. */
   function pasosEnCurso(): WarmupStep[] {
-    if (fase === "cardio" && cardioDelDia?.sesion?.cardio) {
-      return pasosDeCardio(cardioDelDia.sesion.cardio, cardioDelDia.minutes, unidadDe(cardioDelDia.sesion.cardio));
-    }
     return sesion?.warmup?.pasos ?? [];
   }
 
+  /** El cardio lo corre `CorredorCardio`: aquí solo se cambia de fase. */
   function empezarCardio() {
     setFase("cardio");
-    setCardioInicio(new Date());
-    setCalentamientoIniciado(true);
-    setPasoCalentamiento(0);
-    const primero = cardioDelDia?.sesion?.cardio
-      ? pasosDeCardio(cardioDelDia.sesion.cardio, cardioDelDia.minutes, unidadDe(cardioDelDia.sesion.cardio))[0]
-      : undefined;
-    setAvisadoEnPaso(null);
-    setCalentamientoHasta(primero ? Date.now() + primero.segundos * 1000 : null);
-  }
-
-  /**
-   * Registra el cardio como sesión de disciplina del día, con su hora real:
-   * si el reloj también la grabó, el servidor las enlaza en vez de duplicar.
-   * Sin señal no se pierde la sesión de pesas: se avisa y se puede cerrar.
-   */
-  async function registrarCardio() {
-    const detalle = cardioDelDia?.sesion?.cardio;
-    if (!detalle || !sesion || cardioEstado === "guardando") return;
-    setCalentamientoHasta(null);
-    setCardioEstado("guardando");
-    try {
-      await postActivities([actividadDeCardio(detalle, sesion.date, cardioInicio ?? new Date(), new Date())]);
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setCardioEstado("hecho");
-      setCardioMsg("Cardio registrado.");
-    } catch {
-      setCardioEstado("hecho");
-      setCardioMsg("No se pudo subir el cardio. Regístralo en Rutinas cuando tengas señal.");
-    }
   }
 
   function empezarCalentamiento() {
@@ -834,10 +773,6 @@ export default function EnVivoScreen() {
   /** Nunca es obligatorio: pasa directo a la primera serie, desde donde sea. */
   function saltarTodoElCalentamiento() {
     setCalentamientoHasta(null);
-    if (fase === "cardio") {
-      void registrarCardio();
-      return;
-    }
     setFase("entrenando");
   }
 
@@ -1177,7 +1112,6 @@ export default function EnVivoScreen() {
   const tempoActual = textoDeTempo(serieActual?.tempo);
 
   const warmup = sesion.warmup;
-  const pasosCardio = fase === "cardio" ? pasosEnCurso() : [];
   const enCalentamiento = !estado.terminada && fase === "calentamiento" && warmup !== null;
   // Mismo arreglo que el descanso: `ahoraCalentamiento` es la hora del
   // último tick, y el primer paso arrancaba contado contra la hora en que se
@@ -1225,62 +1159,17 @@ export default function EnVivoScreen() {
       </View>
 
       {estado.terminada && fase === "cardio" && cardioEstado !== "hecho" && cardioDelDia?.sesion?.cardio ? (
-        <ScrollView contentContainerStyle={styles.contenido}>
-          <Text style={styles.ejercicioPaso}>CARDIO</Text>
-          <Text style={styles.ejercicioNombre}>
-            {tituloTarjetaCardio(cardioDelDia.sesion.cardio, cardioDelDia.minutes)}
-          </Text>
-          <View style={styles.descanso}>
-            <Timer size={20} color={colors.champan} strokeWidth={2} />
-            {protocoloCardio ? (
-              // N1: el tramo actual grande, en km/h o mph y con el color de
-              // su esfuerzo; la cuenta regresiva del tramo; el siguiente en
-              // una línea, y el aviso 5 s antes de cambiar la velocidad.
-              <>
-                <Text
-                  style={[
-                    styles.tramoActual,
-                    { color: colorDeEsfuerzo(tramosDeSesion(protocoloCardio)[pasoCalentamiento]?.esfuerzo ?? "Fácil", colors) },
-                  ]}
-                  accessibilityRole="header"
-                >
-                  {pasosCardio[pasoCalentamiento]?.nombre ?? ""}
-                </Text>
-                <Text style={styles.descansoReloj}>{formatoReloj(restanteCalentamiento ?? 0)}</Text>
-                {avisadoEnPaso === pasoCalentamiento && pasosCardio[pasoCalentamiento + 1] ? (
-                  <Text style={styles.avisoCambio} accessibilityLiveRegion="assertive">
-                    Cambia a {pasosCardio[pasoCalentamiento + 1]!.nombre}
-                  </Text>
-                ) : pasosCardio[pasoCalentamiento + 1] ? (
-                  <Text style={styles.descansoTexto}>Luego: {pasosCardio[pasoCalentamiento + 1]!.nombre}</Text>
-                ) : (
-                  <Text style={styles.descansoTexto}>Último tramo</Text>
-                )}
-              </>
-            ) : (
-              <>
-                <Text style={styles.descansoReloj}>{formatoReloj(restanteCalentamiento ?? 0)}</Text>
-                <Text style={styles.descansoTexto}>{pasosCardio[pasoCalentamiento]?.nombre ?? ""}</Text>
-              </>
-            )}
-            <Text style={styles.progresoTexto}>
-              {protocoloCardio ? "Tramo" : "Paso"} {pasoCalentamiento + 1} de {pasosCardio.length}
-            </Text>
-            <View style={styles.descansoBotones}>
-              <Pressable onPress={saltarPasoCalentamiento} style={styles.botonSecundario}>
-                <SkipForward size={16} color={colors.marfil} strokeWidth={2} />
-                <Text style={styles.botonSecundarioTexto}>Saltar paso</Text>
-              </Pressable>
-              <Pressable
-                onPress={saltarTodoElCalentamiento}
-                style={styles.botonSecundario}
-                disabled={cardioEstado === "guardando"}
-              >
-                <Text style={styles.botonSecundarioTexto}>Terminar cardio</Text>
-              </Pressable>
-            </View>
-          </View>
-        </ScrollView>
+        // N2: el mismo corredor del cardio suelto. Al terminar (o "Terminar
+        // aquí") registra y vuelve a "Sesión completa" con el mensaje.
+        <CorredorCardio
+          detalle={cardioDelDia.sesion.cardio}
+          minutos={cardioDelDia.minutes}
+          fecha={sesion.date}
+          onTerminado={(resultado) => {
+            setCardioEstado("hecho");
+            setCardioMsg(resultado.mensaje);
+          }}
+        />
       ) : estado.terminada ? (
         <ScrollView contentContainerStyle={styles.contenido}>
           <Text style={styles.tituloFin}>Sesión completa</Text>
@@ -1289,8 +1178,8 @@ export default function EnVivoScreen() {
             teléfono; se sube sola cuando haya señal.
           </Parrafo>
           {cardioDelDia?.sesion?.cardio && cardioEstado === "pendiente" ? (
-            // La tarjeta del cardio: una línea y un botón. El timer es el del
-            // calentamiento; al terminar se registra solo.
+            // La tarjeta del cardio: una línea y un botón. Lo corre
+            // `CorredorCardio`; al terminar se registra solo.
             <View style={styles.serieCaja}>
               <Text style={styles.seriePlan}>
                 {tituloTarjetaCardio(cardioDelDia.sesion.cardio, cardioDelDia.minutes)}
@@ -2062,8 +1951,6 @@ const makeStyles = (colors: Palette) =>
       color: colors.champan,
     },
     descansoTexto: { fontFamily: fonts.sans, ...typeScale.body, color: colors.paloRosa },
-    tramoActual: { fontFamily: fonts.sansBold, ...typeScale.title, textAlign: "center" },
-    avisoCambio: { fontFamily: fonts.sansSemiBold, ...typeScale.body, color: colors.champan, textAlign: "center" },
     descansoBotones: { flexDirection: "row", gap: spacing.md, marginTop: spacing.md },
     botonSecundario: {
       flexDirection: "row",
