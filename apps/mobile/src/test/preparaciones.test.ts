@@ -57,3 +57,19 @@ describe("la comida agrupa el platillo", () => {
     expect(grupo.sueltos).toHaveLength(4);
   });
 });
+
+import { avisoDeCambioEnPlatillo } from "@/lib/preparaciones";
+
+describe("cambiar un ingrediente del licuado", () => {
+  const licuado = { id: "licuado_proteina_fruta_avena", tipo: "licuado" };
+
+  it("dentro del licuado avisa que el nombre sigue a la fruta", () => {
+    expect(avisoDeCambioEnPlatillo({ preparacionId: licuado.id }, licuado)).toMatch(/toma su nombre/);
+  });
+
+  it("suelto, o en una sopa, no dice nada", () => {
+    expect(avisoDeCambioEnPlatillo({}, licuado)).toBeNull();
+    expect(avisoDeCambioEnPlatillo({ preparacionId: "sopa_lentejas" }, { id: "sopa_lentejas", tipo: "sopa" })).toBeNull();
+    expect(avisoDeCambioEnPlatillo({ preparacionId: licuado.id }, undefined)).toBeNull();
+  });
+});

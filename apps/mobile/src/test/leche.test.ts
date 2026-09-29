@@ -27,3 +27,26 @@ describe("tipo de leche", () => {
     expect(nombreDeLeche("deslactosada_light")).toBe("Deslactosada light");
   });
 });
+
+import { BASES_DE_LICUADO, baseLicuadoDelPerfil, resumenLeche } from "@/lib/leche";
+
+describe("base de licuados", () => {
+  it("sin dato del servidor, leche", () => {
+    expect(baseLicuadoDelPerfil(null)).toBe("leche");
+    expect(baseLicuadoDelPerfil({ baseLicuado: "jugo" })).toBe("leche");
+  });
+
+  it("lee lo que manda /me", () => {
+    expect(baseLicuadoDelPerfil({ baseLicuado: "agua" })).toBe("agua");
+  });
+
+  it("dos opciones: agua, o la leche elegida", () => {
+    expect(BASES_DE_LICUADO.map((b) => b.clave)).toEqual(["agua", "leche"]);
+    expect(BASES_DE_LICUADO.find((b) => b.clave === "leche")!.nombre).toBe("Leche (usa la leche elegida)");
+  });
+
+  it("el renglón de Ajustes lo dice cuando es agua", () => {
+    expect(resumenLeche({ tipoLeche: "entera" })).toBe("leche entera");
+    expect(resumenLeche({ tipoLeche: "entera", baseLicuado: "agua" })).toBe("leche entera · licuados con agua");
+  });
+});

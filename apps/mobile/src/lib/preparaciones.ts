@@ -84,3 +84,17 @@ export function agruparComida<T extends { preparacionId?: string }>(
     sueltos: items.filter((item) => item.preparacionId !== preparacion.id),
   };
 }
+
+/**
+ * Lo que dice la hoja de "cambiar" cuando el alimento es de un licuado: el
+ * cambio se queda dentro del vaso, y si es la fruta el licuado toma su nombre
+ * ("Licuado de frambuesa con avena"). Nada para lo que va suelto.
+ */
+export function avisoDeCambioEnPlatillo(
+  item: { preparacionId?: string },
+  preparacion: { id: string; tipo: string } | undefined,
+): string | null {
+  if (!preparacion || item.preparacionId !== preparacion.id) return null;
+  if (preparacion.tipo !== "licuado") return null;
+  return "Se cambia dentro de tu licuado; si es la fruta, el licuado toma su nombre.";
+}

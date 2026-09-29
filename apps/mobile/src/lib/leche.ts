@@ -32,3 +32,33 @@ export function tipoLecheDelPerfil(perfil: unknown): TipoLeche {
 export function nombreDeLeche(tipo: TipoLeche): string {
   return TIPOS_DE_LECHE.find((t) => t.clave === tipo)?.nombre ?? "Descremada";
 }
+
+// ---------------------------------------------------------------------------
+// Base de licuados
+// ---------------------------------------------------------------------------
+
+/**
+ * Con qué se licua: la leche elegida arriba o agua. Con agua el licuado no
+ * lleva los macros de la taza de leche; el plan los mueve a otra comida.
+ */
+export type BaseLicuado = "leche" | "agua";
+
+export const BASE_LICUADO_DEFAULT: BaseLicuado = "leche";
+
+export const BASES_DE_LICUADO: ReadonlyArray<{ clave: BaseLicuado; nombre: string }> = [
+  { clave: "agua", nombre: "Agua" },
+  { clave: "leche", nombre: "Leche (usa la leche elegida)" },
+];
+
+/** Lo que manda `/me` en `profile.baseLicuado`; sin dato (o uno raro), leche. */
+export function baseLicuadoDelPerfil(perfil: unknown): BaseLicuado {
+  if (typeof perfil !== "object" || perfil === null) return BASE_LICUADO_DEFAULT;
+  const crudo = (perfil as { baseLicuado?: unknown }).baseLicuado;
+  return crudo === "agua" || crudo === "leche" ? crudo : BASE_LICUADO_DEFAULT;
+}
+
+/** El resumen del renglón de Ajustes: "leche entera · licuados con agua". */
+export function resumenLeche(perfil: unknown): string {
+  const leche = `leche ${nombreDeLeche(tipoLecheDelPerfil(perfil)).toLowerCase()}`;
+  return baseLicuadoDelPerfil(perfil) === "agua" ? `${leche} · licuados con agua` : leche;
+}
