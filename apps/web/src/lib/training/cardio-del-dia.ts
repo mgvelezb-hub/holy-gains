@@ -11,6 +11,11 @@ import type { EquipoCardio, TipoCardio, TrainingProfile } from "@/lib/training/t
  * sesión con los MISMOS minutos, la misma semana, el mismo ordinal (de él
  * depende la rotación del variado y la calibración) y el mismo historial y
  * edad; solo cambian la máquina y/o la modalidad.
+ *
+ * Si la máquina nueva no tiene nivel base y es el 1.er cardio de la semana,
+ * la sesión arranca con 5 min de calibración pero SIGUE siendo la modalidad
+ * elegida (`programa.modalidad` y `programa.calibracion`): la calibración ya
+ * no sustituye lo que la persona escogió en la hoja.
  */
 
 export type CambiosCardioDelDia = { equipo?: EquipoCardio; tipo?: TipoCardio };

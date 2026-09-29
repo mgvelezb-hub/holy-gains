@@ -19,21 +19,22 @@ import {
   NOMBRE_MAQUINA,
   ritmoATexto,
   segundosDeRitmo,
-  type ControlMaquina,
   type MaquinaConBase,
   type NivelBase,
 } from "@/lib/training/disciplinas/maquinas-cardio";
 import {
   conPulso,
-  fcMaxima,
   INFO_MODALIDAD,
-  notaDeMaquina,
   programaCardio,
   tituloPrograma,
   type ModalidadCardio,
   type ProgramaCardio,
 } from "@/lib/training/disciplinas/modalidades-cardio";
-import { duracionValida, ENFRIAMIENTO_MIN, type TramoCardio } from "@/lib/training/disciplinas/plantillas-hiit";
+import {
+  duracionValida,
+  DURACION_MINIMA_CARDIO,
+  type TramoCardio,
+} from "@/lib/training/disciplinas/plantillas-hiit";
 import type { EquipoCardio, NivelCardio, PreferenciasCardio, TipoCardio } from "@/lib/training/types";
 
 /**
@@ -52,10 +53,11 @@ import type { EquipoCardio, NivelCardio, PreferenciasCardio, TipoCardio } from "
  *
  * **La intensidad se ancla en un nivel base personal** por máquina (lo que
  * es "moderado" para esa persona en esa máquina). Si falta, la primera
- * sesión de la semana es de **calibración**: 5 min subiendo un paso por
+ * sesión de la semana arranca con **calibración**: 5 min subiendo un paso por
  * minuto y la persona marca "aquí voy moderado"; eso se guarda en
  * `nivelBase`. Mientras tanto, el resto de sesiones usa una base estimada
- * por nivel declarado y lo dice.
+ * por nivel declarado y lo dice. La calibración va AL INICIO de la modalidad
+ * elegida; nunca la sustituye (Q1).
  *
  * **Progresión del HIIT: +1 nivel por semana cumplida (≥ 80 %)**, la misma
  * regla de la caminadora (`nivelHiitDeSemana`), para toda máquina. La 4.ª
@@ -85,7 +87,7 @@ export const NOMBRE_EQUIPO: Record<EquipoCardio, string> = {
   LIBRE: "libre",
 };
 
-export const NOMBRE_TIPO: Record<TipoCardio | "CALIBRACION", string> = {
+export const NOMBRE_TIPO: Record<TipoCardio, string> = {
   HIIT: "HIIT",
   CONTINUO: "zona 2",
   ZONA2: "zona 2",
@@ -94,7 +96,6 @@ export const NOMBRE_TIPO: Record<TipoCardio | "CALIBRACION", string> = {
   PIRAMIDAL: "piramidal",
   RECUPERACION: "recuperación",
   VARIADO: "variado",
-  CALIBRACION: "calibración",
 };
 
 /** Del nivel genérico de disciplina al de cardio, cuando no se declaró uno propio. */
@@ -206,72 +207,75 @@ export function pasosDeCalibracion(maquina: MaquinaConBase, nivel: NivelCardio):
 }
 
 /**
- * La sesión de calibración: 5 min subiendo un paso por minuto (la persona
- * toca "Aquí voy moderado" cuando solo puede hablar en frases cortas: la
- * prueba del habla, ACSM 2021), el resto en zona 2 a lo que marcó y 2 min
- * de enfriamiento.
+ * La primera vez en una máquina sin nivel base: **5 min de calibración al
+ * inicio** y el resto es la modalidad ELEGIDA (la calibración ya no la
+ * sustituye). Un paso por minuto; la persona toca "Aquí voy moderado" cuando
+ * solo puede hablar en frases cortas (la prueba del habla, ACSM 2021).
+ *
+ * Los minutos que siguen se calculan con la base estimada mientras no
+ * marque; cada paso trae `tramosSiMarcas`: esos mismos tramos (mismos
+ * minutos, esfuerzos y fases) recalculados con el valor de ese paso, para
+ * que el teléfono los cambie al marcar sin volver a pedir nada. La modalidad
+ * conserva su propio calentamiento: después del último paso (Moderado Alto)
+ * sirve de asentamiento antes de lo fuerte.
  */
-export function programaCalibracion(input: {
+export function programaConCalibracion(input: {
   maquina: MaquinaConBase;
+  modalidad: ModalidadCardio;
   duracion: number;
   nivel: NivelCardio;
+  nivelHiit: number;
   edad?: number;
 }): ProgramaCardio {
-  const duracion = Math.max(MINUTOS_CALIBRACION + ENFRIAMIENTO_MIN + 1, duracionValida(input.duracion));
+  const resto = Math.max(DURACION_MINIMA_CARDIO, duracionValida(input.duracion) - MINUTOS_CALIBRACION);
+  const duracion = MINUTOS_CALIBRACION + resto;
   const valores = pasosDeCalibracion(input.maquina, input.nivel);
+  const estimada = baseEstimada(input.maquina, input.nivel);
+  const edad = input.edad !== undefined ? { edad: input.edad } : {};
+  const tramosCon = (base: NivelBase): TramoCardio[] =>
+    programaCardio({ maquina: input.maquina, modalidad: input.modalidad, duracion: resto, nivelHiit: input.nivelHiit, base, ...edad })
+      .tramos.map((tramo) => ({
+        ...tramo,
+        desdeMin: tramo.desdeMin + MINUTOS_CALIBRACION,
+        hastaMin: tramo.hastaMin + MINUTOS_CALIBRACION,
+      }));
+  const cuerpo = programaCardio({
+    maquina: input.maquina,
+    modalidad: input.modalidad,
+    duracion: resto,
+    nivelHiit: input.nivelHiit,
+    base: estimada,
+    ...edad,
+  });
   const esfuerzos = ["Fácil", "Fácil", "Moderado", "Moderado", "Moderado Alto"] as const;
   const pasos = valores.map((valor, i) => ({
     desdeMin: i,
     hastaMin: i + 1,
     control: controlDe(input.maquina, "Moderado", { base: valor }),
     valor,
+    tramosSiMarcas: tramosCon(valor),
   }));
-  const marcado = (texto: string): ControlMaquina => ({ maquina: input.maquina, texto });
-  const tramos: TramoCardio[] = [
-    ...pasos.map((paso, i) => ({
-      desdeMin: paso.desdeMin,
-      hastaMin: paso.hastaMin,
-      esfuerzo: esfuerzos[i]!,
-      fase: "calibracion" as const,
-      control: paso.control,
-    })),
-    {
-      desdeMin: MINUTOS_CALIBRACION,
-      hastaMin: duracion - ENFRIAMIENTO_MIN,
-      esfuerzo: "Moderado",
-      fase: "continuo",
-      control: marcado("El que marcaste"),
-    },
-    {
-      desdeMin: duracion - ENFRIAMIENTO_MIN,
-      hastaMin: duracion,
-      esfuerzo: "Fácil",
-      fase: "enfriamiento",
-      control: marcado("Un poco menos que el que marcaste"),
-    },
-  ];
+  const calibracion: TramoCardio[] = pasos.map((paso, i) => ({
+    desdeMin: paso.desdeMin,
+    hastaMin: paso.hastaMin,
+    esfuerzo: esfuerzos[i]!,
+    fase: "calibracion" as const,
+    control: paso.control,
+  }));
   const nombre = NOMBRE_MAQUINA[input.maquina];
   return {
-    maquina: input.maquina,
-    modalidad: "CALIBRACION",
-    nivel: null,
+    ...cuerpo,
     duracion,
-    titulo: `Calibración · ${duracion}' · ${nombre}`,
-    fuente: "plantilla",
-    porque: "Una vez por máquina: fija tu nivel base, el \"moderado\" del que salen todos los esfuerzos (prueba del habla, ACSM 2021).",
-    paraQuien: `La primera vez que la app te prescribe ${nombre.toLowerCase()}.`,
-    tramos: conPulso(tramos, input.edad, "CALIBRACION"),
-    notaMaquina: notaDeMaquina(input.maquina),
-    base: null,
+    titulo: `Calibración + ${INFO_MODALIDAD[cuerpo.modalidad].nombre} ${duracion}' · ${nombre}`,
+    tramos: [...conPulso(calibracion, input.edad, cuerpo.modalidad), ...tramosCon(estimada)],
+    base: estimada,
     baseEstimada: true,
     calibracion: {
       maquina: input.maquina,
       instruccion:
-        "Sube un paso cada minuto. Cuando ya solo puedas hablar en frases cortas, toca «Aquí voy moderado»: ese es tu nivel base en esta máquina.",
+        "Sube un paso cada minuto. Cuando ya solo puedas hablar en frases cortas, toca «Aquí voy moderado»: ese es tu nivel base en esta máquina y lo que sigue se ajusta a él.",
       pasos,
     },
-    ajuste: null,
-    fcMaxima: input.edad !== undefined ? fcMaxima(input.edad) : null,
   };
 }
 
@@ -280,7 +284,7 @@ export function programaCalibracion(input: {
 /* ------------------------------------------------------------------------ */
 
 /** "Cardio HIIT caminadora", "Cardio zona 2 remo". */
-export function etiquetaCardio(prefs?: { equipo?: EquipoCardio; tipo?: TipoCardio | "CALIBRACION" }): string {
+export function etiquetaCardio(prefs?: { equipo?: EquipoCardio; tipo?: TipoCardio }): string {
   const equipo = prefs?.equipo ?? DEFAULTS_CARDIO.equipo;
   const tipo = NOMBRE_TIPO[prefs?.tipo ?? DEFAULTS_CARDIO.tipo];
   return equipo === "LIBRE" ? `Cardio ${tipo}` : `Cardio ${tipo} ${NOMBRE_EQUIPO[equipo]}`;
@@ -305,7 +309,14 @@ export function prescribirCardio(input: CardioInput): SesionDisciplina {
   const edad = input.edad !== undefined ? { edad: input.edad } : {};
   let programa: ProgramaCardio;
   if (necesitaBase(equipo) && guardada === undefined && ordinal === 1) {
-    programa = programaCalibracion({ maquina: equipo, duracion: minutes, nivel, ...edad });
+    programa = programaConCalibracion({
+      maquina: equipo,
+      modalidad,
+      duracion: minutes,
+      nivel,
+      nivelHiit: progreso.nivel,
+      ...edad,
+    });
   } else {
     const base = guardada ?? (necesitaBase(equipo) ? baseEstimada(equipo, nivel) : undefined);
     programa = {
@@ -348,12 +359,11 @@ export function prescribirCardio(input: CardioInput): SesionDisciplina {
     programa.fuente === "catalogo" ? protocoloDelCatalogo(programa.protocoloMin ?? programa.duracion, programa.nivel ?? 0) : null;
   const calentamientoMin = sumaMin(programa.tramos, ["calentamiento", "calibracion"]);
   const enfriamientoMin = sumaMin(programa.tramos, ["enfriamiento"]);
-  const tipoResuelto = programa.modalidad === "CALIBRACION" ? "CALIBRACION" : programa.modalidad;
 
   return {
     discipline: "CARDIO",
     nivel: NIVEL_DISCIPLINA[nivel],
-    focus: programa.modalidad === "CALIBRACION" ? "Calibración" : INFO_MODALIDAD[programa.modalidad].nombre,
+    focus: INFO_MODALIDAD[programa.modalidad].nombre,
     unidad: "min",
     cargaTotal: blocks.reduce((suma, bloque) => suma + (bloque.carga ?? 0), 0),
     minutes,
@@ -365,7 +375,7 @@ export function prescribirCardio(input: CardioInput): SesionDisciplina {
       tipo: programa.modalidad === "HIIT" ? "HIIT" : "CONTINUO",
       modalidad: programa.modalidad,
       nivelMaquina: programa.nivel ?? (typeof programa.base === "number" ? programa.base : 0),
-      etiqueta: etiquetaCardio({ equipo, tipo: tipoResuelto }),
+      etiqueta: etiquetaCardio({ equipo, tipo: programa.modalidad }),
       intervalos: null,
       calentamientoSeg: calentamientoMin * 60,
       enfriamientoSeg: enfriamientoMin * 60,
@@ -382,7 +392,11 @@ function sumaMin(tramos: readonly TramoCardio[], fases: ReadonlyArray<TramoCardi
 
 /** Los bloques de la tarjeta: lo de antes, el cuerpo, el enfriamiento y la caminata que sobre. */
 function bloquesDe(programa: ProgramaCardio, unidad?: UnidadVelocidad): BloqueSesion[] {
-  const antes = programa.tramos.filter((t) => t.fase === "calentamiento" || t.fase === "calibracion");
+  // Con calibración, lo de antes son solo sus 5 pasos: el calentamiento de la
+  // modalidad que sigue va con el cuerpo.
+  const antes = programa.tramos.filter((t) =>
+    programa.calibracion ? t.fase === "calibracion" : t.fase === "calentamiento",
+  );
   const despues = programa.tramos.filter((t) => t.fase === "enfriamiento");
   const caminata = programa.tramos.filter((t) => t.fase === "caminata");
   const cuerpo = programa.tramos.filter((t) => !antes.includes(t) && !despues.includes(t) && !caminata.includes(t));
@@ -413,12 +427,13 @@ function bloquesDe(programa: ProgramaCardio, unidad?: UnidadVelocidad): BloqueSe
 
   if (cuerpo.length > 0) {
     const tope = cuerpo.reduce((max, t) => (ESFUERZO_ORDEN[t.esfuerzo] > ESFUERZO_ORDEN[max.esfuerzo] ? t : max), cuerpo[0]!);
-    const titulo =
-      programa.caminataMin && programa.protocoloMin && programa.modalidad !== "CALIBRACION"
+    const titulo = programa.calibracion
+      ? tituloPrograma(programa.modalidad, programa.duracion - min(antes), programa.maquina, programa.nivel)
+      : programa.caminataMin && programa.protocoloMin
         ? tituloPrograma(programa.modalidad, programa.protocoloMin, programa.maquina, programa.nivel)
         : programa.titulo;
     blocks.push({
-      title: programa.calibracion ? "Zona 2" : titulo,
+      title: titulo,
       detail:
         cuerpo.length === 1
           ? `${min(cuerpo)} min${como(cuerpo[0]!)} (${cuerpo[0]!.esfuerzo})`

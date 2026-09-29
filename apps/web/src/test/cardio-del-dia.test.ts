@@ -80,13 +80,34 @@ describe("cardio del día con otra máquina o modalidad", () => {
     expect(hoy.sesion.cardio!.programa).toMatchObject({ maquina: "CAMINADORA", modalidad: "ZONA2", duracion: original.minutes });
   });
 
-  it("máquina sin base el 1.er cardio de la semana: calibra", () => {
+  it("máquina sin base el 1.er cardio de la semana: calibra al inicio y respeta la modalidad elegida", () => {
     const profile = mau();
     const sesiones = semana(profile);
     const primero = sesiones.filter((s) => s.discipline === "CARDIO").sort((a, b) => a.date.localeCompare(b.date))[0]!;
     const hoy = cardioDelDia({ sesiones, fecha: primero.date, training: profile, isoWeek: isoWeekNumber(LUNES), cambios: { equipo: "REMO" } })!;
-    expect(hoy.sesion.cardio!.programa!.modalidad).toBe("CALIBRACION");
-    expect(hoy.sesion.cardio!.programa!.calibracion!.pasos).toHaveLength(5);
+    const programa = hoy.sesion.cardio!.programa!;
+    // Sin cambiar la modalidad, sigue la guardada (HIIT).
+    expect(programa.modalidad).toBe("HIIT");
+    expect(programa.calibracion!.pasos).toHaveLength(5);
+    expect(programa.tramos.slice(0, 5).every((t) => t.fase === "calibracion")).toBe(true);
+  });
+
+  it("máquina sin base con otra modalidad: la calibración no la pisa", () => {
+    const profile = mau();
+    const sesiones = semana(profile);
+    const primero = sesiones.filter((s) => s.discipline === "CARDIO").sort((a, b) => a.date.localeCompare(b.date))[0]!;
+    const hoy = cardioDelDia({
+      sesiones,
+      fecha: primero.date,
+      training: profile,
+      isoWeek: isoWeekNumber(LUNES),
+      cambios: { equipo: "BICI", tipo: "ZONA2" },
+    })!;
+    const programa = hoy.sesion.cardio!.programa!;
+    expect(programa.modalidad).toBe("ZONA2");
+    expect(hoy.sesion.cardio!.modalidad).toBe("ZONA2");
+    expect(programa.titulo).toBe(`Calibración + Zona 2 ${hoy.minutes}' · Bici`);
+    expect(programa.calibracion).not.toBeNull();
   });
 
   it("sin cardio ese día: null", () => {

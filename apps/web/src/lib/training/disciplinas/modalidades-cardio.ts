@@ -256,11 +256,21 @@ export function tramosDeModalidad(
 /* El programa que pinta la app                                              */
 /* ------------------------------------------------------------------------ */
 
-/** La calibración del nivel base: un paso por minuto, y qué se guarda si la persona marca ese. */
+/**
+ * La calibración del nivel base: un paso por minuto, qué se guarda si la
+ * persona marca ese y, con `tramosSiMarcas`, los tramos que siguen a la
+ * calibración recalculados con ese valor (mismos minutos, esfuerzos y fases).
+ */
 export type CalibracionCardio = {
   maquina: MaquinaConBase;
   instruccion: string;
-  pasos: Array<{ desdeMin: number; hastaMin: number; control: ControlMaquina; valor: NivelBase }>;
+  pasos: Array<{
+    desdeMin: number;
+    hastaMin: number;
+    control: ControlMaquina;
+    valor: NivelBase;
+    tramosSiMarcas: TramoCardio[];
+  }>;
 };
 
 /**
@@ -269,7 +279,8 @@ export type CalibracionCardio = {
  */
 export type ProgramaCardio = {
   maquina: EquipoCardio;
-  modalidad: ModalidadCardio | "CALIBRACION";
+  /** La elegida, también cuando la sesión arranca calibrando (`calibracion`). */
+  modalidad: ModalidadCardio;
   /** Nivel de HIIT 0–5; `null` fuera del HIIT. */
   nivel: number | null;
   duracion: number;
@@ -286,7 +297,7 @@ export type ProgramaCardio = {
   base: NivelBase | null;
   /** `true` = base estimada: la persona aún no calibra esta máquina. */
   baseEstimada: boolean;
-  /** Solo en la sesión de calibración. */
+  /** Solo la primera vez en una máquina sin base: 5 min al inicio. */
   calibracion: CalibracionCardio | null;
   /** Por qué la sesión no es la modalidad pedida ("el 4×4 pide 35 min"). */
   ajuste: string | null;
@@ -330,7 +341,7 @@ export function notaDeMaquina(maquina: EquipoCardio): string | null {
 }
 
 /** Pone la zona de pulso a cada tramo. */
-export function conPulso(tramos: TramoCardio[], edad: number | undefined, modalidad: ModalidadCardio | "CALIBRACION"): TramoCardio[] {
+export function conPulso(tramos: TramoCardio[], edad: number | undefined, modalidad: ModalidadCardio): TramoCardio[] {
   if (edad === undefined) return tramos;
   const fcMax = fcMaxima(edad);
   return tramos.map((tramo) => ({

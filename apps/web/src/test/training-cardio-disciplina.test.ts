@@ -40,16 +40,68 @@ describe("prescribirCardio · máquinas con nivel base", () => {
     expect(sesion.cardio!.tipo).toBe("HIIT");
   });
 
-  it("sin base, la 1.ª sesión de la semana calibra: 5 pasos de 1 min y lo que se guarda", () => {
-    const sesion = prescribirCardio({ ...base, minutes: 20, ordinal: 1, prefs: { equipo: "ELIPTICA", nivel: "BASICO" } });
+  it("sin base, la 1.ª sesión calibra 5 min AL INICIO y sigue con la modalidad elegida", () => {
+    const sesion = prescribirCardio({
+      ...base,
+      minutes: 20,
+      ordinal: 1,
+      prefs: { equipo: "ELIPTICA", tipo: "HIIT", nivel: "BASICO" },
+    });
     const programa = sesion.cardio!.programa!;
-    expect(programa.modalidad).toBe("CALIBRACION");
+    // La calibración ya no sustituye la modalidad: la elegida manda.
+    expect(programa.modalidad).toBe("HIIT");
+    expect(sesion.cardio!.modalidad).toBe("HIIT");
+    expect(sesion.cardio!.tipo).toBe("HIIT");
+    expect(programa.titulo).toBe("Calibración + HIIT 20' · Elíptica");
+    expect(programa.nivel).not.toBeNull();
     expect(programa.calibracion!.pasos.map((p) => p.valor)).toEqual([4, 5, 6, 7, 8]);
     expect(programa.calibracion!.pasos[2]!.control.texto).toBe("Resist. 6 · 130–140 SPM");
-    expect(programa.tramos.filter((t) => t.fase === "calibracion")).toHaveLength(5);
+    // Los 5 min de calibración van primero; luego nada es calibración.
+    const calibracion = programa.tramos.filter((t) => t.fase === "calibracion");
+    expect(calibracion.map((t) => [t.desdeMin, t.hastaMin])).toEqual([[0, 1], [1, 2], [2, 3], [3, 4], [4, 5]]);
+    expect(programa.tramos.slice(5).every((t) => t.fase !== "calibracion")).toBe(true);
+    expect(programa.tramos[5]!.desdeMin).toBe(5);
     expect(programa.tramos.at(-1)!.hastaMin).toBe(20);
-    expect(sesion.blocks.map((b) => b.title)).toEqual(["Calibración", "Zona 2", "Enfriamiento"]);
-    expect(sesion.focus).toBe("Calibración");
+    expect(programa.tramos.some((t) => t.fase === "trabajo")).toBe(true);
+    // Con la base estimada (6) mientras no marque.
+    expect(programa.baseEstimada).toBe(true);
+    expect(programa.base).toBe(6);
+    expect(programa.tramos.slice(5).every((t) => !/marcaste/.test(t.control.texto))).toBe(true);
+    expect(sesion.focus).toBe("HIIT");
+    expect(sesion.cardio!.etiqueta).toBe("Cardio HIIT elíptica");
+    expect(sesion.blocks.map((b) => b.title)).toEqual(["Calibración", "HIIT 15' · Nivel 0 · Elíptica", "Enfriamiento"]);
+    expect(sesion.blocks[0]!.detail).toBe("5 min · un paso más cada minuto");
+    expect(sesion.cargaTotal).toBe(20);
+  });
+
+  it("al marcar un paso, los tramos que siguen se recalculan con esa base (misma duración)", () => {
+    const programa = prescribirCardio({
+      ...base,
+      minutes: 20,
+      ordinal: 1,
+      prefs: { equipo: "ELIPTICA", tipo: "ZONA2", nivel: "BASICO" },
+    }).cardio!.programa!;
+    expect(programa.titulo).toBe("Calibración + Zona 2 20' · Elíptica");
+    const resto = programa.tramos.slice(5);
+    for (const paso of programa.calibracion!.pasos) {
+      expect(paso.tramosSiMarcas.map((t) => [t.desdeMin, t.hastaMin, t.esfuerzo, t.fase])).toEqual(
+        resto.map((t) => [t.desdeMin, t.hastaMin, t.esfuerzo, t.fase]),
+      );
+    }
+    // El paso del centro ES la base estimada: igual a lo que ya se ve.
+    expect(programa.calibracion!.pasos[2]!.tramosSiMarcas.map((t) => t.control.texto)).toEqual(resto.map((t) => t.control.texto));
+    // Marcar 8 sube la resistencia del tramo continuo.
+    const continuo = (tramos: typeof resto) => tramos.find((t) => t.fase === "continuo")!.control.resistencia!;
+    expect(continuo(programa.calibracion!.pasos[4]!.tramosSiMarcas)).toBeGreaterThan(continuo(resto));
+  });
+
+  it("remo sin base: calibra en ritmo y sigue en la modalidad elegida", () => {
+    const programa = prescribirCardio({ ...base, minutes: 30, ordinal: 1, prefs: { equipo: "REMO", tipo: "TEMPO" } }).cardio!
+      .programa!;
+    expect(programa.modalidad).toBe("TEMPO");
+    expect(programa.titulo).toBe("Calibración + Tempo 30' · Remo");
+    expect(programa.calibracion!.pasos[0]!.valor).toEqual({ ritmo500: "2:50" });
+    expect(programa.tramos.at(-1)!.hastaMin).toBe(30);
   });
 
   it("sin base, la 2.ª sesión va con la base estimada y lo dice", () => {
