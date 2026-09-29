@@ -55,7 +55,8 @@ function grupoDe(role: string): GrupoDespensa | null {
  * al servidor una búsqueda por cada tecla: quien escribe "Yogurt Griego"
  * encuentra el "Yogur griego natural 0%".
  */
-const CATALOGO = FOODS.map((food) => ({
+// El agua es la base del licuado, no algo que se compra: no va en la despensa.
+const CATALOGO = FOODS.filter((food) => !food.tags.includes("base_agua")).map((food) => ({
   id: food.id,
   nombre: food.name,
   grupo: grupoDe(food.role),
