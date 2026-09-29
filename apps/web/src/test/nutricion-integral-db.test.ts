@@ -447,9 +447,8 @@ describe.skipIf(!available)("K1 — nutrición integral (perfil clon de Mau)", (
     // --- Lo que tiene que ser verdad -------------------------------------
     // Una sola verdad del plan: el porqué, el estilo, las tomas y los
     // horarios por día salen del mismo lugar que los menús.
-    // El porqué dice la fase de la decisión. Nota: con dos check-ins el motor
-    // arranca en BASE aunque el perfil diga CUT (`analyze.ts` no le pasa
-    // `initialPhase`); el texto de corte se prueba en las reglas puras.
+    // El porqué dice la fase de la decisión. El motor parte de la fase que
+    // declara el perfil (CUT) si no hay decisiones previas (`fase-inicial.ts`).
     const ETIQUETA: Record<string, RegExp> = { CUT: /^Corte:/, BASE: /^Base:/, CUT_AGRESIVO: /^Corte fuerte:/ };
     expect(nutricion.porque).toMatch(ETIQUETA[nutricion.decision!.phase] ?? /./);
     expect(nutricion.porque).toContain(`${nutricion.decision!.proteinG} g`);

@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client";
 import { decide } from "engine";
 
 import { necesitaRevisionHumana } from "@/lib/coachy/aprobacion";
+import { arranqueDelMotor } from "@/lib/coachy/fase-inicial";
 import { engineConfigForActivity, toEngineCheckIn } from "@/lib/coachy/mapping";
 import { perfilDelMotor } from "@/lib/coachy/perfil-motor";
 import { activityWindow } from "@/lib/health/db";
@@ -195,7 +196,23 @@ export async function runCheckinAnalysis(checkInId: string): Promise<AnalysisRes
   const activity = await activityWindow(user.id, checkIn.date).catch(() => null);
   const engineActivity = engineConfigForActivity(activity);
 
-  const engineDecision = decide(engineHistory, engineProfile, engineActivity?.config);
+  // Sin decisiones previas en la ventana, el motor parte de la fase que el
+  // perfil declara (un CUT ya no arranca en BASE); con historial, de lo ya
+  // decidido (`fase-inicial.ts`).
+  const decisionesPrevias = await prisma.decision.findMany({
+    where: {
+      userId: user.id,
+      checkIn: { date: { lt: checkIn.date, ...(punto ? { gte: punto.date } : {}) } },
+    },
+    orderBy: { checkIn: { date: "asc" } },
+    select: { phase: true },
+  });
+  const engineDecision = decide(
+    engineHistory,
+    engineProfile,
+    engineActivity?.config,
+    arranqueDelMotor({ faseDeclarada: profile.currentPhase, decisionesPrevias }),
+  );
 
   const previousDecision = await prisma.decision.findFirst({
     where: { userId: user.id, checkIn: { date: { lt: checkIn.date } } },
