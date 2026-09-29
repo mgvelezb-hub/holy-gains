@@ -1,9 +1,10 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { Check, ChevronDown, ChevronLeft, ChevronUp, PlayCircle, RotateCcw } from "lucide-react-native";
+import { Check, ChevronLeft, ChevronRight, PlayCircle, RotateCcw } from "lucide-react-native";
 import { useCallback, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { Hoja } from "@/components/Hoja";
 import { InfoTip, TextoInfo } from "@/components/InfoTip";
 import { ProtocoloCardio } from "@/components/ProtocoloCardio";
 import { ErrorState, LoadingState } from "@/components/States";
@@ -225,20 +226,26 @@ export default function CardioScreen() {
 
         {programa && (
           <View style={styles.hoy}>
+            {/* Una línea que abre su hoja: nada se despliega hacia abajo. */}
             <Pressable
-              onPress={() => setAbierto((valor) => !valor)}
+              onPress={() => setAbierto(true)}
               style={styles.hoyCabeza}
               accessibilityRole="button"
-              accessibilityState={{ expanded: abierto }}
             >
-              <Text style={styles.hoyTitulo}>{delDia ? "Cambiado solo para hoy" : "Cambiar máquina o modalidad de hoy"}</Text>
-              {abierto ? (
-                <ChevronUp size={18} color={colors.paloRosa} strokeWidth={2} />
-              ) : (
-                <ChevronDown size={18} color={colors.paloRosa} strokeWidth={2} />
-              )}
+              <Text style={styles.hoyTitulo} numberOfLines={1}>
+                {delDia ? "Solo hoy · " : "Máquina y modalidad · "}
+                {OPCIONES_MAQUINA.find((o) => o.valor === programa.maquina)?.nombre ?? programa.maquina}
+                {" · "}
+                {OPCIONES_MODALIDAD.find((o) => o.valor === programa.modalidad)?.nombre ?? programa.modalidad}
+              </Text>
+              <ChevronRight size={18} color={colors.paloRosa} strokeWidth={2} />
             </Pressable>
-            {abierto && (
+            {avisoCambio && <Text style={styles.nota}>{avisoCambio}</Text>}
+          </View>
+        )}
+
+        {programa && (
+          <Hoja visible={abierto} onClose={() => setAbierto(false)} titulo="Cardio de hoy">
               <>
                 <Text style={styles.hoyLabel}>Máquina de hoy</Text>
                 <View style={styles.chips}>
@@ -288,9 +295,7 @@ export default function CardioScreen() {
                   </View>
                 )}
               </>
-            )}
-            {avisoCambio && <Text style={styles.nota}>{avisoCambio}</Text>}
-          </View>
+          </Hoja>
         )}
 
         {programa ? (
