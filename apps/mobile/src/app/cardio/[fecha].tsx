@@ -5,7 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { InfoTip, TextoInfo } from "@/components/InfoTip";
-import { ProtocoloHiit } from "@/components/ProtocoloHiit";
+import { ProtocoloCardio } from "@/components/ProtocoloCardio";
 import { ErrorState, LoadingState } from "@/components/States";
 import { useTheme } from "@/context/theme";
 import { getActivities, getTrainingWeek, type OtherSessionView, type UnidadVelocidad, type WeekView } from "@/lib/api";
@@ -18,7 +18,8 @@ import {
   tituloTarjetaCardio,
 } from "@/lib/cardio";
 import { leeCardioEnCurso, leeCardioHecho } from "@/lib/cardio-en-curso";
-import { CAMINATA_SUAVE_KMH, protocoloDe, textoVelocidad, tituloProtocolo, unidadDe } from "@/lib/hiit";
+import { programaDe } from "@/lib/api-cardio";
+import { unidadDe } from "@/lib/hiit";
 import { todayISO } from "@/lib/streak";
 import { fonts, radius, spacing, type as typeScale, withAlpha, type Palette } from "@/lib/theme";
 import { getCachedWeek } from "@/lib/training-db";
@@ -106,8 +107,8 @@ export default function CardioScreen() {
   if (cargando || !cardio?.sesion?.cardio) return <LoadingState label="Abriendo tu cardio..." />;
 
   const detalle = cardio.sesion.cardio;
-  const protocolo = protocoloDe(detalle);
-  const titulo = protocolo ? tituloProtocolo(protocolo) : tituloTarjetaCardio(detalle, cardio.minutes);
+  const programa = programaDe(detalle);
+  const titulo = programa ? programa.titulo : tituloTarjetaCardio(detalle, cardio.minutes);
   const pasos = pasosDeCardio(detalle, cardio.minutes, unidad);
 
   return (
@@ -143,16 +144,8 @@ export default function CardioScreen() {
 
         {cardio.note ? <Text style={styles.nota}>{cardio.note}</Text> : null}
 
-        {protocolo ? (
-          <>
-            <ProtocoloHiit protocolo={protocolo} unidad={unidad} onUnidad={cambiarUnidad} />
-            {protocolo.caminataMin > 0 && (
-              <Text style={styles.nota}>
-                Al final, {protocolo.caminataMin} min de caminata suave a {textoVelocidad(CAMINATA_SUAVE_KMH, unidad)}{" "}
-                para completar el bloque.
-              </Text>
-            )}
-          </>
+        {programa ? (
+          <ProtocoloCardio programa={programa} unidad={unidad} onUnidad={cambiarUnidad} />
         ) : (
           <View style={styles.pasos}>
             {pasos.map((paso, indice) => (
@@ -164,7 +157,9 @@ export default function CardioScreen() {
           </View>
         )}
 
-        {cardio.sesion.notes.map((nota) => (
+        {cardio.sesion.notes
+          .filter((nota) => nota !== programa?.notaMaquina)
+          .map((nota) => (
           <Text key={nota} style={styles.nota}>
             {nota}
           </Text>
