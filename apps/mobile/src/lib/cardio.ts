@@ -345,3 +345,12 @@ export function lunesDe(fecha: string): string {
   const m = String(fechaLocal.getMonth() + 1).padStart(2, "0");
   return `${fechaLocal.getFullYear()}-${m}-${String(fechaLocal.getDate()).padStart(2, "0")}`;
 }
+
+/**
+ * ¿Este cardio se lee en km/h ↔ mph? Solo la caminadora (Q1: el chip del
+ * corredor y el de la hoja). Con programa manda su máquina; sin él, el equipo.
+ */
+export function usaUnidadVelocidad(detalle: DetalleCardio): boolean {
+  const programa = programaDe(detalle);
+  return (programa?.maquina ?? detalle.equipo) === "CAMINADORA";
+}

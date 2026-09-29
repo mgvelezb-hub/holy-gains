@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AppState, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { useTheme } from "@/context/theme";
-import { getMe, patchEntrenamiento, postActivities, type DetalleCardio } from "@/lib/api";
+import { getMe, patchEntrenamiento, postActivities, type DetalleCardio, type UnidadVelocidad } from "@/lib/api";
 import { programaDe, type MaquinaConBase, type NivelBase } from "@/lib/api-cardio";
 import {
   activoMsCorredor,
@@ -21,6 +21,7 @@ import {
   saltarPasoCorredor,
   terminarCorredor,
   tituloTarjetaCardio,
+  usaUnidadVelocidad,
   type CorredorCardio as EstadoCorredor,
 } from "@/lib/cardio";
 import { guardaCardioEnCurso, leeCardioEnCurso, marcaCardioHecho, olvidaCardioEnCurso } from "@/lib/cardio-en-curso";
@@ -40,6 +41,7 @@ import {
 } from "@/lib/programa-cardio";
 import { enviarFinAlReloj, enviarSesionAlReloj, estadoDelReloj } from "@/lib/reloj-nativo";
 import { formatoReloj } from "@/lib/sesion-viva";
+import { guardarUnidadVelocidad } from "@/lib/unidad-velocidad";
 import { fonts, radius, spacing, type as typeScale, withAlpha, type Palette } from "@/lib/theme";
 
 /** Cada cuánto se repinta la cuenta regresiva. */
@@ -50,6 +52,10 @@ export type ResultadoCardio = { registrado: boolean; minutos: number; mensaje: s
 /**
  * El corredor del cardio (N2) — el MISMO en la sesión de pesas y en el cardio
  * suelto (`/cardio-en-vivo`), para que la lógica no se duplique.
+ *
+ * Q1: en caminadora, el chip km/h ↔ mph junto al tramo actual cambia al
+ * instante lo que se lee (actual, siguiente y el reloj) y guarda la
+ * preferencia, igual que la hoja; las duraciones del timer no se tocan.
  *
  * P1: con `programa`, cualquier máquina: lo que se pone en ella en grande
  * ("Resist. 10 · 140 SPM", "2:15/500 · 26 SPM"), el esfuerzo con su color,
@@ -86,10 +92,13 @@ export function CorredorCardio({
 
   useKeepAwake();
 
-  const unidad = unidadDe(detalle);
+  // Q1: km/h ↔ mph se cambia aquí mismo. La unidad solo cambia lo que se
+  // LEE; los pasos del timer (duraciones) se arman una vez y no se tocan.
+  const [unidad, setUnidad] = useState<UnidadVelocidad>(() => unidadDe(detalle));
   const programa = programaDe(detalle);
   const protocolo = programa ? null : protocoloDe(detalle);
-  const pasos = useMemo(() => pasosDeCardio(detalle, minutos, unidad), [detalle, minutos, unidad]);
+  const conUnidad = usaUnidadVelocidad(detalle);
+  const pasos = useMemo(() => pasosDeCardio(detalle, minutos, unidadDe(detalle)), [detalle, minutos]);
   /** El esfuerzo de cada paso, si el cardio va tramo por tramo (programa P1 o protocolo N1). */
   const esfuerzos = useMemo<EsfuerzoDeFila[] | null>(
     () =>
@@ -112,8 +121,8 @@ export function CorredorCardio({
     [programa, marcado],
   );
   const nombres = useMemo(
-    () => (vigente && marcado ? pasosDePrograma(vigente, unidad, marcado) : pasos),
-    [vigente, marcado, pasos, unidad],
+    () => (vigente ? pasosDePrograma(vigente, unidad, marcado) : pasosDeCardio(detalle, minutos, unidad)),
+    [vigente, marcado, detalle, minutos, unidad],
   );
 
   const [estado, setEstado] = useState<EstadoCorredor | null>(null);
@@ -279,6 +288,16 @@ export function CorredorCardio({
     })();
   }
 
+  /** km/h ↔ mph: cambia al instante lo que se ve (y el reloj) y queda como preferencia, igual que en la hoja. */
+  function cambiarUnidad(siguiente: UnidadVelocidad) {
+    if (siguiente === unidad) return;
+    void Haptics.selectionAsync();
+    setUnidad(siguiente);
+    guardarUnidadVelocidad(siguiente).catch(() => {
+      // Sin señal: se ve en la unidad elegida y la próxima vez se vuelve a intentar.
+    });
+  }
+
   /** "Terminar aquí": registra lo corrido hasta ahora. */
   function terminarAqui() {
     if (!estado || estado.terminado) return;
@@ -312,7 +331,31 @@ export function CorredorCardio({
       <Text style={styles.nombre}>{tituloTarjetaCardio(detalle, minutos)}</Text>
 
       <View style={styles.caja}>
-        <Timer size={20} color={colors.champan} strokeWidth={2} />
+        <View style={styles.cabezaCaja}>
+          <Timer size={20} color={colors.champan} strokeWidth={2} />
+          {conUnidad && !estado.terminado && (
+            <View style={styles.unidades} accessibilityRole="radiogroup" accessibilityLabel="Unidad de velocidad">
+              {(["kmh", "mph"] as const).map((valor) => {
+                const activa = valor === unidad;
+                return (
+                  <Pressable
+                    key={valor}
+                    onPress={() => cambiarUnidad(valor)}
+                    disabled={activa}
+                    hitSlop={8}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: activa }}
+                    style={[styles.unidad, activa && styles.unidadActiva]}
+                  >
+                    <Text style={[styles.unidadTexto, activa && styles.unidadTextoActiva]}>
+                      {valor === "kmh" ? "km/h" : "mph"}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+        </View>
         {controlGrande ? (
           <>
             <Text style={styles.control} accessibilityRole="header">
@@ -413,6 +456,18 @@ const makeStyles = (colors: Palette) =>
       paddingVertical: spacing.xl,
       paddingHorizontal: spacing.lg,
     },
+    cabezaCaja: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.md },
+    unidades: {
+      flexDirection: "row",
+      borderRadius: radius.full,
+      borderWidth: 1,
+      borderColor: withAlpha(colors.champan, 0.45),
+      overflow: "hidden",
+    },
+    unidad: { paddingHorizontal: spacing.md, paddingVertical: 6, minHeight: 32, justifyContent: "center" },
+    unidadActiva: { backgroundColor: colors.champan },
+    unidadTexto: { fontFamily: fonts.sansSemiBold, ...typeScale.label, color: colors.paloRosa },
+    unidadTextoActiva: { color: colors.pergamino },
     tramo: { fontFamily: fonts.sansBold, ...typeScale.title, textAlign: "center" },
     control: { fontFamily: fonts.sansBold, ...typeScale.title, color: colors.marfil, textAlign: "center" },
     esfuerzo: { fontFamily: fonts.sansSemiBold, ...typeScale.heading, textAlign: "center" },
