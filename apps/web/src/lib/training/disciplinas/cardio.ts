@@ -62,6 +62,9 @@ export const NOMBRE_EQUIPO: Record<EquipoCardio, string> = {
   ESCALERA: "escalera",
   BICI: "bici",
   ELIPTICA: "elíptica",
+  REMO: "remo",
+  BICI_AIRE: "bici de aire",
+  SKI_ERG: "SkiErg",
   LIBRE: "libre",
 };
 

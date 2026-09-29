@@ -305,7 +305,19 @@ export type DisciplineLoad = {
 };
 
 /** Máquina (o ninguna) en la que se hace el cardio. */
-export const EQUIPOS_CARDIO = ["CAMINADORA", "ESCALERA", "BICI", "ELIPTICA", "LIBRE"] as const;
+export const EQUIPOS_CARDIO = [
+  "CAMINADORA",
+  "ESCALERA",
+  "BICI",
+  "ELIPTICA",
+  /** Ergómetro de remo (P1). */
+  "REMO",
+  /** Assault / air bike: sin resistencia, se mide en watts (P1). */
+  "BICI_AIRE",
+  /** SkiErg (P1). */
+  "SKI_ERG",
+  "LIBRE",
+] as const;
 export type EquipoCardio = (typeof EQUIPOS_CARDIO)[number];
 
 /** HIIT (intervalos) o continuo (zona 2). */

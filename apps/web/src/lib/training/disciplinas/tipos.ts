@@ -1,5 +1,5 @@
 import type { ProtocoloPrescrito, UnidadVelocidad } from "@/lib/training/disciplinas/hiit-caminadora";
-import type { Discipline } from "@/lib/training/types";
+import type { Discipline, EquipoCardio } from "@/lib/training/types";
 
 /**
  * El molde común de una sesión de disciplina — tipos PUROS.
@@ -77,7 +77,7 @@ export type SesionDisciplina = {
 };
 
 export type DetalleCardio = {
-  equipo: "CAMINADORA" | "ESCALERA" | "BICI" | "ELIPTICA" | "LIBRE";
+  equipo: EquipoCardio;
   tipo: "HIIT" | "CONTINUO";
   /** El nivel de la máquina del bloque principal (el "fuerte" en HIIT). */
   nivelMaquina: number;
