@@ -24,7 +24,11 @@ describe('catalogo de preparaciones', () => {
       for (const ing of prep.ingredientes) {
         const donde = `${prep.id}`;
         expect(
-          ing.foodId !== undefined || ing.tag === 'leche' || ing.tag === 'base' || (ing.rolePool?.length ?? 0) > 0,
+          ing.foodId !== undefined ||
+            ing.tag === 'leche' ||
+            ing.tag === 'base' ||
+            (ing.rolePool?.length ?? 0) > 0 ||
+            (ing.fruta?.rolePool.length ?? 0) > 0,
           donde,
         ).toBe(true);
         if (ing.foodId) expect(findFood(ing.foodId), `${donde} ${ing.foodId}`).toBeDefined();

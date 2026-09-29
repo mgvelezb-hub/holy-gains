@@ -89,7 +89,9 @@ describe('cambiar el ingrediente de un platillo', () => {
           const hermano =
             deLaReceta.has(o.foodId) ||
             (food.tags.includes('leguminosa') && otro.tags.includes('leguminosa')) ||
-            (food.role === 'vegetal_libre' && otro.role === 'vegetal_libre');
+            (food.role === 'vegetal_libre' && otro.role === 'vegetal_libre') ||
+            // La fruta del licuado es plantilla: cualquier fruta que se licue.
+            (food.role === 'fruta' && otro.role === 'fruta' && prep.ingredientes.some((i) => i.fruta));
           expect(hermano, `${item.name} -> ${o.name} en ${prep.id}`).toBe(true);
         }
       }

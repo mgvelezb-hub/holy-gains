@@ -1,7 +1,7 @@
 [
   {
     "id": "licuado_proteina_fruta_avena",
-    "nombre": "Licuado de proteína con fruta y avena",
+    "nombre": "Licuado de {fruta} con avena",
     "tipo": "licuado",
     "slots": [
       "PRE",
@@ -18,157 +18,22 @@
           "whey_isolate",
           "proteina_vegetal",
           "yogur_griego_0"
-        ]
-      },
-      {
-        "rolePool": [
-          "fruta"
         ],
-        "opciones": [
-          "platano",
-          "fresa",
-          "mango",
-          "papaya",
-          "pina",
-          "manzana"
-        ]
+        "opcional": true
       },
       {
-        "rolePool": [
-          "carbo_pre"
-        ],
-        "opciones": [
-          "avena",
-          "amaranto"
-        ],
-        "maxUnits": 60
-      },
-      {
-        "tag": "base",
-        "fijo": true,
-        "minUnits": 1,
-        "maxUnits": 1
-      }
-    ],
-    "prepMin": 5,
-    "tags": [
-      "vegetariano",
-      "ayuno_ok"
-    ],
-    "costRel": 2
-  },
-  {
-    "id": "licuado_platano_cacahuate",
-    "nombre": "Licuado de plátano con crema de cacahuate",
-    "tipo": "licuado",
-    "slots": [
-      "DESAYUNO",
-      "SNACK",
-      "PRE",
-      "POST"
-    ],
-    "ingredientes": [
-      {
-        "rolePool": [
-          "proteina_magra"
-        ],
-        "opciones": [
-          "whey_isolate",
-          "proteina_vegetal",
-          "yogur_griego_0"
-        ]
-      },
-      {
-        "foodId": "platano"
-      },
-      {
-        "foodId": "crema_cacahuate"
-      },
-      {
-        "tag": "base",
-        "fijo": true,
-        "minUnits": 1,
-        "maxUnits": 1
-      }
-    ],
-    "prepMin": 5,
-    "tags": [
-      "vegetariano",
-      "ayuno_ok"
-    ],
-    "costRel": 2
-  },
-  {
-    "id": "licuado_verde",
-    "nombre": "Licuado verde",
-    "tipo": "licuado",
-    "slots": [
-      "PRE",
-      "DESAYUNO",
-      "SNACK",
-      "POST"
-    ],
-    "ingredientes": [
-      {
-        "foodId": "espinaca",
-        "fijo": true,
-        "gramos": 60
-      },
-      {
-        "foodId": "pepino",
-        "fijo": true,
-        "gramos": 100
-      },
-      {
-        "foodId": "manzana"
-      },
-      {
-        "rolePool": [
-          "proteina_magra"
-        ],
-        "opciones": [
-          "whey_isolate",
-          "proteina_vegetal",
-          "yogur_griego_0"
-        ]
-      },
-      {
-        "tag": "base",
-        "fijo": true,
-        "minUnits": 1,
-        "maxUnits": 1
-      }
-    ],
-    "prepMin": 5,
-    "tags": [
-      "vegetariano",
-      "ayuno_ok"
-    ],
-    "costRel": 2
-  },
-  {
-    "id": "licuado_fresa_avena",
-    "nombre": "Licuado de fresa con avena",
-    "tipo": "licuado",
-    "slots": [
-      "PRE",
-      "DESAYUNO",
-      "SNACK",
-      "POST"
-    ],
-    "ingredientes": [
-      {
-        "rolePool": [
-          "proteina_magra"
-        ],
-        "opciones": [
-          "whey_isolate",
-          "proteina_vegetal",
-          "yogur_griego_0"
-        ]
-      },
-      {
-        "foodId": "fresa"
+        "fruta": {
+          "rolePool": [
+            "fruta"
+          ],
+          "preferidas": [
+            "fresa",
+            "frutos_rojos",
+            "frambuesa",
+            "mango",
+            "papaya"
+          ]
+        }
       },
       {
         "foodId": "avena",
@@ -189,8 +54,114 @@
     "costRel": 2
   },
   {
-    "id": "licuado_mango_yogur",
-    "nombre": "Licuado de mango con yogur",
+    "id": "licuado_platano_cacahuate",
+    "nombre": "Licuado de {fruta} con crema de cacahuate",
+    "tipo": "licuado",
+    "slots": [
+      "PRE",
+      "DESAYUNO",
+      "SNACK",
+      "POST"
+    ],
+    "ingredientes": [
+      {
+        "rolePool": [
+          "proteina_magra"
+        ],
+        "opciones": [
+          "whey_isolate",
+          "proteina_vegetal",
+          "yogur_griego_0"
+        ],
+        "opcional": true
+      },
+      {
+        "fruta": {
+          "rolePool": [
+            "fruta"
+          ],
+          "preferidas": [
+            "platano",
+            "manzana"
+          ]
+        }
+      },
+      {
+        "foodId": "crema_cacahuate"
+      },
+      {
+        "tag": "base",
+        "fijo": true,
+        "minUnits": 1,
+        "maxUnits": 1
+      }
+    ],
+    "prepMin": 5,
+    "tags": [
+      "vegetariano",
+      "ayuno_ok"
+    ],
+    "costRel": 2
+  },
+  {
+    "id": "licuado_verde",
+    "nombre": "Licuado verde con {fruta}",
+    "tipo": "licuado",
+    "slots": [
+      "PRE",
+      "DESAYUNO",
+      "SNACK",
+      "POST"
+    ],
+    "ingredientes": [
+      {
+        "foodId": "espinaca",
+        "fijo": true,
+        "gramos": 60
+      },
+      {
+        "foodId": "pepino",
+        "fijo": true,
+        "gramos": 100
+      },
+      {
+        "fruta": {
+          "rolePool": [
+            "fruta"
+          ],
+          "preferidas": [
+            "manzana",
+            "pina"
+          ]
+        }
+      },
+      {
+        "rolePool": [
+          "proteina_magra"
+        ],
+        "opciones": [
+          "whey_isolate",
+          "proteina_vegetal",
+          "yogur_griego_0"
+        ]
+      },
+      {
+        "tag": "base",
+        "fijo": true,
+        "minUnits": 1,
+        "maxUnits": 1
+      }
+    ],
+    "prepMin": 5,
+    "tags": [
+      "vegetariano",
+      "ayuno_ok"
+    ],
+    "costRel": 2
+  },
+  {
+    "id": "licuado_frutos_rojos_yogur",
+    "nombre": "Licuado de {fruta} con yogur",
     "tipo": "licuado",
     "slots": [
       "PRE",
@@ -203,18 +174,355 @@
         "foodId": "yogur_griego_0"
       },
       {
-        "foodId": "mango"
+        "fruta": {
+          "rolePool": [
+            "fruta"
+          ],
+          "preferidas": [
+            "frutos_rojos",
+            "fresa",
+            "frambuesa",
+            "arandano"
+          ]
+        }
+      },
+      {
+        "tag": "base",
+        "fijo": true,
+        "minUnits": 1,
+        "maxUnits": 1
+      }
+    ],
+    "prepMin": 5,
+    "tags": [
+      "vegetariano",
+      "ayuno_ok"
+    ],
+    "costRel": 2
+  },
+  {
+    "id": "licuado_cacao_platano",
+    "nombre": "Licuado de cacao con {fruta}",
+    "tipo": "licuado",
+    "slots": [
+      "PRE",
+      "DESAYUNO",
+      "SNACK",
+      "POST"
+    ],
+    "ingredientes": [
+      {
+        "rolePool": [
+          "proteina_magra"
+        ],
+        "opciones": [
+          "whey_isolate",
+          "proteina_vegetal",
+          "yogur_griego_0"
+        ],
+        "opcional": true
+      },
+      {
+        "fruta": {
+          "rolePool": [
+            "fruta"
+          ],
+          "preferidas": [
+            "platano"
+          ]
+        }
+      },
+      {
+        "foodId": "cacao_polvo",
+        "fijo": true,
+        "gramos": 10
+      },
+      {
+        "tag": "base",
+        "fijo": true,
+        "minUnits": 1,
+        "maxUnits": 1
+      }
+    ],
+    "prepMin": 5,
+    "tags": [
+      "vegetariano",
+      "ayuno_ok"
+    ],
+    "costRel": 2
+  },
+  {
+    "id": "licuado_avena_canela",
+    "nombre": "Licuado de avena con {fruta} y canela",
+    "tipo": "licuado",
+    "slots": [
+      "PRE",
+      "DESAYUNO",
+      "SNACK",
+      "POST"
+    ],
+    "ingredientes": [
+      {
+        "fruta": {
+          "rolePool": [
+            "fruta"
+          ],
+          "preferidas": [
+            "papaya",
+            "manzana",
+            "platano"
+          ]
+        }
+      },
+      {
+        "foodId": "avena",
+        "maxUnits": 60
+      },
+      {
+        "foodId": "canela",
+        "fijo": true,
+        "gramos": 2
+      },
+      {
+        "tag": "base",
+        "fijo": true,
+        "minUnits": 1,
+        "maxUnits": 1
+      }
+    ],
+    "prepMin": 5,
+    "tags": [
+      "vegetariano",
+      "ayuno_ok"
+    ],
+    "costRel": 1
+  },
+  {
+    "id": "licuado_pina_espinaca_jengibre",
+    "nombre": "Licuado de {fruta} con espinaca y jengibre",
+    "tipo": "licuado",
+    "slots": [
+      "PRE",
+      "DESAYUNO",
+      "SNACK",
+      "POST"
+    ],
+    "ingredientes": [
+      {
+        "fruta": {
+          "rolePool": [
+            "fruta"
+          ],
+          "preferidas": [
+            "pina",
+            "mango"
+          ]
+        }
+      },
+      {
+        "foodId": "espinaca",
+        "fijo": true,
+        "gramos": 40
+      },
+      {
+        "foodId": "jengibre",
+        "fijo": true,
+        "gramos": 5
       },
       {
         "rolePool": [
-          "carbo_pre"
+          "proteina_magra"
         ],
         "opciones": [
-          "avena",
-          "amaranto"
+          "whey_isolate",
+          "proteina_vegetal",
+          "yogur_griego_0"
+        ]
+      },
+      {
+        "tag": "base",
+        "fijo": true,
+        "minUnits": 1,
+        "maxUnits": 1
+      }
+    ],
+    "prepMin": 5,
+    "tags": [
+      "vegetariano",
+      "ayuno_ok"
+    ],
+    "costRel": 2
+  },
+  {
+    "id": "licuado_yogur_amaranto",
+    "nombre": "Licuado de {fruta} con yogur y amaranto",
+    "tipo": "licuado",
+    "slots": [
+      "PRE",
+      "DESAYUNO",
+      "SNACK",
+      "POST"
+    ],
+    "ingredientes": [
+      {
+        "foodId": "yogur_griego_0"
+      },
+      {
+        "fruta": {
+          "rolePool": [
+            "fruta"
+          ],
+          "preferidas": [
+            "mango",
+            "papaya",
+            "durazno"
+          ]
+        }
+      },
+      {
+        "foodId": "amaranto",
+        "maxUnits": 40
+      },
+      {
+        "tag": "base",
+        "fijo": true,
+        "minUnits": 1,
+        "maxUnits": 1
+      }
+    ],
+    "prepMin": 5,
+    "tags": [
+      "vegetariano",
+      "ayuno_ok"
+    ],
+    "costRel": 2
+  },
+  {
+    "id": "licuado_fruta_chia",
+    "nombre": "Licuado de {fruta} con chía",
+    "tipo": "licuado",
+    "slots": [
+      "PRE",
+      "DESAYUNO",
+      "SNACK",
+      "POST"
+    ],
+    "ingredientes": [
+      {
+        "rolePool": [
+          "proteina_magra"
         ],
-        "maxUnits": 60,
+        "opciones": [
+          "whey_isolate",
+          "proteina_vegetal",
+          "yogur_griego_0"
+        ],
         "opcional": true
+      },
+      {
+        "fruta": {
+          "rolePool": [
+            "fruta"
+          ],
+          "preferidas": [
+            "fresa",
+            "mango",
+            "frambuesa"
+          ]
+        }
+      },
+      {
+        "foodId": "chia"
+      },
+      {
+        "tag": "base",
+        "fijo": true,
+        "minUnits": 1,
+        "maxUnits": 1
+      }
+    ],
+    "prepMin": 5,
+    "tags": [
+      "vegetariano",
+      "ayuno_ok"
+    ],
+    "costRel": 2
+  },
+  {
+    "id": "licuado_proteina_fruta",
+    "nombre": "Licuado de proteína con {fruta}",
+    "tipo": "licuado",
+    "slots": [
+      "PRE",
+      "DESAYUNO",
+      "SNACK",
+      "POST"
+    ],
+    "ingredientes": [
+      {
+        "rolePool": [
+          "proteina_magra"
+        ],
+        "opciones": [
+          "whey_isolate",
+          "proteina_vegetal"
+        ]
+      },
+      {
+        "fruta": {
+          "rolePool": [
+            "fruta"
+          ],
+          "preferidas": [
+            "platano",
+            "fresa",
+            "durazno"
+          ]
+        }
+      },
+      {
+        "tag": "base",
+        "fijo": true,
+        "minUnits": 1,
+        "maxUnits": 1
+      }
+    ],
+    "prepMin": 5,
+    "tags": [
+      "vegetariano",
+      "ayuno_ok"
+    ],
+    "costRel": 2
+  },
+  {
+    "id": "licuado_yogur_avena",
+    "nombre": "Licuado de {fruta} con yogur y avena",
+    "tipo": "licuado",
+    "slots": [
+      "PRE",
+      "DESAYUNO",
+      "SNACK",
+      "POST"
+    ],
+    "ingredientes": [
+      {
+        "foodId": "yogur_griego_0"
+      },
+      {
+        "fruta": {
+          "rolePool": [
+            "fruta"
+          ],
+          "preferidas": [
+            "pera",
+            "manzana",
+            "durazno"
+          ]
+        }
+      },
+      {
+        "foodId": "avena",
+        "maxUnits": 60
       },
       {
         "tag": "base",

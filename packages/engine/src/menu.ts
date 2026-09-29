@@ -864,7 +864,12 @@ function equivalencesFor(
     slot.intercambiables !== undefined || slot.permitidos !== undefined
       ? new Set(slot.intercambiables ?? slot.permitidos)
       : undefined;
-  const dentro = (f: Food): boolean => soloEntre === undefined || soloEntre.has(f.id);
+  // La fruta del licuado no se cambia por la fruta de otra comida del dia:
+  // seria la misma fruta dos veces.
+  const esFrutaDePlatillo = slot.food.role === 'fruta' && soloEntre !== undefined;
+  const dentro = (f: Food): boolean =>
+    (soloEntre === undefined || soloEntre.has(f.id)) &&
+    !(esFrutaDePlatillo && evitar.has(`${MARCA_FRUTA_DEL_DIA}${f.id}`));
 
   // Los vegetales libres SI tienen equivalencias — y son las mas faciles de
   // dar: "libre" significa que la cantidad no esta contada, asi que cualquier
@@ -989,6 +994,7 @@ export function equivalenciasDeAlimento(
     const encontrado = pool.find((f) => normalize(f.name) === n || normalize(f.id) === n);
     const familia = encontrado ? familiaDe(encontrado) : undefined;
     if (familia) evitar.add(familia);
+    if (encontrado?.role === 'fruta') evitar.add(`${MARCA_FRUTA_DEL_DIA}${encontrado.id}`);
   }
 
   const slot: Slot = { food, grams: gramos, fixed: false };
@@ -1629,6 +1635,9 @@ function ajustarPorciones(
 // Preparaciones: licuados, sopas, cremas y caldos
 // ---------------------------------------------------------------------------
 
+/** Gramos de proteina que un licuado se puede pasar de su comida (ver `resolverPreparacion`). */
+const HOLGURA_PROTEINA_LICUADO_G = 5;
+
 /** Probabilidad de servir un licuado en un slot que lo admite. */
 const PROBA_LICUADO = 0.35;
 /** Probabilidad de servir sopa, crema o caldo en la comida o la cena. */
@@ -1690,13 +1699,55 @@ function preparacionesPara(slot: MealSlot, profile: Profile): Preparacion[] {
  * Los alimentos que pueden llenar un ingrediente: el fijo, la leche de la
  * persona o la lista corta.
  */
-function idsDeIngrediente(ing: IngredientePreparacion, profile: Profile): string[] {
+function idsDeIngrediente(ing: IngredientePreparacion, profile: Profile, pool: Food[]): string[] {
   if (ing.foodId) return [ing.foodId];
   if (ing.tag === 'leche') return [lecheDe(profile)];
-  // La base del licuado: la leche de la persona, y si no, agua.
-  if (ing.tag === 'base') return [lecheDe(profile), AGUA_ID];
+  // La base del licuado: la que la persona eligio. Con leche, si la leche no
+  // pasa (excluida, alergia), agua; con agua, solo agua.
+  if (ing.tag === 'base') return profile.baseLicuado === 'agua' ? [AGUA_ID] : [lecheDe(profile), AGUA_ID];
+  if (ing.fruta) return frutasDePlantilla(ing.fruta, pool);
   return ing.opciones ?? [];
 }
+
+/**
+ * Las frutas que caben en la plantilla de un licuado: todas las del catalogo
+ * (y las propias) de ese rol, menos las que no se licuan (pasas, toronja).
+ * Las preferidas de la receta van primero; el sorteo las pesa doble.
+ */
+function frutasDePlantilla(fruta: NonNullable<IngredientePreparacion['fruta']>, pool: Food[]): string[] {
+  const preferidas = fruta.preferidas ?? [];
+  const todas = pool
+    .filter((f) => fruta.rolePool.includes(f.role) && !f.tags.includes(NO_LICUADO))
+    .map((f) => f.id);
+  return [...preferidas.filter((id) => todas.includes(id)), ...todas.filter((id) => !preferidas.includes(id))];
+}
+
+/** Tag de la fruta que no va en licuado: pasas, toronja. */
+const NO_LICUADO = 'no_licuado';
+
+/**
+ * El nombre del platillo con su fruta: "Licuado de {fruta} con avena" con
+ * frambuesa es "Licuado de frambuesa con avena". Sin plantilla, el nombre tal
+ * cual; con un platillo que ya no existe, `undefined`.
+ */
+export function nombreDePlatillo(
+  preparacionId: string,
+  frutaId?: string,
+  pool: Food[] = FOODS,
+): string | undefined {
+  const prep = PREPARACIONES.find((p) => p.id === preparacionId);
+  if (!prep) return undefined;
+  if (!prep.nombre.includes(MARCA_FRUTA)) return prep.nombre;
+  const fruta = frutaId ? (pool.find((f) => f.id === frutaId) ?? FOODS.find((f) => f.id === frutaId)) : undefined;
+  const nombre = fruta ? (fruta.nombreEnPlatillo ?? fruta.name.toLowerCase()) : 'fruta';
+  return prep.nombre.replace(MARCA_FRUTA, nombre);
+}
+
+/** El hueco del nombre donde va la fruta elegida. */
+const MARCA_FRUTA = '{fruta}';
+
+/** Prefijo de las frutas de OTRAS comidas del dia en el conjunto `fuera`. */
+const MARCA_FRUTA_DEL_DIA = 'fruta:';
 
 /** Los ids del catalogo base: lo demas del pool lo dio de alta la persona. */
 const IDS_DEL_CATALOGO = new Set(FOODS.map((f) => f.id));
@@ -1743,8 +1794,9 @@ function intercambiablesDe(
   profile: Profile,
   pool: Food[],
 ): string[] {
-  const ids = idsDeIngrediente(ing, profile);
-  if (ing.tag !== undefined || ing.opciones !== undefined) return ids;
+  const ids = idsDeIngrediente(ing, profile, pool);
+  // La fruta de la plantilla se cambia por cualquier otra que se licue.
+  if (ing.tag !== undefined || ing.opciones !== undefined || ing.fruta !== undefined) return ids;
   if (food.tags.includes('leguminosa')) {
     return [
       food.id,
@@ -1818,6 +1870,7 @@ function resolverPreparacion(
   const ref: PreparacionRef = { id: prep.id, nombre: prep.nombre, tipo: prep.tipo };
   const slots: Slot[] = [];
   const cubre = { proteina: false, carbo: false, grasa: false, fruta: false, verdura: false };
+  const esLicuado = prep.tipo === 'licuado';
 
   const admisible = (food: Food): boolean => {
     // El agua no pasa por las reglas de un alimento: no tiene macros, no se
@@ -1831,7 +1884,7 @@ function resolverPreparacion(
         estricto: true,
         // El polvo en el licuado del desayuno es la receta, no un suplemento
         // suelto en el plato: ahi si entra (si la persona lo tiene).
-        ...(prep.tipo === 'licuado' ? { noSupplements: false } : {}),
+        ...(esLicuado ? { noSupplements: false } : {}),
         ...(esCarbo ? { subtipos: plantilla.subtipos } : {}),
       }).length === 1;
     return pasa && !slots.some((s) => incompatibles(food, s.food, config));
@@ -1840,20 +1893,36 @@ function resolverPreparacion(
   // El platillo no puede pasarse de la proteina de la comida con solo sus
   // porciones minimas: una sopa con 100 g de pechuga y media taza de garbanzo
   // ya son 38 g, y en la comida de alguien que pide 26 no hay como bajarla.
-  const topeDeProteina = slot.proteinG * 1.1;
+  // El licuado se mide en tazas y scoops enteros —no hay "0.8 de taza"—, asi
+  // que su holgura es de gramos, no de porcentaje: en la colacion de 13 g de
+  // Irma el 10 % eran 1.3 g y ningun licuado cabia.
+  const topeDeProteina = esLicuado
+    ? slot.proteinG + Math.max(slot.proteinG * 0.1, HOLGURA_PROTEINA_LICUADO_G)
+    : slot.proteinG * 1.1;
   let proteinaMinima = 0;
+  // La proteina del licuado es el vaso entero: la taza de leche ya trae 8 g,
+  // y el polvo o el yogur solo ponen lo que falta para el piso de la comida.
+  let proteinaDeLaBase = 0;
+  const pisoDeProteina = (): number =>
+    esLicuado ? Math.max(0, plantilla.proteinaMinG - proteinaDeLaBase) : plantilla.proteinaMinG;
   const proteinaQueAporta = (food: Food, fijo: boolean, gramos: number | undefined): number => {
     const base = gramosDeIngrediente(food, fijo, gramos, config);
     const esLaProteina = !fijo && food.role.startsWith('proteina') && !cubre.proteina;
     const conPiso =
       esLaProteina && food.proteinPer100 > 0
-        ? Math.max(base, (plantilla.proteinaMinG * 100) / food.proteinPer100)
+        ? Math.max(base, (pisoDeProteina() * 100) / food.proteinPer100)
         : base;
     return (conPiso * food.proteinPer100) / 100;
   };
 
-  for (const ing of prep.ingredientes) {
-    const ids = conPropios(idsDeIngrediente(ing, profile), ing, pool);
+  // La base del licuado va primero: su proteina cuenta para el piso del vaso.
+  const ingredientes = esLicuado
+    ? [...prep.ingredientes.filter((i) => i.tag === 'base'), ...prep.ingredientes.filter((i) => i.tag !== 'base')]
+    : prep.ingredientes;
+  let fruta: Food | undefined;
+
+  for (const ing of ingredientes) {
+    const ids = conPropios(idsDeIngrediente(ing, profile, pool), ing, pool);
     const esFijo = (f: Food): boolean =>
       ing.fijo === true || f.role === 'fruta' || f.role === 'vegetal_libre';
     const pasan = ids
@@ -1865,13 +1934,14 @@ function resolverPreparacion(
       .filter((f) => vaCarbohidrato || !(DENSE_CARB_ROLES.includes(f.role) || f.role === 'fruta'))
       // La grasa que se resuelve necesita grasa en el slot: el pre-entreno no la lleva.
       .filter((f) => ing.fijo || f.role !== 'grasa' || slot.fatG > 0)
-      // La proteina del platillo tiene que sostener la comida por si sola.
+      // La proteina del platillo tiene que sostener la comida por si sola
+      // (en el licuado, junto con su leche).
       .filter(
         (f) =>
           ing.fijo ||
           !f.role.startsWith('proteina') ||
           cubre.proteina ||
-          (maxGrams(acotar(f, ing)) * f.proteinPer100) / 100 >= plantilla.proteinaMinG,
+          (maxGrams(acotar(f, ing)) * f.proteinPer100) / 100 >= pisoDeProteina(),
       )
       .filter(
         (f) =>
@@ -1886,13 +1956,16 @@ function resolverPreparacion(
       .filter((f) => !(f.tags.includes('leguminosa') && familiasDelDia.has(LEGUMINOSA)));
     // La proteina del licuado sale del polvo cuando la persona lo tiene: el
     // yogur solo entra si no hay polvo (y si no salio ya en otra comida).
-    const polvos = pasan.filter((f) => f.tags.includes('suplemento'));
+    const polvos = pasan.filter((f) => f.tags.includes('suplemento') && f.role.startsWith('proteina'));
     const candidatos = polvos.length > 0 ? polvos : pasan;
 
     // La base no se sortea: la leche de la persona si la admite, y si no,
-    // agua. Nadie licua con agua teniendo la leche que eligio.
+    // agua. Nadie licua con agua teniendo la leche que eligio. La fruta de
+    // la plantilla prefiere las de la receta (la despensa manda en `pick`).
     const elegido =
-      ing.tag === 'base' ? candidatos[0] : pick(candidatos, profile, random, avoid);
+      ing.tag === 'base'
+        ? candidatos[0]
+        : pick(candidatos, profile, random, avoid, new Set(ing.fruta?.preferidas ?? []));
     if (!elegido) {
       if (ing.opcional) continue;
       return undefined;
@@ -1903,6 +1976,8 @@ function resolverPreparacion(
     const fijo = esFijo(food);
     const grams = gramosDeIngrediente(food, fijo, ing.gramos, config);
     proteinaMinima += proteinaQueAporta(food, fijo, ing.gramos);
+    if (ing.tag === 'base') proteinaDeLaBase = (grams * food.proteinPer100) / 100;
+    if (ing.fruta) fruta = food;
 
     const nuevo: Slot = {
       food,
@@ -1922,7 +1997,8 @@ function resolverPreparacion(
 
     if (role.startsWith('proteina') && !fijo && !cubre.proteina) {
       cubre.proteina = true;
-      if (plantilla.proteinaMinG > 0) nuevo.minProteinG = plantilla.proteinaMinG;
+      const piso = pisoDeProteina();
+      if (piso > 0) nuevo.minProteinG = piso;
     }
     if (DENSE_CARB_ROLES.includes(role)) cubre.carbo = true;
     if (role === 'grasa' && !fijo) cubre.grasa = true;
@@ -1936,7 +2012,7 @@ function resolverPreparacion(
   // La sopa tiene que alcanzar el carbohidrato de la comida: la de pasta o
   // leguminosa no admite cereal al lado, y el caldo solo media porcion. Una
   // comida de 120 g de carbohidrato no se sirve con sopa de pasta.
-  if (prep.tipo !== 'licuado' && vaCarbohidrato) {
+  if (!esLicuado && vaCarbohidrato) {
     const delPlatillo = slots.reduce(
       (acc, s) =>
         acc + (DENSE_CARB_ROLES.includes(s.food.role) ? (maxGrams(s.food) * s.food.carbPer100) / 100 : 0),
@@ -1945,20 +2021,32 @@ function resolverPreparacion(
     const alLado = sopaPesada(slots) ? 0 : 40;
     if (slot.carbG > (delPlatillo + alLado) * 1.1) return undefined;
   }
-  // Sin polvo, la proteina del licuado es yogur CON leche: yogur licuado con
-  // agua no es un licuado que alguien prepare. Si la leche no cabe, no va.
-  if (prep.tipo === 'licuado') {
+  if (esLicuado) {
     const conAgua = slots.some((s) => s.food.tags.includes(BASE_AGUA));
+    // Sin polvo, la proteina del licuado es yogur CON leche: si la leche no
+    // cupo y el agua entro de relevo, yogur con agua no es un licuado que
+    // alguien prepare. Quien PIDIO agua si lo toma asi.
     const proteinaEntera = slots.some(
       (s) =>
         s.food.role.startsWith('proteina') && !esLeche(s.food) && !s.food.tags.includes('suplemento'),
     );
-    if (conAgua && proteinaEntera) return undefined;
+    if (conAgua && proteinaEntera && profile.baseLicuado !== 'agua') return undefined;
+    // Al lado del licuado solo van pan, tortilla o fruta: la proteina de la
+    // comida tiene que estar en el vaso. Sin polvo ni yogur, la leche la
+    // sostiene en la colacion (licuado de avena con papaya); en el pre, el
+    // post o el desayuno no alcanza, y el licuado no va.
+    if (!cubre.proteina) {
+      if (slot.id !== 'SNACK' && proteinaDeLaBase < plantilla.proteinaMinG) return undefined;
+      // Con agua y sin polvo ni yogur, la colacion va sin proteina: el dia la
+      // sube en otra comida.
+      cubre.proteina = true;
+    }
   }
   // Si el platillo no trae la proteina, la comida la agrega junto: la sopa de
   // lentejas mas su pechuga tambien tiene que caber.
   const reserva = cubre.proteina ? 0 : plantilla.proteinaMinG + 2;
   if (slot.proteinG > 0 && proteinaMinima + reserva > topeDeProteina) return undefined;
+  if (fruta) ref.nombre = nombreDePlatillo(prep.id, fruta.id, pool) ?? prep.nombre;
   const requeridos = slots.filter((s) => s.requerido).length;
   for (const s of slots) {
     s.requeridosDelPlatillo = requeridos;
@@ -2056,10 +2144,18 @@ function sinGramos(display: string): string {
 }
 
 /** "Licuado de fresa con avena — 1 taza de fresa · 40 g de avena". */
-function platilloDe(items: MenuItem[]): MenuMeal['preparacion'] {
+function platilloDe(items: MenuItem[], pool: Food[] = FOODS): MenuMeal['preparacion'] {
   const ingredientes = items.filter((i) => i.preparacion);
-  const ref = ingredientes[0]?.preparacion;
-  if (!ref) return undefined;
+  const primero = ingredientes[0]?.preparacion;
+  if (!primero) return undefined;
+  // El nombre sale de la fruta que quedo, no de la que se sorteo: si la
+  // reparacion del dia la cambio, el licuado se llama como lo que lleva.
+  const fruta = ingredientes.find(
+    (i) => (pool.find((f) => f.id === i.foodId) ?? FOODS.find((f) => f.id === i.foodId))?.role === 'fruta',
+  );
+  const nombre = fruta ? (nombreDePlatillo(primero.id, fruta.foodId, pool) ?? primero.nombre) : primero.nombre;
+  const ref: PreparacionRef = { ...primero, nombre };
+  for (const i of ingredientes) i.preparacion = ref;
   const renglones = ingredientes.map((i) => sinGramos(i.display));
   // El licuado sin leche se licua con agua: se dice, para que nadie lo
   // prepare en seco o le ponga la leche que el dia no tenia.
@@ -2211,7 +2307,20 @@ function buildMeal(
         acompanan: slots.map((s) => s.food),
       }),
     );
-    const todosUnicos = base.filter((f, i) => base.findIndex((o) => o.id === f.id) === i);
+    const deLaPlantilla = base.filter((f, i) => base.findIndex((o) => o.id === f.id) === i);
+    // La afinidad de `eligible` se afloja si deja el rol vacio, y asi salia
+    // la colacion de sardina con avena (el cereal de desayuno no va con
+    // pescado). Si ninguno del subtipo va con lo que ya esta en el plato, el
+    // carbohidrato es tortilla o pan —la tostada de sardina—, no avena.
+    const companeros = slots.map((s) => s.food);
+    const vaCon = (f: Food): boolean => !companeros.some((otro) => incompatibles(f, otro, config));
+    const deRelevo =
+      subtipos.length > 0 && deLaPlantilla.length > 0 && !deLaPlantilla.some(vaCon)
+        ? roles
+            .flatMap((role) => eligible(pool, profile, config, role, { ...filters, acompanan: companeros }))
+            .filter((f) => vaCon(f) && (familiaDe(f) === 'tortilla' || familiaDe(f) === 'pan'))
+        : [];
+    const todosUnicos = deRelevo.length > 0 ? deRelevo : deLaPlantilla;
     // En la cena la leguminosa pesa: se prefiere tortilla o tuberculo, y la
     // leguminosa se deja para la comida.
     const ligeros = esCena ? todosUnicos.filter((f) => !f.tags.includes('leguminosa')) : todosUnicos;
@@ -2552,7 +2661,7 @@ function refreshMeal(
 ): void {
   const kept = slots.filter((s) => s.grams > 0);
   meal.items = kept.map((s) => toItem(s, s.fixed && s.food.role === 'vegetal_libre'));
-  const platillo = platilloDe(meal.items);
+  const platillo = platilloDe(meal.items, pool);
   if (platillo) meal.preparacion = platillo;
   else delete meal.preparacion;
   meal.equivalences = kept
@@ -2953,8 +3062,10 @@ function buildMenu(
   }
   const meals = built.map((b) => b.meal);
   const fueraDe = (i: number): Set<string> => {
-    const fuera = familiasDe(built.filter((_, j) => j !== i).flatMap((b) => b.slots));
+    const otras = built.filter((_, j) => j !== i).flatMap((b) => b.slots);
+    const fuera = familiasDe(otras);
     for (const vetada of vetadas) fuera.add(vetada);
+    for (const s of otras) if (s.grams > 0 && s.food.role === 'fruta') fuera.add(`${MARCA_FRUTA_DEL_DIA}${s.food.id}`);
     return fuera;
   };
   built.forEach((b, i) => refreshMeal(b.meal, b.slots, pool, profile, config, fueraDe(i)));
@@ -3376,7 +3487,8 @@ export function opcionesDePlatillo(input: CambioDePlatilloInput): OpcionDePlatil
     )
     .map(({ prep, armada }) => ({
       id: prep.id,
-      nombre: prep.nombre,
+      // Con plantilla, el nombre lleva la fruta que de verdad saldria.
+      nombre: armada.meal.preparacion?.nombre ?? prep.nombre,
       tipo: prep.tipo,
       totals: armada.meal.totals,
     }));

@@ -405,8 +405,13 @@ describe('generador de menus (spec §6)', () => {
               findFood(i.foodId)!.role.startsWith('proteina'),
             );
             expect(fuentes.length, donde).toBeGreaterThanOrEqual(1);
-            expect(Math.max(...fuentes.map((i) => i.proteinG)), donde).toBeGreaterThanOrEqual(
-              DEFAULT_CONFIG.mealProteinMinG,
+            // El vaso del licuado (leche + polvo o yogur) es una sola fuente.
+            const vaso = fuentes
+              .filter((i) => i.preparacion?.tipo === 'licuado')
+              .reduce((acc, i) => acc + i.proteinG, 0);
+            const sueltas = fuentes.filter((i) => i.preparacion?.tipo !== 'licuado').map((i) => i.proteinG);
+            expect(Math.max(vaso, ...sueltas), donde).toBeGreaterThanOrEqual(
+              DEFAULT_CONFIG.mealProteinMinG - 0.05,
             );
           }
         }

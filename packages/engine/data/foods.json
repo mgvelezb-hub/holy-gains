@@ -2427,7 +2427,8 @@
       "minUnits": 0.5,
       "maxUnits": 1,
       "step": 0.5
-    }
+    },
+    "nombreEnPlatillo": "manzana"
   },
   {
     "id": "fresa",
@@ -2456,7 +2457,8 @@
       "minUnits": 0.5,
       "maxUnits": 1.25,
       "step": 0.25
-    }
+    },
+    "nombreEnPlatillo": "fresa"
   },
   {
     "id": "frambuesa",
@@ -2485,7 +2487,8 @@
       "minUnits": 0.5,
       "maxUnits": 1.5,
       "step": 0.25
-    }
+    },
+    "nombreEnPlatillo": "frambuesa"
   },
   {
     "id": "arandano",
@@ -2513,7 +2516,37 @@
       "minUnits": 0.5,
       "maxUnits": 1.25,
       "step": 0.25
-    }
+    },
+    "nombreEnPlatillo": "arándano"
+  },
+  {
+    "id": "frutos_rojos",
+    "name": "Frutos rojos congelados",
+    "role": "fruta",
+    "proteinPer100": 0.9,
+    "carbPer100": 11.5,
+    "fatPer100": 0.4,
+    "fiberPer100": 4.5,
+    "kcalPer100": 53.2,
+    "gi": 40,
+    "costRel": 2,
+    "prepMin": 1,
+    "tags": [
+      "rapido",
+      "sin_cocinar",
+      "vegetariano"
+    ],
+    "servingG": 140,
+    "unit": "g",
+    "maxG": 200,
+    "serving": {
+      "unit": "taza",
+      "gramsPerUnit": 140,
+      "minUnits": 0.5,
+      "maxUnits": 1.25,
+      "step": 0.25
+    },
+    "nombreEnPlatillo": "frutos rojos"
   },
   {
     "id": "papaya",
@@ -2542,7 +2575,8 @@
       "minUnits": 0.5,
       "maxUnits": 1.25,
       "step": 0.25
-    }
+    },
+    "nombreEnPlatillo": "papaya"
   },
   {
     "id": "melon",
@@ -2570,7 +2604,8 @@
       "minUnits": 0.5,
       "maxUnits": 1.25,
       "step": 0.25
-    }
+    },
+    "nombreEnPlatillo": "melón"
   },
   {
     "id": "platano",
@@ -2600,7 +2635,8 @@
       "minUnits": 0.5,
       "maxUnits": 1,
       "step": 0.5
-    }
+    },
+    "nombreEnPlatillo": "plátano"
   },
   {
     "id": "naranja",
@@ -2629,7 +2665,8 @@
       "minUnits": 0.5,
       "maxUnits": 1,
       "step": 0.5
-    }
+    },
+    "nombreEnPlatillo": "naranja"
   },
   {
     "id": "toronja",
@@ -2645,6 +2682,7 @@
     "prepMin": 2,
     "tags": [
       "mexicano",
+      "no_licuado",
       "rapido",
       "sin_cocinar",
       "vegetariano"
@@ -2658,7 +2696,8 @@
       "minUnits": 0.5,
       "maxUnits": 1,
       "step": 0.5
-    }
+    },
+    "nombreEnPlatillo": "toronja"
   },
   {
     "id": "mango",
@@ -2686,7 +2725,8 @@
       "minUnits": 0.5,
       "maxUnits": 1.25,
       "step": 0.25
-    }
+    },
+    "nombreEnPlatillo": "mango"
   },
   {
     "id": "pina",
@@ -2714,7 +2754,8 @@
       "minUnits": 0.5,
       "maxUnits": 1.25,
       "step": 0.25
-    }
+    },
+    "nombreEnPlatillo": "piña"
   },
   {
     "id": "pera",
@@ -2743,7 +2784,8 @@
       "minUnits": 0.5,
       "maxUnits": 1,
       "step": 0.5
-    }
+    },
+    "nombreEnPlatillo": "pera"
   },
   {
     "id": "durazno",
@@ -2772,7 +2814,8 @@
       "minUnits": 0.5,
       "maxUnits": 1,
       "step": 0.5
-    }
+    },
+    "nombreEnPlatillo": "durazno"
   },
   {
     "id": "pasas",
@@ -2788,6 +2831,7 @@
     "prepMin": 1,
     "tags": [
       "mexicano",
+      "no_licuado",
       "rapido",
       "sin_cocinar",
       "vegetariano"
@@ -2801,7 +2845,8 @@
       "minUnits": 1,
       "maxUnits": 4,
       "step": 0.5
-    }
+    },
+    "nombreEnPlatillo": "pasas"
   },
   {
     "id": "psyllium",
@@ -2934,5 +2979,56 @@
       "maxUnits": 1,
       "step": 1
     }
+  },
+  {
+    "id": "cacao_polvo",
+    "name": "Cacao en polvo sin azucar",
+    "role": "suplemento",
+    "proteinPer100": 19.6,
+    "carbPer100": 57.9,
+    "fatPer100": 13.7,
+    "fiberPer100": 37,
+    "kcalPer100": 433.3,
+    "gi": null,
+    "costRel": 1,
+    "prepMin": 1,
+    "tags": [
+      "mexicano",
+      "rapido",
+      "sin_cocinar",
+      "vegetariano"
+    ],
+    "servingG": 10,
+    "unit": "g",
+    "maxG": 10,
+    "serving": {
+      "unit": "cda",
+      "gramsPerUnit": 5,
+      "minUnits": 1,
+      "maxUnits": 2,
+      "step": 1
+    }
+  },
+  {
+    "id": "jengibre",
+    "name": "Jengibre fresco",
+    "role": "suplemento",
+    "proteinPer100": 1.8,
+    "carbPer100": 17.8,
+    "fatPer100": 0.8,
+    "fiberPer100": 2,
+    "kcalPer100": 85.6,
+    "gi": null,
+    "costRel": 1,
+    "prepMin": 1,
+    "tags": [
+      "mexicano",
+      "rapido",
+      "sin_cocinar",
+      "vegetariano"
+    ],
+    "servingG": 5,
+    "unit": "g",
+    "maxG": 10
   }
 ]

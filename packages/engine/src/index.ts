@@ -45,6 +45,7 @@ export {
   opcionesDePlatillo,
   cambiarPlatillo,
   maxGrams,
+  nombreDePlatillo,
   type CambioDePlatilloInput,
   type MenuOptions,
   type OpcionDePlatillo,

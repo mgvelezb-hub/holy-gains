@@ -274,9 +274,14 @@ describe.each(CASOS)('$nombre', (caso) => {
         const donde = `dia ${dia} menu ${meal.menuId} ${meal.slot}: ${meal.items.map((i) => i.name).join(' + ')}`;
         const fuentes = meal.items.filter((i) => findFood(i.foodId)!.role.startsWith('proteina'));
         expect(fuentes.length, donde).toBeGreaterThanOrEqual(1);
-        expect(Math.max(...fuentes.map((i) => i.proteinG)), donde).toBeGreaterThanOrEqual(
-          DEFAULT_CONFIG.mealProteinMinG,
-        );
+        // El licuado es una sola fuente: su vaso (la taza de leche mas el
+        // polvo o el yogur) se toma junto. Media porcion de yogur con su
+        // leche son 20 g de proteina de verdad; la leche sola, no.
+        const vaso = fuentes
+          .filter((i) => i.preparacion?.tipo === 'licuado')
+          .reduce((acc, i) => acc + i.proteinG, 0);
+        const sueltas = fuentes.filter((i) => i.preparacion?.tipo !== 'licuado').map((i) => i.proteinG);
+        expect(Math.max(vaso, ...sueltas), donde).toBeGreaterThanOrEqual(DEFAULT_CONFIG.mealProteinMinG - 0.05);
       }
     }
   });

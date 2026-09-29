@@ -144,7 +144,16 @@ export interface Profile {
    * otras leches no salen en ningun lado del menu.
    */
   tipoLeche?: TipoLeche;
+  /**
+   * Con que se licua: la leche de la casa (`tipoLeche`) o agua. Sin el campo,
+   * leche. Es preferencia de consumo, no restriccion: con agua el licuado no
+   * lleva los macros de la taza de leche y el solver los mueve a otro lado.
+   */
+  baseLicuado?: BaseLicuado;
 }
+
+export const BASES_LICUADO = ['leche', 'agua'] as const;
+export type BaseLicuado = (typeof BASES_LICUADO)[number];
 
 export const TIPOS_LECHE = ['descremada', 'entera', 'deslactosada', 'deslactosada_light'] as const;
 export type TipoLeche = (typeof TIPOS_LECHE)[number];
@@ -370,6 +379,11 @@ export interface Food {
    * el otro se dosifica).
    */
   serving?: FoodServing;
+  /**
+   * Como se nombra dentro de un platillo, con acentos: "piña", "plátano".
+   * Es lo que arma "Licuado de piña con avena" cuando el licuado es plantilla.
+   */
+  nombreEnPlatillo?: string;
 }
 
 /**
@@ -435,6 +449,13 @@ export interface IngredientePreparacion {
   gramos?: number;
   /** Si el slot no lo admite (sin carbohidrato denso), se omite sin tirar el platillo. */
   opcional?: boolean;
+  /**
+   * La fruta del licuado como plantilla, no como alimento fijo: cualquier
+   * fruta del catalogo que pase las reglas, primero la de la despensa y luego
+   * las `preferidas`. El nombre del platillo la lleva (`{fruta}`), asi que
+   * cambiarla cambia el nombre: "Licuado de frambuesa con avena".
+   */
+  fruta?: { rolePool: FoodRole[]; preferidas?: string[] };
 }
 
 /**
@@ -445,6 +466,7 @@ export interface IngredientePreparacion {
  */
 export interface Preparacion {
   id: string;
+  /** Con plantilla de fruta lleva `{fruta}`: "Licuado de {fruta} con avena". */
   nombre: string;
   tipo: TipoPreparacion;
   slots: MealSlotId[];
