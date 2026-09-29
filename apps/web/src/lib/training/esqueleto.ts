@@ -64,6 +64,7 @@ export function esqueletoDeSemana(profile: TrainingProfile, weekStart: Date): Es
     isoWeek,
     timePerDay: profile.timePerDay,
     compactos: profile.compactDays,
+    ...(profile.historialCardio ? { historialCardio: profile.historialCardio } : {}),
   });
 
   return {

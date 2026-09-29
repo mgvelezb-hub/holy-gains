@@ -7,6 +7,7 @@ import {
   nivelHiitDeSemana,
   protocoloDelCatalogo,
   protocoloParaBloque,
+  semanasDeCardio,
   textoVelocidad,
 } from "@/lib/training/disciplinas/hiit-caminadora";
 
@@ -153,5 +154,26 @@ describe("unidades", () => {
     expect(textoVelocidad([4, 5])).toBe("4–5 km/h");
     expect(textoVelocidad([4, 5], "mph")).toBe("2.5–3.1 mph");
     expect(textoVelocidad([10, 12], "kmh")).toBe("10–12 km/h");
+  });
+});
+
+describe("semanasDeCardio (lo que ve el cargador)", () => {
+  it("agrupa por semana anterior, cuenta días distintos y se queda en la ventana", () => {
+    // Lunes 28-sep-2026 = semana ISO 40.
+    const semanas = semanasDeCardio({
+      lunes: "2026-09-28",
+      planeadas: 5,
+      fechas: [
+        "2026-09-21", "2026-09-22", "2026-09-22", "2026-09-23", "2026-09-24", // ISO 39: 4 días (uno doble: app + reloj)
+        "2026-09-15", // ISO 38
+        "2026-09-28", // esta semana: no cuenta
+        "2026-07-01", // fuera de la ventana de 8
+      ],
+    });
+    expect(semanas).toHaveLength(8);
+    expect(semanas.at(-1)).toEqual({ isoWeek: 39, planeadas: 5, registradas: 4 });
+    expect(semanas.at(-2)).toEqual({ isoWeek: 38, planeadas: 5, registradas: 1 });
+    expect(semanas[0]!.isoWeek).toBe(32);
+    expect(semanas.reduce((suma, semana) => suma + semana.registradas, 0)).toBe(5);
   });
 });

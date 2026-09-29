@@ -116,6 +116,27 @@ describe("H2 · el cardio después de pesas de Mau", () => {
     expect(cardio.every((sesion) => sesion.gymMinutes === 70)).toBe(true);
   });
 
+  it("N1: con historial, el HIIT de caminadora sube de nivel (15' + 5 min de caminata)", () => {
+    const plan = planDisciplines({
+      weekStart: MONDAY,
+      otherDisciplines: [
+        { discipline: "CARDIO", sessionsPerWeek: 5, modo: "DESPUES", cardio: { equipo: "CAMINADORA", tipo: "HIIT", nivel: "BASICO", minutos: 20 } },
+      ],
+      gymByDay: GYM_MAU,
+      niveles: {},
+      objetivo: "RECOMPOSICION",
+      isoWeek: 3,
+      timePerDay: TIEMPO_MAU,
+      compactos: true,
+      historialCardio: [
+        { isoWeek: 1, planeadas: 5, registradas: 5 },
+        { isoWeek: 2, planeadas: 5, registradas: 4 },
+      ],
+    });
+    const cardio = plan.sessions.filter((sesion) => sesion.discipline === "CARDIO");
+    expect(cardio[0]!.sesion?.cardio?.protocolo).toMatchObject({ duracion: 15, nivel: 2, caminataMin: 5 });
+  });
+
   it("planDisciplines: el día de menos de 45 min se avisa con su nombre, no se tira", () => {
     const plan = planDisciplines({
       weekStart: MONDAY,

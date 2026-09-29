@@ -64,6 +64,8 @@ export function prescribirSesion(input: {
    * que pasa con el cardio "después de pesas" (H2).
    */
   cardio?: PreferenciasCardio;
+  /** Solo CARDIO: semanas anteriores planeadas vs registradas (nivel del HIIT de caminadora, N1). */
+  historialCardio?: ReadonlyArray<{ isoWeek: number; planeadas: number; registradas: number }>;
 }): SesionDisciplina | null {
   if (input.discipline === "CARDIO" && input.cardio) {
     return prescribirCardio({
@@ -72,6 +74,7 @@ export function prescribirSesion(input: {
       objetivo: input.objetivo,
       prefs: input.cardio,
       nivelDisciplina: input.nivel,
+      ...(input.historialCardio ? { historial: input.historialCardio } : {}),
     });
   }
 

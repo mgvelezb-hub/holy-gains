@@ -12,6 +12,7 @@ import type { OtherSession } from "@/lib/training/disciplines";
 import { diasDelPlan, type DiaDelPlan } from "@/lib/training/semana";
 import {
   ensureWeekMaterialized,
+  historialCardioDe,
   otherPlanFor,
   otherSessionsFor,
   lastPerformances,
@@ -184,7 +185,12 @@ export async function weekView(
     };
   });
 
-  const disciplinas = otherPlanFor(profile, mondayOf(reference), workouts);
+  const disciplinas = otherPlanFor(
+    profile,
+    mondayOf(reference),
+    workouts,
+    await historialCardioDe(userId, profile, mondayOf(reference)),
+  );
   const weekStart = toISODate(mondayOf(reference));
 
   return {
@@ -233,7 +239,7 @@ function planVisible(
 export async function todayPlan(userId: string, profile: Profile, reference: Date): Promise<DiaDelPlan | null> {
   const workouts = await ensureWeekMaterialized(userId, profile, reference);
   const monday = mondayOf(reference);
-  const { sessions } = otherPlanFor(profile, monday, workouts);
+  const { sessions } = otherPlanFor(profile, monday, workouts, await historialCardioDe(userId, profile, monday));
   const iso = toISODate(reference);
   return planVisible(toISODate(monday), workouts, sessions, profile).find((dia) => dia.date === iso) ?? null;
 }
@@ -295,7 +301,12 @@ export async function todayOtherSession(
 ): Promise<OtherSession | null> {
   const workouts = await ensureWeekMaterialized(userId, profile, reference);
   const iso = toISODate(reference);
-  const sessions = otherSessionsFor(profile, mondayOf(reference), workouts);
+  const sessions = otherSessionsFor(
+    profile,
+    mondayOf(reference),
+    workouts,
+    await historialCardioDe(userId, profile, mondayOf(reference)),
+  );
   return sessions.find((session) => session.date === iso) ?? null;
 }
 

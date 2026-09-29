@@ -24,6 +24,7 @@ export const preferenciasCardioSchema = z.object({
   tipo: z.enum(TIPOS_CARDIO).optional(),
   nivel: z.enum(NIVELES_CARDIO).optional(),
   minutos: z.number().int().min(10).max(60).optional(),
+  unidadVelocidad: z.enum(["kmh", "mph"]).optional(),
 });
 
 export const cargaDisciplinaSchema = z.object({
@@ -47,7 +48,7 @@ export const cargaDisciplinaSchema = z.object({
  */
 export function parsePreferenciasCardio(raw: unknown): PreferenciasCardio | undefined {
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return undefined;
-  const { equipo, tipo, nivel, minutos } = raw as Record<string, unknown>;
+  const { equipo, tipo, nivel, minutos, unidadVelocidad } = raw as Record<string, unknown>;
 
   const prefs: PreferenciasCardio = {};
   if (typeof equipo === "string" && (EQUIPOS_CARDIO as readonly string[]).includes(equipo)) {
@@ -62,5 +63,6 @@ export function parsePreferenciasCardio(raw: unknown): PreferenciasCardio | unde
   if (typeof minutos === "number" && Number.isFinite(minutos)) {
     prefs.minutos = Math.max(10, Math.min(60, Math.round(minutos)));
   }
+  if (unidadVelocidad === "kmh" || unidadVelocidad === "mph") prefs.unidadVelocidad = unidadVelocidad;
   return Object.keys(prefs).length > 0 ? prefs : undefined;
 }

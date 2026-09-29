@@ -1,3 +1,4 @@
+import type { ProtocoloPrescrito, UnidadVelocidad } from "@/lib/training/disciplinas/hiit-caminadora";
 import type { Discipline } from "@/lib/training/types";
 
 /**
@@ -91,6 +92,14 @@ export type DetalleCardio = {
   } | null;
   calentamientoSeg: number;
   enfriamientoSeg: number;
+  /**
+   * Solo caminadora HIIT (N1): el protocolo minuto a minuto por velocidad
+   * real, del catálogo de `hiit-caminadora.ts`. Con él, `nivelMaquina` es el
+   * nivel del protocolo (0–5) e `intervalos` va en `null`.
+   */
+  protocolo?: ProtocoloPrescrito;
+  /** En qué unidad se leen las velocidades. Solo con `protocolo`. */
+  unidad?: UnidadVelocidad;
 };
 
 export type PrescripcionInput = {

@@ -326,6 +326,11 @@ export type PreferenciasCardio = {
   nivel?: NivelCardio;
   /** Minutos por sesión, 10 a 60. */
   minutos?: number;
+  /**
+   * En qué unidad se leen las velocidades de la caminadora (N1): km/h por
+   * default; mph para las máquinas que solo marcan millas.
+   */
+  unidadVelocidad?: "kmh" | "mph";
 };
 
 /** Nivel en el agua. Igual que `SwimLevel` en el schema. */
@@ -334,6 +339,13 @@ export type SwimLevel = (typeof SWIM_LEVELS)[number];
 
 /** Lo que el generador necesita saber de la atleta. */
 export type TrainingProfile = {
+  /**
+   * Las semanas anteriores de cardio —planeadas vs registradas— de donde sale
+   * el nivel del HIIT de caminadora (N1, `nivelHiitDeSemana`). No viene de la
+   * fila del perfil: lo carga `historialCardioDe` cuando hay base, y sin él
+   * el HIIT arranca en el piso del nivel declarado.
+   */
+  historialCardio?: Array<{ isoWeek: number; planeadas: number; registradas: number }>;
   /**
    * Presupuesto semanal de sesiones de entrenamiento. Se llama `liftingDays`
    * por historia: cuando solo había pesas, las sesiones y los días de pesas

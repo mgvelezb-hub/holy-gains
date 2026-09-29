@@ -159,6 +159,47 @@ export function nivelHiitDeSemana(input: {
   return { nivel: descarga ? Math.max(0, acumulado - 1) : acumulado, inicial, subidas, descarga };
 }
 
+/** Cuántas semanas atrás mira el cargador para el nivel del HIIT. */
+export const SEMANAS_DE_HISTORIAL = 8;
+
+/**
+ * Las `SEMANAS_DE_HISTORIAL` semanas anteriores a `lunes`, con los días en
+ * que hubo cardio registrado. Cuenta DÍAS distintos, no filas: el cardio de
+ * después de pesas es uno al día, y una sesión de la app más la del reloj
+ * que no se alcanzaron a enlazar no pueden valer por dos.
+ *
+ * `planeadas` es la carga de hoy (`sessionsPerWeek` de CARDIO): el perfil no
+ * guarda cuántas pedía cada semana vieja.
+ */
+export function semanasDeCardio(input: {
+  lunes: string;
+  planeadas: number;
+  fechas: readonly string[];
+  semanas?: number;
+}): SemanaCardio[] {
+  const cuantas = input.semanas ?? SEMANAS_DE_HISTORIAL;
+  const [y, m, d] = input.lunes.split("-").map(Number);
+  const salida: SemanaCardio[] = [];
+  for (let atras = cuantas; atras >= 1; atras -= 1) {
+    const inicio = new Date(Date.UTC(y!, m! - 1, d! - atras * 7));
+    const fin = new Date(Date.UTC(y!, m! - 1, d! - (atras - 1) * 7));
+    const desde = inicio.toISOString().slice(0, 10);
+    const hasta = fin.toISOString().slice(0, 10);
+    const dias = new Set(input.fechas.filter((fecha) => fecha >= desde && fecha < hasta));
+    salida.push({ isoWeek: isoWeekDe(inicio), planeadas: input.planeadas, registradas: dias.size });
+  }
+  return salida;
+}
+
+/** Semana ISO de una fecha UTC (la misma cuenta que `isoWeekNumber`). */
+function isoWeekDe(fecha: Date): number {
+  const copia = new Date(fecha);
+  const dia = copia.getUTCDay() || 7;
+  copia.setUTCDate(copia.getUTCDate() + 4 - dia);
+  const inicioDeAno = Date.UTC(copia.getUTCFullYear(), 0, 1);
+  return Math.ceil(((copia.getTime() - inicioDeAno) / 86_400_000 + 1) / 7);
+}
+
 /* ------------------------------------------------------------------------ */
 /* Unidades                                                                  */
 /* ------------------------------------------------------------------------ */

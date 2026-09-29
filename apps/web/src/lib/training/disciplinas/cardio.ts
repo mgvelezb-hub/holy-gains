@@ -7,6 +7,14 @@ import {
   type ObjetivoAtleta,
   type SesionDisciplina,
 } from "@/lib/training/disciplinas/tipos";
+import {
+  CAMINATA_SUAVE_KMH,
+  nivelHiitDeSemana,
+  protocoloParaBloque,
+  textoVelocidad,
+  type SemanaCardio,
+  type UnidadVelocidad,
+} from "@/lib/training/disciplinas/hiit-caminadora";
 import type { EquipoCardio, NivelCardio, PreferenciasCardio, TipoCardio } from "@/lib/training/types";
 
 /**
@@ -29,6 +37,13 @@ import type { EquipoCardio, NivelCardio, PreferenciasCardio, TipoCardio } from "
  * **Progresión: +1 nivel cada semana, o +5 min si el día los tiene** — la
  * regla del coach de Becca. Tres semanas subiendo y la cuarta de descarga,
  * el mismo ciclo que el resto de disciplinas (`factorDeSemana`).
+ *
+ * **Caminadora HIIT (N1): por velocidad real.** La caminadora no tiene
+ * "niveles": marca km/h (o mph). Ahí el bloque corre un protocolo del
+ * catálogo de Mau (`hiit-caminadora.ts`): la mayor duración de 10/15/25 que
+ * quepa, al nivel 0–5 que sale del declarado más las semanas cumplidas
+ * (`nivelHiitDeSemana`), y lo que sobre del bloque se camina suave a 5–6
+ * km/h. El nivel de máquina de arriba queda para elíptica, bici y escalera.
  */
 
 export const DEFAULTS_CARDIO: Required<PreferenciasCardio> = {
@@ -36,6 +51,7 @@ export const DEFAULTS_CARDIO: Required<PreferenciasCardio> = {
   tipo: "HIIT",
   nivel: "BASICO",
   minutos: 20,
+  unidadVelocidad: "kmh",
 };
 
 /** Nivel de máquina de arranque por nivel de cardio: básico 6–8, medio 9–12, avanzado 13+. */
@@ -74,6 +90,8 @@ export type CardioInput = {
   prefs?: PreferenciasCardio;
   /** Respaldo si `prefs.nivel` no se declaró. */
   nivelDisciplina?: NivelDisciplina;
+  /** Semanas anteriores de cardio: de ahí sube el nivel del HIIT de caminadora. */
+  historial?: readonly SemanaCardio[];
 };
 
 /** La etiqueta corta del bloque: "Cardio HIIT caminadora". */
@@ -90,6 +108,10 @@ export function prescribirCardio(input: CardioInput): SesionDisciplina {
   const nivel =
     input.prefs?.nivel ?? (input.nivelDisciplina ? DESDE_NIVEL_DISCIPLINA[input.nivelDisciplina] : DEFAULTS_CARDIO.nivel);
   const minutes = Math.max(10, Math.round(input.minutes));
+
+  if (equipo === "CAMINADORA" && tipo === "HIIT") {
+    return hiitEnCaminadora({ ...input, minutes }, nivel, input.prefs?.unidadVelocidad ?? DEFAULTS_CARDIO.unidadVelocidad);
+  }
 
   // Semanas 1-3 del ciclo suben un nivel cada una; la 4.ª descarga un nivel
   // por debajo del arranque.
@@ -179,6 +201,89 @@ export function prescribirCardio(input: CardioInput): SesionDisciplina {
       intervalos,
       calentamientoSeg: calentamiento * 60,
       enfriamientoSeg: enfriamiento * 60,
+    },
+  };
+}
+
+/**
+ * El HIIT de caminadora por velocidad real (N1): un protocolo del catálogo de
+ * Mau, más la caminata suave que rellene el bloque.
+ */
+function hiitEnCaminadora(input: CardioInput, nivel: NivelCardio, unidad: UnidadVelocidad): SesionDisciplina {
+  const { minutes, isoWeek, objetivo } = input;
+  const progreso = nivelHiitDeSemana({ nivel, isoWeek, historial: input.historial ?? [] });
+  const protocolo = protocoloParaBloque(minutes, progreso.nivel);
+  const primero = protocolo.tramos[0]!;
+  const ultimo = protocolo.tramos.at(-1)!;
+  const medio = protocolo.tramos.slice(1, -1);
+  const tope = medio.reduce((max, tramo) => (tramo.kmh[1] > max.kmh[1] ? tramo : max), medio[0] ?? primero);
+  const dur = (tramo: { desdeMin: number; hastaMin: number }) => tramo.hastaMin - tramo.desdeMin;
+  const titulo = `HIIT ${protocolo.duracion}' · Nivel ${protocolo.nivel}`;
+
+  const blocks: BloqueSesion[] = [
+    {
+      title: "Calentamiento",
+      detail: `${dur(primero)} min · ${textoVelocidad(primero.kmh, unidad)}`,
+      carga: dur(primero),
+      restSeconds: null,
+      note: "Fácil: subir el pulso poco a poco. Llegas de pesas, no en frío.",
+    },
+    {
+      title: titulo,
+      detail: `${medio.length} tramos · hasta ${textoVelocidad(tope.kmh, unidad)} (${tope.esfuerzo})`,
+      carga: ultimo.desdeMin - primero.hastaMin,
+      restSeconds: null,
+      note: "Cada tramo dice su velocidad y su esfuerzo. Si el Máximo no sale, quédate en el extremo bajo del rango.",
+    },
+    {
+      title: "Enfriamiento",
+      detail: `${dur(ultimo)} min · ${textoVelocidad(ultimo.kmh, unidad)}`,
+      carga: dur(ultimo),
+      restSeconds: null,
+      note: "Nunca bajarse en seco después de intervalos.",
+    },
+  ];
+  if (protocolo.caminataMin > 0) {
+    blocks.push({
+      title: "Caminata suave",
+      detail: `${protocolo.caminataMin} min · ${textoVelocidad(CAMINATA_SUAVE_KMH, unidad)}`,
+      carga: protocolo.caminataMin,
+      restSeconds: null,
+      note: "Lo que sobra del bloque, caminando: suma gasto sin sumar fatiga.",
+    });
+  }
+
+  const notes = [
+    "Progresión: +1 nivel por cada semana en que registres al menos el 80 % de tus sesiones de cardio; la 4.ª semana baja un nivel para descargar.",
+    "HIIT y continuo queman grasa igual por sesión (Keating 2017, Wewege 2017); el HIIT lo logra en menos tiempo.",
+  ];
+  if (protocolo.recortado) {
+    notes.push("Tu nivel aún no tiene protocolo de 10': es el de 15' recortado a 10 y cerrando en Fácil.");
+  }
+  if (progreso.descarga) notes.push("Semana de descarga: un nivel abajo, mismos minutos.");
+  const porObjetivo = notaDeObjetivo(objetivo);
+  if (porObjetivo) notes.push(porObjetivo);
+
+  return {
+    discipline: "CARDIO",
+    nivel: NIVEL_DISCIPLINA[nivel],
+    focus: "HIIT",
+    unidad: "min",
+    cargaTotal: blocks.reduce((suma, bloque) => suma + (bloque.carga ?? 0), 0),
+    minutes,
+    blocks,
+    deload: progreso.descarga,
+    notes,
+    cardio: {
+      equipo: "CAMINADORA",
+      tipo: "HIIT",
+      nivelMaquina: protocolo.nivel,
+      etiqueta: etiquetaCardio({ equipo: "CAMINADORA", tipo: "HIIT" }),
+      intervalos: null,
+      calentamientoSeg: dur(primero) * 60,
+      enfriamientoSeg: dur(ultimo) * 60,
+      protocolo,
+      unidad,
     },
   };
 }

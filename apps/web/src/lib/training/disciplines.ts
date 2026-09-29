@@ -657,6 +657,11 @@ export function planDisciplines(input: {
    * 1-3 únicamente).
    */
   compactos?: boolean;
+  /**
+   * Semanas anteriores de cardio, planeadas vs registradas: de ahí sube el
+   * nivel del HIIT de caminadora (N1). Ausente = arranca en el piso.
+   */
+  historialCardio?: ReadonlyArray<{ isoWeek: number; planeadas: number; registradas: number }>;
 }): DisciplinePlan {
   const { weekStart, otherDisciplines, gymByDay, niveles, objetivo, isoWeek, timePerDay, compactos } = input;
 
@@ -823,6 +828,7 @@ export function planDisciplines(input: {
           minutes: colocacion.minutes,
           objetivo,
           ...(discipline === "CARDIO" && prefsCardio ? { cardio: prefsCardio } : {}),
+          ...(discipline === "CARDIO" && input.historialCardio ? { historialCardio: input.historialCardio } : {}),
         }),
         note: colocacion.note,
         sharesDayWithGym: colocacion.sharesDayWithGym,

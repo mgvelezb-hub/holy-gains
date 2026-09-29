@@ -10,6 +10,7 @@ import { parseDayBlocks } from "@/lib/training/bloques-dia";
 import { emphasisFor } from "@/lib/training/emphasis";
 import type { OtherSession } from "@/lib/training/disciplines";
 import { esqueletoDeSemana } from "@/lib/training/esqueleto";
+import { SEMANAS_DE_HISTORIAL, semanasDeCardio, type SemanaCardio } from "@/lib/training/disciplinas/hiit-caminadora";
 import { mondayOf, sundayEndOf } from "@/lib/training/generate";
 import { esUnilateral } from "@/lib/training/coach";
 import { SCHEME_PREFERENCES } from "@/lib/training/schemes";
@@ -518,9 +519,11 @@ export function otherPlanFor(
   profile: Profile,
   monday: Date,
   workouts: Array<{ date: Date; exercisesJson: Prisma.JsonValue }>,
+  /** Semanas anteriores de cardio (`historialCardioDe`): el nivel del HIIT de caminadora (N1). */
+  historialCardio?: SemanaCardio[],
 ): OtherPlan {
   const mondayISO = toISODate(monday);
-  const training = toTrainingProfile(profile);
+  const training = { ...toTrainingProfile(profile), ...(historialCardio ? { historialCardio } : {}) };
 
   // I1: las disciplinas salen del MISMO esqueleto que el generador —no de los
   // `dayKind` guardados—, así que los minutos que el gym le cede al cardio
@@ -563,8 +566,39 @@ export function otherSessionsFor(
   profile: Profile,
   monday: Date,
   workouts: Array<{ date: Date; exercisesJson: Prisma.JsonValue }>,
+  historialCardio?: SemanaCardio[],
 ): OtherSession[] {
-  return otherPlanFor(profile, monday, workouts).sessions;
+  return otherPlanFor(profile, monday, workouts, historialCardio).sessions;
+}
+
+/**
+ * Las semanas anteriores de cardio de esta persona (N1): cuántas sesiones
+ * pedía el plan y en cuántos días registró cardio, para que el HIIT de
+ * caminadora suba de nivel con lo que de verdad hizo. Sin cardio en el
+ * perfil no consulta nada; si la consulta falla, el HIIT arranca en el piso
+ * del nivel declarado en vez de tirar la semana.
+ */
+export async function historialCardioDe(userId: string, profile: Profile, monday: Date): Promise<SemanaCardio[]> {
+  const carga = parseDisciplineLoads(profile.otherDisciplines).find((load) => load.discipline === "CARDIO");
+  if (!carga || carga.sessionsPerWeek <= 0) return [];
+  const lunes = toISODate(monday);
+  try {
+    const filas = await prisma.activitySession.findMany({
+      where: {
+        userId,
+        discipline: "CARDIO",
+        date: { gte: fromISODate(shiftISODate(lunes, -7 * SEMANAS_DE_HISTORIAL)), lt: fromISODate(lunes) },
+      },
+      select: { date: true },
+    });
+    return semanasDeCardio({
+      lunes,
+      planeadas: carga.sessionsPerWeek,
+      fechas: filas.map((fila) => isoFromDateColumn(fila.date)),
+    });
+  } catch {
+    return [];
+  }
 }
 
 /**
