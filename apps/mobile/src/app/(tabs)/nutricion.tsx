@@ -40,6 +40,7 @@ import { fonts, radius, spacing, type as typeScale, type Palette } from "@/lib/t
 import { actualizarComidaEnElReloj, enviarSiguienteComidaAlReloj } from "@/lib/reloj-nativo";
 import { comidaCompleta, comidasPendientesDesde, itemsParaAviso, renglonesPlanos } from "@/lib/siguiente-comida";
 import { syncWidgetData } from "@/lib/widget";
+import { avisoDeMenuPorMostrar, marcaAvisoDeMenuVisto } from "@/lib/aviso-menu";
 
 /**
  * Nutrición — tablero de scorecards de una línea.
@@ -78,6 +79,8 @@ export default function NutricionScreen() {
   // Tocar esta pestaña estando en ella regresa el scroll hasta arriba.
   const scrollRef = useScrollTop();
   const [plan, setPlan] = useState<PlanNutricion | null>(null);
+  // "Tu menú se actualizó con las reglas nuevas": una sola vez por decisión.
+  const [avisoMenu, setAvisoMenu] = useState<{ llave: string; texto: string } | null>(null);
   const [sinOnboarding, setSinOnboarding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -86,6 +89,12 @@ export default function NutricionScreen() {
     try {
       const nuevo = await getPlanNutricion();
       setPlan(nuevo);
+      void avisoDeMenuPorMostrar(nuevo)
+        .then((pendiente) => {
+          setAvisoMenu(pendiente);
+          if (pendiente) void marcaAvisoDeMenuVisto(pendiente.llave);
+        })
+        .catch(() => {});
       setSinOnboarding(false);
       setError(null);
 
@@ -174,6 +183,17 @@ export default function NutricionScreen() {
         <Text style={styles.titulo}>Nutrición</Text>
         <EngraneAjustes seccion="nutricion" />
       </View>
+
+      {avisoMenu && (
+        <ScoreCard
+          icon={Package}
+          tint={colors.champan}
+          title="Menú actualizado"
+          summary={avisoMenu.texto}
+          status={null}
+          onPress={() => setAvisoMenu(null)}
+        />
+      )}
 
       {(plan?.avisos ?? []).map((aviso) => (
         <ScoreCard
