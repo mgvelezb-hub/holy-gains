@@ -141,6 +141,7 @@ export default function ComidaHoyScreen() {
                 key={toma.supplement}
                 toma={toma}
                 conCuando
+                conAyuda={toma.supplement === tomas[0]?.supplement}
                 onToggle={(supplement) => void alternarToma(supplement)}
               />
             ))}

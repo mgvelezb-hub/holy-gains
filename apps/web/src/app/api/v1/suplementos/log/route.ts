@@ -44,7 +44,9 @@ export async function POST(request: Request): Promise<NextResponse> {
   const fila = await prisma.supplementLog.upsert({
     where: { userId_date_supplement: { userId: user.id, date: fromISODate(date), supplement } },
     create: { userId: user.id, date: fromISODate(date), supplement, taken },
-    update: { taken },
+    // Marcar renueva la hora: `createdAt` es cuándo se tomó ("tomada
+    // 14:05"), no cuándo se tocó por primera vez. Desmarcar no la toca.
+    update: taken ? { taken, createdAt: new Date() } : { taken },
   });
 
   return NextResponse.json({

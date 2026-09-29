@@ -30,7 +30,7 @@ import {
   type OpcionPlatillo,
   type TomaDelDia,
 } from "@/lib/api";
-import { agruparComida } from "@/lib/preparaciones";
+import { agruparComida, avisoDeCambioEnPlatillo } from "@/lib/preparaciones";
 import { tomasDeComida } from "@/lib/tomas-comida";
 import { fonts, radius, spacing, type as typeScale, type Palette } from "@/lib/theme";
 
@@ -142,6 +142,7 @@ export default function MenuScreen() {
                 menuNumber={menu.menuNumber}
                 onSwapped={load}
                 tomas={tomasDeComida(tomas, meal.slot)}
+                primeraToma={tomas[0]?.supplement}
                 onToggleToma={(supplement) => void alternarToma(supplement)}
               />
             </Card>
@@ -170,6 +171,7 @@ function ComidaDelMenu({
   menuNumber,
   onSwapped,
   tomas,
+  primeraToma,
   onToggleToma,
 }: {
   meal: MenuMeal;
@@ -177,6 +179,8 @@ function ComidaDelMenu({
   onSwapped: () => Promise<void>;
   /** Las tomas de hoy amarradas a esta comida. */
   tomas: TomaDelDia[];
+  /** La primera toma del día: la que lleva el InfoTip del check. */
+  primeraToma?: string;
   onToggleToma: (supplement: string) => void;
 }) {
   const { colors } = useTheme();
@@ -250,6 +254,7 @@ function ComidaDelMenu({
 
   function renglon(item: ItemDelMenu) {
     const equivalencia = equivalenciaDe(item.name);
+    const avisoPlatillo = avisoDeCambioEnPlatillo(item, (meal as ComidaConPlatillo).preparacion);
     const expandido = abierto === item.name;
     // El motor ya escribe la cantidad como se sirve —"2 cditas"—; si el
     // menú es viejo, se cae a la porción por pieza y luego a los gramos.
@@ -306,6 +311,7 @@ function ComidaDelMenu({
                 <TextoInfo>El cambio se queda: tu menú, tu widget y tu día lo muestran así.</TextoInfo>
               </InfoTip>
             )}
+            {avisoPlatillo && <Parrafo style={styles.equivalenciaAviso}>{avisoPlatillo}</Parrafo>}
             <ScrollView
               style={styles.equivalenciaLista}
               nestedScrollEnabled
@@ -392,7 +398,7 @@ function ComidaDelMenu({
         </>
       ) : null}
       {grupo.sueltos.map((item) => renglon(item))}
-      <TomasDeLaComida tomas={tomas} onToggle={onToggleToma} />
+      <TomasDeLaComida tomas={tomas} onToggle={onToggleToma} primeraDelDia={primeraToma} />
       {aviso && <Text style={styles.equivalenciaAviso}>{aviso}</Text>}
       {platilloAbierto && errorCambio && <Text style={styles.equivalenciaError}>{errorCambio}</Text>}
     </View>

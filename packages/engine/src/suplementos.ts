@@ -255,7 +255,10 @@ export interface TomaDelDia {
   slot: MealSlotId | null;
   /** Cuando, dicho: "con la comida". */
   cuando: string;
+  /** Ya se tomo hoy (el check escribe `SupplementLog`); no es "acepto tomarlo". */
   hecho: boolean;
+  /** ISO de cuando se marco, si se sabe: la app dice "tomada 14:05". */
+  hechaA?: string;
 }
 
 /**
@@ -320,9 +323,14 @@ function ordenDe(ancla: AnclaSuplemento, slot: MealSlotId | null, slots: readonl
 export function tomasDeHoy(input: {
   pautas: PautaSuplemento[];
   slots: readonly MealSlotId[];
-  logs: Array<{ supplement: string; taken: boolean }>;
+  logs: Array<{ supplement: string; taken: boolean; at?: Date | string }>;
 }): TomaDelDia[] {
   const hechas = new Set(input.logs.filter((l) => l.taken).map((l) => l.supplement));
+  const horaDe = new Map(
+    input.logs
+      .filter((l) => l.taken && l.at !== undefined)
+      .map((l) => [l.supplement, new Date(l.at as Date | string).toISOString()] as const),
+  );
   return input.pautas
     .map((p, i) => {
       const slot = slotDeAncla(p.ancla, input.slots);
@@ -338,6 +346,7 @@ export function tomasDeHoy(input: {
           slot,
           cuando: p.momento,
           hecho: hechas.has(p.supplement),
+          ...(horaDe.has(p.supplement) ? { hechaA: horaDe.get(p.supplement)! } : {}),
         } satisfies TomaDelDia,
       };
     })

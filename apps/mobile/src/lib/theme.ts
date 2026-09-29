@@ -71,6 +71,11 @@ export type Palette = {
   esfuerzoModeradoAlto: string;
   esfuerzoFuerte: string;
   esfuerzoMaximo: string;
+  /**
+   * Rol: lo que ya quedó hecho (la toma de suplemento marcada). Es el verde
+   * del esfuerzo moderado, que ya cumple contraste en los tres temas.
+   */
+  exito: string;
 };
 
 /** Oscuro — el tema original de la app (obsidiana + guinda + marfil + champán). Default. */
@@ -99,6 +104,7 @@ export const paletteDark: Palette = {
   superficie: "#251B1E",
   esfuerzoFacil: "#7DB4EA",
   esfuerzoModerado: "#7CCB9B",
+  exito: "#7CCB9B",
   esfuerzoModeradoAlto: "#E6BC5C",
   esfuerzoFuerte: "#F09A5A",
   esfuerzoMaximo: "#E0765C",
@@ -140,6 +146,7 @@ export const paletteLight: Palette = {
   superficie: "#FAF6F1",
   esfuerzoFacil: "#1F5DA6",
   esfuerzoModerado: "#1C7543",
+  exito: "#1C7543",
   esfuerzoModeradoAlto: "#855C00",
   esfuerzoFuerte: "#AD4A0C",
   esfuerzoMaximo: "#D41101",
@@ -179,6 +186,7 @@ export const paletteChampan: Palette = {
   superficie: "#141417",
   esfuerzoFacil: "#7DB4EA",
   esfuerzoModerado: "#7CCB9B",
+  exito: "#7CCB9B",
   esfuerzoModeradoAlto: "#E6BC5C",
   esfuerzoFuerte: "#F09A5A",
   esfuerzoMaximo: "#E0765C",

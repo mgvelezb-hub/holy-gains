@@ -2307,6 +2307,8 @@ export type TomaDelDia = {
   slot: string | null;
   cuando: string;
   hecho: boolean;
+  /** ISO de cuándo se marcó hoy; ausente si no se ha tomado (o en servidores viejos). */
+  hechaA?: string;
 };
 
 export type SugerenciaSuplemento = {
@@ -2396,6 +2398,20 @@ export function patchLeche(
   return apiFetch<{ tipoLeche: string; rearmado: boolean; congelado: boolean }>(
     `/api/v1/me/leche${rearmar ? "?rearmar=1" : ""}`,
     { method: "PATCH", body: { tipoLeche } },
+  );
+}
+
+/**
+ * `PATCH /api/v1/me/leche` con la base de licuados: agua o la leche elegida.
+ * Mismo flujo que la leche: rearma la semana, o pregunta si ya empezó.
+ */
+export function patchBaseLicuado(
+  baseLicuado: "leche" | "agua",
+  rearmar = false,
+): Promise<{ baseLicuado: string; rearmado: boolean; congelado: boolean }> {
+  return apiFetch<{ baseLicuado: string; rearmado: boolean; congelado: boolean }>(
+    `/api/v1/me/leche${rearmar ? "?rearmar=1" : ""}`,
+    { method: "PATCH", body: { baseLicuado } },
   );
 }
 

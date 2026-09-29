@@ -4,14 +4,17 @@ import { useCallback, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { InfoTip, TextoInfo } from "@/components/InfoTip";
 import { EmptyState, ErrorState, LoadingState } from "@/components/States";
 import { useTheme } from "@/context/theme";
 import { ApiError, getSuplementos, postLogSuplemento, type SuplementosResponse } from "@/lib/api";
 import { lineaToma } from "@/lib/suplementos";
+import { AYUDA_TOMAS, alternaToma, renglonToma } from "@/lib/tomas-comida";
 import { fonts, radius, spacing, type as typeScale, withAlpha, type Palette } from "@/lib/theme";
 
 /**
- * Tomas de hoy: una línea por toma, en el orden del día, y un toque la marca.
+ * Tomas de hoy: una línea por toma, en el orden del día, y un toque la marca
+ * como tomada (con su hora); otro toque la desmarca.
  *
  * No hay nada más aquí a propósito: el porqué y la evidencia viven en
  * Ajustes → Suplementos. Esta hoja es para el momento de tomarla.
@@ -43,7 +46,7 @@ export default function SuplementosHoyScreen() {
     const toma = data.tomas.find((t) => t.supplement === supplement);
     if (!toma) return;
     const anterior = data;
-    const tomas = data.tomas.map((t) => (t.supplement === supplement ? { ...t, hecho: !t.hecho } : t));
+    const tomas = alternaToma(data.tomas, supplement);
     const hechas = tomas.filter((t) => t.hecho).length;
     setData({ ...data, tomas, resumen: { ...data.resumen, hechas } });
     try {
@@ -86,7 +89,7 @@ export default function SuplementosHoyScreen() {
                 accessibilityState={{ checked: toma.hecho }}
               >
                 {toma.hecho ? (
-                  <Check size={20} color={colors.champan} strokeWidth={2.5} />
+                  <Check size={20} color={colors.exito} strokeWidth={2.5} />
                 ) : (
                   <Circle size={20} color={colors.paloRosa} strokeWidth={2} />
                 )}
@@ -94,10 +97,17 @@ export default function SuplementosHoyScreen() {
                   <Text style={[styles.nombre, toma.hecho && styles.hecho]} numberOfLines={1}>
                     {toma.nombre}
                   </Text>
-                  <Text style={styles.detalle} numberOfLines={1}>
-                    {lineaToma(toma)}
+                  {/* El check es "ya la tomé", no "la acepto": pendiente dice
+                      qué hacer, marcada dice a qué hora, sin tachar. */}
+                  <Text style={[styles.detalle, toma.hecho && styles.hecho]} numberOfLines={1}>
+                    {toma.hecho ? renglonToma(toma) : `${lineaToma(toma)} · tócalo al tomarlo`}
                   </Text>
                 </View>
+                {index === 0 && (
+                  <InfoTip titulo="Tus tomas">
+                    <TextoInfo>{AYUDA_TOMAS}.</TextoInfo>
+                  </InfoTip>
+                )}
               </Pressable>
             ))}
           </View>
@@ -141,6 +151,6 @@ const makeStyles = (colors: Palette) =>
     filaPresionada: { backgroundColor: withAlpha(colors.paloRosa, 0.08) },
     textos: { flex: 1, gap: 1 },
     nombre: { fontFamily: fonts.sansSemiBold, ...typeScale.body, color: colors.marfil },
-    hecho: { color: colors.paloRosa, textDecorationLine: "line-through" },
+    hecho: { color: colors.exito },
     detalle: { fontFamily: fonts.sans, ...typeScale.bodySm, color: colors.paloRosa },
   });

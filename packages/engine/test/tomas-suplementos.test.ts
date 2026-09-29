@@ -89,6 +89,20 @@ describe('tomasDeHoy — la pauta amarrada a las comidas del dia', () => {
     expect(tomas.find((t) => t.supplement === 'CREATINA')!.hecho).toBe(true);
     expect(tomas.find((t) => t.supplement === 'OMEGA3')!.hecho).toBe(false);
   });
+
+  it('la toma marcada trae a que hora se marco; la que no, nada', () => {
+    const at = new Date('2026-09-29T20:05:00.000Z');
+    const tomas = tomasDeHoy({
+      pautas: todas,
+      slots: DIA_MANANA,
+      logs: [
+        { supplement: 'CREATINA', taken: true, at },
+        { supplement: 'OMEGA3', taken: false, at },
+      ],
+    });
+    expect(tomas.find((t) => t.supplement === 'CREATINA')!.hechaA).toBe('2026-09-29T20:05:00.000Z');
+    expect(tomas.find((t) => t.supplement === 'OMEGA3')!.hechaA).toBeUndefined();
+  });
 });
 
 describe('resumenTomas — la linea de la tarjeta de Hoy', () => {

@@ -127,7 +127,7 @@ export async function tomasPara(
     slotsDeHoy ? Promise.resolve(slotsDeHoy) : slotsDelDia(userId, profile),
     prisma.supplementLog.findMany({
       where: { userId, date: fromISODate(hoy) },
-      select: { supplement: true, taken: true },
+      select: { supplement: true, taken: true, createdAt: true },
     }),
   ]);
 
@@ -136,6 +136,12 @@ export async function tomasPara(
     macros: { kcal: decision?.kcal ?? 0, proteinG: decision?.proteinG ?? 0, carbG: 0, fatG: 0, fiberG: 0 },
     phase: decision?.phase ?? profile.currentPhase,
   });
-  const tomas = tomasDeHoy({ pautas, slots, logs });
+  // `createdAt` es cuándo se marcó (el registro lo renueva al marcar): la
+  // app dice "tomada 14:05".
+  const tomas = tomasDeHoy({
+    pautas,
+    slots,
+    logs: logs.map((log) => ({ supplement: log.supplement, taken: log.taken, at: log.createdAt })),
+  });
   return { tomas, resumen: resumenTomas(tomas) };
 }

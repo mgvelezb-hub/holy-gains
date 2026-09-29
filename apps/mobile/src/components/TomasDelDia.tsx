@@ -2,9 +2,10 @@ import { Check, Circle } from "lucide-react-native";
 import { useCallback, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { InfoTip, TextoInfo } from "@/components/InfoTip";
 import { useTheme } from "@/context/theme";
 import { getSuplementos, postLogSuplemento, type TomaDelDia } from "@/lib/api";
-import { alternaToma, renglonToma } from "@/lib/tomas-comida";
+import { AYUDA_TOMAS, alternaToma, renglonToma } from "@/lib/tomas-comida";
 import { fonts, spacing, type as typeScale, withAlpha, type Palette } from "@/lib/theme";
 
 /**
@@ -49,17 +50,23 @@ export function useTomasDeHoy(): {
 }
 
 /**
- * Un renglón de toma: "+ Creatina 5 g" con su check. Con `cuando`, la toma
- * que no va con comida dice su momento ("30 min antes de dormir").
+ * Un renglón de toma. El check es "ya lo tomé hoy", no "acepto tomarlo" (eso
+ * vive en Ajustes → Suplementos): sin marcar dice "○ Creatina 5 g · tócalo al
+ * tomarlo"; marcado, "✓ Creatina 5 g · tomada 14:05" en verde, sin tachar.
+ * Tocar de nuevo desmarca. Con `cuando`, la toma que no va con comida dice su
+ * momento ("30 min antes de dormir"); con `conAyuda` (la primera del día),
+ * el InfoTip que lo explica.
  */
 export function RenglonToma({
   toma,
   onToggle,
   conCuando = false,
+  conAyuda = false,
 }: {
   toma: TomaDelDia;
   onToggle: (supplement: string) => void;
   conCuando?: boolean;
+  conAyuda?: boolean;
 }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -72,31 +79,46 @@ export function RenglonToma({
       hitSlop={4}
     >
       {toma.hecho ? (
-        <Check size={16} color={colors.champan} strokeWidth={2.5} />
+        <Check size={16} color={colors.exito} strokeWidth={2.5} />
       ) : (
         <Circle size={16} color={colors.paloRosa} strokeWidth={2} />
       )}
       <Text style={[styles.texto, toma.hecho && styles.hecho]} numberOfLines={1}>
         {renglonToma(toma)}
-        {conCuando ? ` · ${toma.cuando}` : ""}
+        {conCuando && !toma.hecho ? ` · ${toma.cuando}` : ""}
       </Text>
+      {conAyuda && (
+        <InfoTip titulo="Tus tomas">
+          <TextoInfo>{AYUDA_TOMAS}.</TextoInfo>
+        </InfoTip>
+      )}
     </Pressable>
   );
 }
 
-/** Las tomas de una comida, debajo de sus alimentos. Nada si no hay. */
+/**
+ * Las tomas de una comida, debajo de sus alimentos. Nada si no hay.
+ * `primeraDelDia` es la primera toma del día: esa lleva el InfoTip.
+ */
 export function TomasDeLaComida({
   tomas,
   onToggle,
+  primeraDelDia,
 }: {
   tomas: TomaDelDia[];
   onToggle: (supplement: string) => void;
+  primeraDelDia?: string;
 }) {
   if (tomas.length === 0) return null;
   return (
     <View>
       {tomas.map((toma) => (
-        <RenglonToma key={toma.supplement} toma={toma} onToggle={onToggle} />
+        <RenglonToma
+          key={toma.supplement}
+          toma={toma}
+          onToggle={onToggle}
+          conAyuda={toma.supplement === primeraDelDia}
+        />
       ))}
     </View>
   );
@@ -113,5 +135,5 @@ const makeStyles = (colors: Palette) =>
     },
     presionada: { backgroundColor: withAlpha(colors.paloRosa, 0.08) },
     texto: { flex: 1, fontFamily: fonts.sans, ...typeScale.body, color: colors.champan },
-    hecho: { color: colors.paloRosa, textDecorationLine: "line-through" },
+    hecho: { color: colors.exito },
   });

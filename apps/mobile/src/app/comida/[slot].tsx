@@ -175,6 +175,7 @@ export default function ComidaSlotScreen() {
                 <TomasDeLaComida
                   tomas={tomasDeComida(tomas, meal.slot)}
                   onToggle={(supplement) => void alternarToma(supplement)}
+                  primeraDelDia={tomas[0]?.supplement}
                 />
               </Card>
             )}
