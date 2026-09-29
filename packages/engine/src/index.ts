@@ -36,6 +36,7 @@ export {
 } from './phases.js';
 export { decide, decideAll, weeksBetween, type DecideOptions } from './adjust.js';
 export { NO_DENSE_CARB_PHASES, distribute } from './meals.js';
+export { MENU_ENGINE_VERSION } from './version.js';
 export {
   generateMenu,
   prepMinDelDia,
