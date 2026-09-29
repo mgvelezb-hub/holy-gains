@@ -19,13 +19,16 @@ export const PREPARACIONES_TODAS: PreferenciaPreparaciones = {
   cremas: true,
 };
 
-const MARCAS: Record<keyof PreferenciaPreparaciones, string> = {
+/** Tres marcas: los platillos (tacos, tostadas) siguen a las sopas en el motor. */
+type TipoConMarca = "licuados" | "sopas" | "cremas";
+
+const MARCAS: Record<TipoConMarca, string> = {
   licuados: "licuados",
   sopas: "sopas",
   cremas: "cremas",
 };
 
-const TIPOS = Object.keys(MARCAS) as Array<keyof PreferenciaPreparaciones>;
+const TIPOS = Object.keys(MARCAS) as TipoConMarca[];
 
 function normaliza(texto: string): string {
   return texto
