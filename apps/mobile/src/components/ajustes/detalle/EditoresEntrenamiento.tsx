@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { Card } from "@/components/Card";
+import { EditorNivelBase } from "@/components/EditorNivelBase";
 import { InfoTip, TextoInfo } from "@/components/InfoTip";
 import { NumberStepper } from "@/components/NumberStepper";
 import { Parrafo } from "@/components/Parrafo";
@@ -42,8 +43,10 @@ import {
 import type { PreferenciasCardioP1 } from "@/lib/api-cardio";
 import { CARDIO_POR_DEFECTO, OPCIONES_NIVEL, renglonDeCardio } from "@/lib/cardio";
 import {
+  baseSugerida,
   INFO_MODALIDAD,
   modalidadElegida,
+  necesitaBase,
   NOMBRE_MAQUINA,
   OPCIONES_MAQUINA,
   OPCIONES_MODALIDAD,
@@ -907,6 +910,9 @@ function EditorCardio({
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const modalidad = modalidadElegida(prefs.tipo);
+  const [editandoBase, setEditandoBase] = useState(false);
+  const equipo = prefs.equipo;
+  const baseGuardada = necesitaBase(equipo) ? prefs.nivelBase?.[equipo] : undefined;
 
   function filaDeChips<T extends string>(
     opciones: Array<{ valor: T; nombre: string }>,
@@ -981,6 +987,22 @@ function EditorCardio({
         </InfoTip>
       </View>
       <Text style={styles.valorBase}>{renglonNivelBase(prefs.equipo, prefs.nivelBase)}</Text>
+      {necesitaBase(equipo) &&
+        (editandoBase ? (
+          <EditorNivelBase
+            key={equipo}
+            maquina={equipo}
+            inicial={baseSugerida(equipo, baseGuardada)}
+            onGuardar={(valor) => {
+              onChange({ nivelBase: { ...prefs.nivelBase, [equipo]: valor } });
+              setEditandoBase(false);
+            }}
+          />
+        ) : (
+          <Pressable onPress={() => setEditandoBase(true)} hitSlop={8} accessibilityRole="button">
+            <Text style={styles.enlaceBase}>{baseGuardada === undefined ? "Ya sé mi nivel" : "Cambiar mi nivel base"}</Text>
+          </Pressable>
+        ))}
 
       <NumberStepper
         label="Minutos por sesión"
@@ -999,6 +1021,7 @@ const makeStyles = (colors: Palette) =>
     subHeader: { flexDirection: "row", alignItems: "center", gap: spacing.xs, marginTop: spacing.md },
     subLabel: { fontFamily: fonts.sansMedium, ...typeScale.bodySm, color: colors.paloRosa },
     valorBase: { fontFamily: fonts.sansSemiBold, ...typeScale.body, color: colors.marfil, marginTop: spacing.xs },
+    enlaceBase: { fontFamily: fonts.sansSemiBold, ...typeScale.bodySm, color: colors.champan, marginTop: spacing.xs },
     lista: { gap: spacing.sm, marginTop: spacing.md },
     fila: {
       borderRadius: radius.xl,

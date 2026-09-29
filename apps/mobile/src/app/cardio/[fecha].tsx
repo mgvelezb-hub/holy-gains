@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { EditorNivelBase } from "@/components/EditorNivelBase";
 import { Hoja } from "@/components/Hoja";
 import { InfoTip, TextoInfo } from "@/components/InfoTip";
 import { ProtocoloCardio } from "@/components/ProtocoloCardio";
@@ -34,12 +35,28 @@ import {
   olvidaCardioDelDia,
   type CardioDelDiaGuardado,
 } from "@/lib/cardio-en-curso";
-import { getCardioDelDia, programaDe, type EquipoCardioP1, type TipoCardioP1 } from "@/lib/api-cardio";
+import {
+  getCardioDelDia,
+  programaDe,
+  type EquipoCardioP1,
+  type NivelBase,
+  type TipoCardioP1,
+} from "@/lib/api-cardio";
 import { unidadDe } from "@/lib/hiit";
-import { conMaquinaYModalidad, OPCIONES_MAQUINA, OPCIONES_MODALIDAD } from "@/lib/programa-cardio";
+import {
+  baseSugerida,
+  conMaquinaYModalidad,
+  conNivelBase,
+  lineaDeCalibracion,
+  modalidadDelChip,
+  OPCIONES_MAQUINA,
+  OPCIONES_MODALIDAD,
+  renglonHojaCardio,
+  textoNivelBase,
+} from "@/lib/programa-cardio";
 import { todayISO } from "@/lib/streak";
 import { fonts, radius, spacing, type as typeScale, withAlpha, type Palette } from "@/lib/theme";
-import { getCachedWeek } from "@/lib/training-db";
+import { getCachedWeek, saveWeek } from "@/lib/training-db";
 import { guardarUnidadVelocidad } from "@/lib/unidad-velocidad";
 
 /**
@@ -51,6 +68,10 @@ import { guardarUnidadVelocidad } from "@/lib/unidad-velocidad";
  * fecha al servidor con los mismos minutos ("la caminadora está ocupada →
  * elíptica") sin tocar la preferencia; se guarda en el teléfono para que el
  * corredor corra esa tabla. "Usar siempre" sí la vuelve preferencia.
+ *
+ * Q1: con una máquina sin nivel base la sesión arranca con 5 min de
+ * calibración pero la modalidad elegida sigue marcada; una línea lo dice y
+ * "Ya sé mi nivel" abre el editor de Ajustes para saltarse la calibración.
  *
  * Antes la tabla vivía en un Modal de Rutinas que cortaba lo que pasaba del
  * 85 % y el corredor solo existía al cerrar la última serie de pesas: no
@@ -76,6 +97,8 @@ export default function CardioScreen() {
   const [cambiando, setCambiando] = useState(false);
   const [abierto, setAbierto] = useState(false);
   const [avisoCambio, setAvisoCambio] = useState<string | null>(null);
+  /** "Ya sé mi nivel": el editor del nivel base abierto dentro de la hoja. */
+  const [editandoBase, setEditandoBase] = useState(false);
 
   const cargar = useCallback(async () => {
     setError(null);
@@ -130,8 +153,8 @@ export default function CardioScreen() {
   }
 
   /** Pide al servidor el cardio de hoy con otra máquina o modalidad (mismos minutos). */
-  async function cambiarDelDia(cambios: { maquina?: EquipoCardioP1; modalidad?: TipoCardioP1 }) {
-    if (!cardio?.sesion?.cardio || cambiando) return;
+  async function cambiarDelDia(cambios: { maquina?: EquipoCardioP1; modalidad?: TipoCardioP1 }): Promise<boolean> {
+    if (!cardio?.sesion?.cardio || cambiando) return false;
     const actual = programaDe(cardio.sesion.cardio);
     const maquina = cambios.maquina ?? delDia?.maquina ?? (actual?.maquina as EquipoCardioP1 | undefined);
     const modalidad = cambios.modalidad ?? delDia?.modalidad;
@@ -150,10 +173,38 @@ export default function CardioScreen() {
       setDelDia(guardado);
       setCardio({ ...cardio, minutes: respuesta.minutes, sesion: respuesta.sesion });
       setUnidad(unidadDe(respuesta.sesion.cardio));
+      return true;
     } catch {
       setAvisoCambio("Sin señal no se puede recalcular la tabla. Inténtalo de nuevo.");
+      return false;
     } finally {
       setCambiando(false);
+    }
+  }
+
+  /**
+   * "Ya sé mi nivel": guarda el nivel base de esta máquina (el mismo editor de
+   * Ajustes) y vuelve a pedir el cardio para que ya no calibre. Con una
+   * elección de hoy se recalcula esa; si no, se refresca la semana del plan.
+   */
+  async function guardarBase(maquina: Parameters<typeof conNivelBase>[1], valor: NivelBase) {
+    setAvisoCambio(null);
+    try {
+      const me = await getMe();
+      const otras = me.profile?.otherDisciplines ?? [];
+      if (!otras.some((carga) => carga.discipline === "CARDIO")) return;
+      await patchEntrenamiento({ otherDisciplines: conNivelBase(otras, maquina, valor) });
+      setEditandoBase(false);
+      if (delDia) {
+        if (!(await cambiarDelDia({}))) return;
+      } else {
+        const semana = await getTrainingWeek(fecha);
+        await saveWeek(lunesDe(fecha), semana);
+        await cargar();
+      }
+      setAvisoCambio(`Nivel base guardado: ${textoNivelBase(maquina, valor)}. Hoy ya no calibras.`);
+    } catch {
+      setAvisoCambio("No se pudo guardar sin señal. Inténtalo de nuevo.");
     }
   }
 
@@ -190,6 +241,10 @@ export default function CardioScreen() {
   const programa = programaDe(detalle);
   const titulo = programa ? programa.titulo : tituloTarjetaCardio(detalle, cardio.minutes);
   const pasos = pasosDeCardio(detalle, cardio.minutes, unidad);
+  // Q1: la modalidad elegida siempre queda marcada, aunque hoy calibre.
+  const chipModalidad = programa ? modalidadDelChip(programa, delDia?.modalidad) : null;
+  const calibra = programa?.calibracion ?? null;
+  const lineaCalibra = programa ? lineaDeCalibracion(programa, delDia?.modalidad) : null;
 
   return (
     <SafeAreaView style={styles.screen} edges={["top", "bottom"]}>
@@ -233,10 +288,7 @@ export default function CardioScreen() {
               accessibilityRole="button"
             >
               <Text style={styles.hoyTitulo} numberOfLines={1}>
-                {delDia ? "Solo hoy · " : "Máquina y modalidad · "}
-                {OPCIONES_MAQUINA.find((o) => o.valor === programa.maquina)?.nombre ?? programa.maquina}
-                {" · "}
-                {OPCIONES_MODALIDAD.find((o) => o.valor === programa.modalidad)?.nombre ?? programa.modalidad}
+                {renglonHojaCardio({ programa, soloHoy: delDia !== null, ...(delDia?.modalidad ? { elegida: delDia.modalidad } : {}) })}
               </Text>
               <ChevronRight size={18} color={colors.paloRosa} strokeWidth={2} />
             </Pressable>
@@ -268,7 +320,7 @@ export default function CardioScreen() {
                 <Text style={styles.hoyLabel}>Modalidad de hoy</Text>
                 <View style={styles.chips}>
                   {OPCIONES_MODALIDAD.filter((opcion) => opcion.valor !== "VARIADO").map((opcion) => {
-                    const activo = programa.modalidad === opcion.valor;
+                    const activo = chipModalidad === opcion.valor;
                     return (
                       <Pressable
                         key={opcion.valor}
@@ -283,6 +335,33 @@ export default function CardioScreen() {
                     );
                   })}
                 </View>
+                {calibra && lineaCalibra && (
+                  <View style={styles.calibra}>
+                    <Text style={styles.calibraTexto}>{lineaCalibra}</Text>
+                    <InfoTip titulo="Por qué calibrar">
+                      <TextoInfo>
+                        Tu nivel base es lo que para ti es "moderado" en esta máquina: puedes hablar, pero solo
+                        en frases cortas. Los primeros 5 min subes un paso cada minuto y tocas «Aquí voy
+                        moderado»; lo que sigue de tu sesión se ajusta a ese valor. Mientras no lo marques, va
+                        con una base estimada.
+                      </TextoInfo>
+                    </InfoTip>
+                  </View>
+                )}
+                {calibra &&
+                  (editandoBase ? (
+                    <EditorNivelBase
+                      key={calibra.maquina}
+                      maquina={calibra.maquina}
+                      inicial={baseSugerida(calibra.maquina, programa.base)}
+                      textoGuardar="Guardar y no calibrar"
+                      onGuardar={(valor) => guardarBase(calibra.maquina, valor)}
+                    />
+                  ) : (
+                    <Pressable onPress={() => setEditandoBase(true)} hitSlop={8} accessibilityRole="button">
+                      <Text style={styles.enlace}>Ya sé mi nivel</Text>
+                    </Pressable>
+                  ))}
                 {cambiando && <Text style={styles.nota}>Recalculando con los mismos {cardio.minutes} min…</Text>}
                 {delDia && !cambiando && (
                   <View style={styles.hoyAcciones}>
@@ -401,6 +480,9 @@ const makeStyles = (colors: Palette) =>
     hoyCabeza: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 36 },
     hoyTitulo: { fontFamily: fonts.sansSemiBold, ...typeScale.bodySm, color: colors.marfil },
     hoyLabel: { fontFamily: fonts.sansMedium, ...typeScale.label, color: colors.paloRosa },
+    calibra: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
+    calibraTexto: { flex: 1, fontFamily: fonts.sansMedium, ...typeScale.bodySm, color: colors.champan },
+    enlace: { fontFamily: fonts.sansSemiBold, ...typeScale.bodySm, color: colors.champan },
     chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs },
     chip: {
       paddingHorizontal: spacing.md,

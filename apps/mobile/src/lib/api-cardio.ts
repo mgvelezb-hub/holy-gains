@@ -69,11 +69,25 @@ export type TramoCardio = {
 export type CalibracionCardio = {
   maquina: MaquinaConBase;
   instruccion: string;
-  pasos: Array<{ desdeMin: number; hastaMin: number; control: ControlMaquina; valor: NivelBase }>;
+  pasos: Array<{
+    desdeMin: number;
+    hastaMin: number;
+    control: ControlMaquina;
+    valor: NivelBase;
+    /**
+     * Q1: los tramos que siguen a la calibración recalculados con este valor
+     * (mismos minutos). Opcional: un programa viejo en caché no lo trae.
+     */
+    tramosSiMarcas?: TramoCardio[];
+  }>;
 };
 
 export type ProgramaCardio = {
   maquina: EquipoCardioP1;
+  /**
+   * La elegida, también cuando arranca calibrando (Q1: `calibracion` va al
+   * inicio). `CALIBRACION` solo llega de un programa viejo guardado.
+   */
   modalidad: ModalidadCardio | "CALIBRACION";
   nivel: number | null;
   duracion: number;

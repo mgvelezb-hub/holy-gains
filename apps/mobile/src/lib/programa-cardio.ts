@@ -289,3 +289,108 @@ export function textoParaRelojPrograma(input: {
     },
   };
 }
+
+/* ------------------------------------------------------------------------ */
+/* Calibración dentro de la modalidad elegida (Q1)                           */
+/* ------------------------------------------------------------------------ */
+
+type ModalidadDeChip = Exclude<TipoCardioP1, "CONTINUO" | "VARIADO">;
+
+/**
+ * El chip de modalidad que va marcado: la elegida para hoy si la hay (zona 2
+ * aunque se guarde `CONTINUO`; `VARIADO` no es chip, va la que resolvió el
+ * servidor), si no la del programa. Un programa viejo con `CALIBRACION` no
+ * marca ninguno: no se inventa.
+ */
+export function modalidadDelChip(programa: ProgramaCardio, elegida?: TipoCardioP1): ModalidadDeChip | null {
+  if (elegida && elegida !== "VARIADO") return modalidadElegida(elegida) as ModalidadDeChip;
+  return programa.modalidad === "CALIBRACION" ? null : programa.modalidad;
+}
+
+function nombreDeModalidad(programa: ProgramaCardio, elegida?: TipoCardioP1): string | null {
+  const modalidad = modalidadDelChip(programa, elegida);
+  return modalidad ? INFO_MODALIDAD[modalidad].nombre : null;
+}
+
+/** "Primera vez en esta máquina: 5 min para calibrar y sigue tu HIIT", o `null` si no calibra. */
+export function lineaDeCalibracion(programa: ProgramaCardio, elegida?: TipoCardioP1): string | null {
+  if (!programa.calibracion) return null;
+  const minutos = programa.tramos.filter((tramo) => tramo.fase === "calibracion").reduce((suma, t) => suma + t.hastaMin - t.desdeMin, 0);
+  const nombre = nombreDeModalidad(programa, elegida);
+  return `Primera vez en esta máquina: ${minutos} min para calibrar${nombre ? ` y sigue tu ${nombre}` : ""}`;
+}
+
+/** El renglón que abre la hoja: "Solo hoy · Elíptica · HIIT · calibra". */
+export function renglonHojaCardio(input: { programa: ProgramaCardio; soloHoy: boolean; elegida?: TipoCardioP1 }): string {
+  const { programa } = input;
+  const partes = [
+    input.soloHoy ? "Solo hoy" : "Máquina y modalidad",
+    OPCIONES_MAQUINA.find((opcion) => opcion.valor === programa.maquina)?.nombre ?? NOMBRE_MAQUINA[programa.maquina],
+    nombreDeModalidad(programa, input.elegida) ?? "Calibración",
+  ];
+  if (programa.calibracion) partes.push("calibra");
+  return partes.join(" · ");
+}
+
+function mismaBase(a: NivelBase, b: NivelBase): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/**
+ * "Aquí voy moderado": los tramos que siguen a la calibración pasan a los
+ * calculados con el valor marcado (`tramosSiMarcas`, mismas duraciones: el
+ * timer no se mueve). Sin calibración o de un servidor viejo, queda igual.
+ */
+export function programaConMarcado(programa: ProgramaCardio, valor: NivelBase): ProgramaCardio {
+  const paso = programa.calibracion?.pasos.find((p) => mismaBase(p.valor, valor));
+  if (!paso?.tramosSiMarcas) return programa;
+  const calibracion = programa.tramos.filter((tramo) => tramo.fase === "calibracion");
+  return { ...programa, tramos: [...calibracion, ...paso.tramosSiMarcas], base: valor, baseEstimada: false };
+}
+
+/** Una base razonable por máquina cuando no se sabe (la "básica" de la web). */
+const BASE_POR_DEFECTO: Record<MaquinaConBase, NivelBase> = {
+  ELIPTICA: 6,
+  BICI: 6,
+  ESCALERA: 6,
+  REMO: { ritmo500: "2:40" },
+  SKI_ERG: { ritmo500: "2:40" },
+  BICI_AIRE: { watts: 80 },
+};
+
+function formaDe(valor: NivelBase): "numero" | "ritmo" | "watts" {
+  if (typeof valor === "number") return "numero";
+  return "ritmo500" in valor ? "ritmo" : "watts";
+}
+
+/** Dónde arranca el editor del nivel base: la base que usa el programa si es de esa máquina, o la de por defecto. */
+export function baseSugerida(maquina: MaquinaConBase, conocida: NivelBase | null | undefined): NivelBase {
+  const defecto = BASE_POR_DEFECTO[maquina];
+  return conocida !== null && conocida !== undefined && formaDe(conocida) === formaDe(defecto) ? conocida : defecto;
+}
+
+const TOPE_RESISTENCIA: [number, number] = [1, 30];
+const TOPE_RITMO_SEG: [number, number] = [90, 240];
+const TOPE_WATTS: [number, number] = [20, 600];
+
+function entre(valor: number, [min, max]: [number, number]): number {
+  return Math.min(max, Math.max(min, valor));
+}
+
+function segundosDeRitmo(ritmo: string): number {
+  const [min, seg] = ritmo.split(":").map(Number);
+  return (min ?? 0) * 60 + (seg ?? 0);
+}
+
+function ritmoATexto(segundos: number): string {
+  return `${Math.floor(segundos / 60)}:${String(segundos % 60).padStart(2, "0")}`;
+}
+
+/** Un paso del editor; `+1` es más intenso: resistencia +1, ritmo 5 s más rápido, watts +10. */
+export function moverNivelBase(valor: NivelBase, sentido: 1 | -1): NivelBase {
+  if (typeof valor === "number") return entre(valor + sentido, TOPE_RESISTENCIA);
+  if ("ritmo500" in valor) {
+    return { ritmo500: ritmoATexto(entre(segundosDeRitmo(valor.ritmo500) - sentido * 5, TOPE_RITMO_SEG)) };
+  }
+  return { watts: entre(valor.watts + sentido * 10, TOPE_WATTS) };
+}

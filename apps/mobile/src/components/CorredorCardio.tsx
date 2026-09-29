@@ -32,6 +32,7 @@ import {
   indiceTrasCalibracion,
   nombreDeEsfuerzo,
   pasosDePrograma,
+  programaConMarcado,
   textoLpm,
   textoNivelBase,
   textoParaRelojPrograma,
@@ -53,7 +54,8 @@ export type ResultadoCardio = { registrado: boolean; minutos: number; mensaje: s
  * P1: con `programa`, cualquier máquina: lo que se pone en ella en grande
  * ("Resist. 10 · 140 SPM", "2:15/500 · 26 SPM"), el esfuerzo con su color,
  * el siguiente, la zona de pulso si hay reloj y, en la calibración, el botón
- * "Aquí voy moderado" que guarda ese paso como nivel base y sigue con zona 2.
+ * "Aquí voy moderado" que guarda ese paso como nivel base y sigue con la
+ * modalidad elegida, ya recalculada con ese valor.
  *
  * Tramo por tramo con su velocidad grande y el color de su esfuerzo, la
  * cuenta regresiva contra la HORA de término (iOS congela los timers en el
@@ -101,12 +103,17 @@ export function CorredorCardio({
   const tramos = esfuerzos;
 
   // Calibración: el nivel base que marcó. Solo cambia los NOMBRES (no las
-  // duraciones): los pasos del timer siguen siendo los mismos.
+  // duraciones): los pasos del timer siguen siendo los mismos. Q1: lo que
+  // sigue a la calibración se recalcula con ese valor (`tramosSiMarcas`).
   const [marcado, setMarcado] = useState<{ maquina: MaquinaConBase; valor: NivelBase } | null>(null);
   const [avisoBase, setAvisoBase] = useState<string | null>(null);
+  const vigente = useMemo(
+    () => (programa && marcado ? programaConMarcado(programa, marcado.valor) : programa),
+    [programa, marcado],
+  );
   const nombres = useMemo(
-    () => (programa && marcado ? pasosDePrograma(programa, unidad, marcado) : pasos),
-    [programa, marcado, pasos, unidad],
+    () => (vigente && marcado ? pasosDePrograma(vigente, unidad, marcado) : pasos),
+    [vigente, marcado, pasos, unidad],
   );
 
   const [estado, setEstado] = useState<EstadoCorredor | null>(null);
@@ -183,12 +190,12 @@ export function CorredorCardio({
   useEffect(() => {
     if (!conReloj || !estado || estado.terminado) return;
     const restanteSeg = restanteDelPasoSeg(estado, Date.now());
-    if (programa) {
-      enviarSesionAlReloj(textoParaRelojPrograma({ programa, paso: estado.paso, restanteSeg, unidad }));
+    if (vigente) {
+      enviarSesionAlReloj(textoParaRelojPrograma({ programa: vigente, paso: estado.paso, restanteSeg, unidad }));
     } else if (protocolo) {
       enviarSesionAlReloj(textoParaReloj({ protocolo, paso: estado.paso, restanteSeg, unidad }));
     }
-  }, [conReloj, programa, protocolo, unidad, estado?.paso, estado?.avisadoEn, estado?.terminado]);
+  }, [conReloj, vigente, protocolo, unidad, estado?.paso, estado?.avisadoEn, estado?.terminado]);
 
   // El cursor se guarda en cada movimiento (paso, pausa); al terminar se olvida.
   useEffect(() => {
@@ -245,7 +252,8 @@ export function CorredorCardio({
   /**
    * "Aquí voy moderado": el paso de calibración en curso es su nivel base en
    * esta máquina. Se guarda en las preferencias (relee el perfil antes: el
-   * PATCH manda la lista completa) y el corredor sigue con la zona 2.
+   * PATCH manda la lista completa) y el corredor sigue con la modalidad,
+   * recalculada con ese valor.
    */
   function aquiVoyModerado() {
     if (!estado || !programa?.calibracion) return;
@@ -291,7 +299,7 @@ export function CorredorCardio({
   const restante = restanteDelPasoSeg(estado, ahora);
   const enPausa = estado.hasta === null && !estado.terminado;
   const colorTramo = tramos ? colorDeEsfuerzo(tramos[estado.paso] ?? "Fácil", colors) : colors.champan;
-  const tramoPrograma = programa?.tramos[estado.paso];
+  const tramoPrograma = vigente?.tramos[estado.paso];
   // Grande, lo que se pone en la máquina; debajo, el esfuerzo con su color.
   const controlGrande = tramoPrograma && !estado.terminado ? controlDelTramo(tramoPrograma, unidad, marcado) : null;
   const pulso = conReloj && tramoPrograma && !estado.terminado ? textoLpm(tramoPrograma.fcLpm) : null;
