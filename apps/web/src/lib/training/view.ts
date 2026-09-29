@@ -8,6 +8,7 @@ import { readinessNote } from "@/lib/health/activity";
 import { sleepMinutesFor } from "@/lib/health/db";
 import { prisma } from "@/lib/prisma";
 import { signedExerciseVideoUrls } from "@/lib/storage";
+import { cardioDelDia as represcribirCardio, type CambiosCardioDelDia, type CardioDelDia } from "@/lib/training/cardio-del-dia";
 import type { OtherSession } from "@/lib/training/disciplines";
 import { diasDelPlan, type DiaDelPlan } from "@/lib/training/semana";
 import {
@@ -30,7 +31,7 @@ import {
 import { alternativesFor, type ExerciseAlternative } from "@/lib/training/substitutes";
 import { mondayOf, sundayEndOf } from "@/lib/training/generate";
 import { prefillSets } from "@/lib/training/progression";
-import { SCHEMES } from "@/lib/training/schemes";
+import { isoWeekNumber, SCHEMES } from "@/lib/training/schemes";
 import type { PlannedExercise, Warmup } from "@/lib/training/types";
 
 /**
@@ -242,6 +243,30 @@ export async function todayPlan(userId: string, profile: Profile, reference: Dat
   const { sessions } = otherPlanFor(profile, monday, workouts, await historialCardioDe(userId, profile, monday));
   const iso = toISODate(reference);
   return planVisible(toISODate(monday), workouts, sessions, profile).find((dia) => dia.date === iso) ?? null;
+}
+
+/**
+ * El cardio de `reference` con otra máquina y/o modalidad solo por ese día
+ * (P1b): mismos minutos, ordinal, historial y edad que el del plan. `null` si
+ * ese día no hay cardio con plan. No escribe nada.
+ */
+export async function cardioDelDia(
+  userId: string,
+  profile: Profile,
+  reference: Date,
+  cambios: CambiosCardioDelDia,
+): Promise<CardioDelDia | null> {
+  const workouts = await ensureWeekMaterialized(userId, profile, reference);
+  const monday = mondayOf(reference);
+  const historial = await historialCardioDe(userId, profile, monday);
+  const sesiones = otherSessionsFor(profile, monday, workouts, historial);
+  return represcribirCardio({
+    sesiones,
+    fecha: toISODate(reference),
+    training: { ...toTrainingProfile(profile), historialCardio: historial },
+    isoWeek: isoWeekNumber(monday),
+    cambios,
+  });
 }
 
 /** La sesión de hoy, o null si hoy toca descanso. */
