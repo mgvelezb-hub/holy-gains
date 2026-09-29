@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { Decision, MealPlan, Profile } from "@prisma/client";
-import type { Prisma } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import { catalogoCon, distribute, generateMenu, listaDeSuper } from "engine";
 import type { Food } from "engine";
 
@@ -9,6 +9,7 @@ import { rellenaEquivalencias } from "@/lib/coachy/equivalencias-backfill";
 import { toGroceries } from "@/lib/coachy/menu-view";
 import { perfilDelMotor } from "@/lib/coachy/perfil-motor";
 import { porcionNatural } from "@/lib/coachy/porciones";
+import { menusDesactualizados, semillaGuardada, sellaMenu } from "@/lib/coachy/version-menu";
 import type { EngineDecision } from "@/lib/engine-types";
 import { prisma } from "@/lib/prisma";
 
@@ -80,22 +81,29 @@ export async function syncMealPlans(
   const { engineProfile, extraFoods } = await perfilDelMotor(profile.userId, profile, {
     latestWeightKg: options.latestWeightKg ?? null,
   });
-  const plan = generateMenu(
-    engineDecision.meals,
-    engineProfile,
-    undefined,
-    semillaDelMenu(engineDecision.menuSeed, options),
-    { phase: engineDecision.phase, extraFoods },
-  );
+  const semilla = semillaDelMenu(engineDecision.menuSeed, options);
+  const plan = generateMenu(engineDecision.meals, engineProfile, undefined, semilla, {
+    phase: engineDecision.phase,
+    extraFoods,
+  });
 
-  return guardaMenus(decisionId, plan, true);
+  return guardaMenus(decisionId, plan, true, { semilla });
 }
 
-/** Guarda los dos menús de un plan del motor. `overwrite: false` deja intactos los que ya existen. */
+/** Lo que basta de Prisma para guardar menús: el cliente o una transacción. */
+type ClienteMenus = Pick<PrismaClient, "mealPlan">;
+
+/**
+ * Guarda los dos menús de un plan del motor. `overwrite: false` deja intactos
+ * los que ya existen. Cada comida se guarda sellada con la versión del motor
+ * y la semilla (`version-menu.ts`).
+ */
 async function guardaMenus(
   decisionId: string,
   plan: ReturnType<typeof generateMenu>,
   overwrite: boolean,
+  sello: { semilla: number; porReglasNuevas?: boolean },
+  cliente: ClienteMenus = prisma,
 ): Promise<MealPlan[]> {
   const saved: MealPlan[] = [];
 
@@ -105,13 +113,13 @@ async function guardaMenus(
     );
 
     const data = {
-      mealsJson: menu.meals as unknown as Prisma.InputJsonValue,
+      mealsJson: sellaMenu(menu.meals, sello) as unknown as Prisma.InputJsonValue,
       equivalencesJson: equivalences as unknown as Prisma.InputJsonValue,
       groceryListJson: plan.shoppingList as unknown as Prisma.InputJsonValue,
     };
 
     saved.push(
-      await prisma.mealPlan.upsert({
+      await cliente.mealPlan.upsert({
         where: { decisionId_menuNumber: { decisionId, menuNumber: menu.id } },
         create: { decisionId, menuNumber: menu.id, ...data },
         update: overwrite ? data : {},
@@ -176,6 +184,20 @@ export async function materializeMealPlans(
   profile: Profile,
   options: MaterializeOptions,
 ): Promise<MealPlan[]> {
+  const { plan, semilla } = await planDeLaDecision(decision, profile, options);
+  return guardaMenus(decision.id, plan, options.overwrite, { semilla });
+}
+
+/**
+ * El plan del motor para una decisión ya guardada: sus macros tal cual, el
+ * perfil de hoy (`perfilDelMotor`: despensa, leche, preparaciones, propios,
+ * suplementos) y la semilla de la decisión — o la que se pida.
+ */
+async function planDeLaDecision(
+  decision: Decision & { checkIn?: { date: Date } | null },
+  profile: Profile,
+  options: { latestWeightKg?: number | null; semilla?: number | null },
+): Promise<{ plan: ReturnType<typeof generateMenu>; semilla: number }> {
   const { engineProfile, extraFoods } = await perfilDelMotor(profile.userId, profile, {
     latestWeightKg: options.latestWeightKg ?? null,
   });
@@ -188,7 +210,8 @@ export async function materializeMealPlans(
   };
 
   const slots = distribute(targets, engineProfile, decision.phase as EngineDecision["phase"]);
-  const seed = decision.menuSeed ?? seedFromDate(decision.checkIn?.date ?? decision.createdAt);
+  const seed =
+    options.semilla ?? decision.menuSeed ?? seedFromDate(decision.checkIn?.date ?? decision.createdAt);
 
   const plan = generateMenu(slots, engineProfile, undefined, seed, {
     phase: decision.phase as EngineDecision["phase"],
@@ -197,7 +220,65 @@ export async function materializeMealPlans(
     extraFoods,
   });
 
-  return guardaMenus(decision.id, plan, options.overwrite);
+  return { plan, semilla: seed };
+}
+
+/** Regeneraciones por versión en curso en este proceso, por persona. */
+const actualizacionesEnCurso = new Map<string, Promise<MealPlan[]>>();
+
+/**
+ * Rehace los menús de la decisión vigente cuando se armaron con reglas más
+ * viejas que `MENU_ENGINE_VERSION` — sin acceso a producción, la única
+ * manera de que los menús de antes de la auditoría se pongan al día es que
+ * se rehagan solos al leerlos.
+ *
+ * - Misma decisión (macros y fase intactos), misma semilla (la guardada en el
+ *   menú; los de versión 1 no la traen y usan la de la decisión, igual que
+ *   "regenerar"), mismo perfil de hoy. `MealLog` no se toca.
+ * - Idempotente: si ya están en la versión vigente, no escribe nada.
+ * - Con candado: dentro del proceso, dos lecturas simultáneas de la misma
+ *   persona esperan la misma promesa; entre procesos, un candado de
+ *   Postgres por persona (`pg_advisory_xact_lock`) serializa la escritura y
+ *   el que llega segundo vuelve a leer, ve la versión nueva y se queda con
+ *   lo que escribió el primero.
+ * - Los cambios a mano (equivalencias elegidas, platillos cambiados) se
+ *   guardan dentro de `mealsJson` sin marca que los distinga de lo que armó
+ *   el motor, así que NO se pueden re-aplicar: se pierden. Por eso el menú
+ *   queda marcado (`menuPorReglasNuevas`) y el plan trae el aviso.
+ */
+export async function actualizaMenusPorVersion(
+  decision: Decision & { checkIn?: { date: Date } | null },
+  profile: Profile,
+  plans: MealPlan[],
+  latestWeightKg?: number | null,
+): Promise<MealPlan[]> {
+  if (!menusDesactualizados(plans)) return plans;
+
+  const llave = profile.userId;
+  const enCurso = actualizacionesEnCurso.get(llave);
+  if (enCurso) return enCurso;
+
+  const trabajo = (async () => {
+    const semilla = plans.map((plan) => semillaGuardada(plan.mealsJson)).find((s) => s !== null) ?? null;
+    const { plan, semilla: usada } = await planDeLaDecision(decision, profile, { latestWeightKg, semilla });
+
+    return prisma.$transaction(
+      async (tx) => {
+        await tx.$executeRaw`select pg_advisory_xact_lock(hashtext(${`menus-version:${llave}`}))`;
+        const actuales = await tx.mealPlan.findMany({
+          where: { decisionId: decision.id },
+          orderBy: { menuNumber: "asc" },
+        });
+        // Otro proceso terminó primero: su resultado manda.
+        if (actuales.length > 0 && !menusDesactualizados(actuales)) return actuales;
+        return guardaMenus(decision.id, plan, true, { semilla: usada, porReglasNuevas: true }, tx);
+      },
+      { maxWait: 10_000, timeout: 20_000 },
+    );
+  })().finally(() => actualizacionesEnCurso.delete(llave));
+
+  actualizacionesEnCurso.set(llave, trabajo);
+  return trabajo;
 }
 
 /**
@@ -373,7 +454,7 @@ export async function currentMealPlan(
   if (decision === null) return null;
 
   const existing = await mealPlansOf(decision.id);
-  if (existing.length > 0) {
+  if (existing.length > 0 && !menusDesactualizados(existing)) {
     return { decision, plans: await rellenaEquivalenciasGuardadas(existing, profile), materialized: false };
   }
 
@@ -382,13 +463,23 @@ export async function currentMealPlan(
     orderBy: { date: "desc" },
     select: { weightKg: true },
   });
+  const latestWeightKg =
+    latest?.weightKg === null || latest?.weightKg === undefined ? null : Number(latest.weightKg);
+
+  if (existing.length > 0) {
+    // Menús de reglas viejas: se rehacen solos. Si algo falla, se ven los de
+    // antes — mejor un menú viejo que una pantalla vacía.
+    const plans = await actualizaMenusPorVersion(decision, profile, existing, latestWeightKg).catch(
+      (error: unknown) => {
+        console.error("[coachy] no se pudieron actualizar los menús a la versión nueva", error);
+        return existing;
+      },
+    );
+    return { decision, plans: await rellenaEquivalenciasGuardadas(plans, profile), materialized: false };
+  }
 
   try {
-    const plans = await ensureMealPlans(
-      decision,
-      profile,
-      latest?.weightKg === null || latest?.weightKg === undefined ? null : Number(latest.weightKg),
-    );
+    const plans = await ensureMealPlans(decision, profile, latestWeightKg);
     return { decision, plans, materialized: plans.length > 0 };
   } catch (error) {
     // Un perfil incompleto no puede tumbar el home: la tarjeta lo dice y ya.

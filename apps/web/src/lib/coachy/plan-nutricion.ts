@@ -37,6 +37,7 @@ import {
   type SenalesClinicas,
 } from "@/lib/coachy/plan-nutricion-reglas";
 import { preferenciaDePreparaciones } from "@/lib/coachy/preparaciones";
+import { avisoDeMenuActualizado } from "@/lib/coachy/version-menu";
 import type { EngineDecision, EngineProfile } from "@/lib/engine-types";
 import { decimalToNumber, shiftISODate, toISODate } from "@/lib/format";
 import { activityWindow } from "@/lib/health/db";
@@ -128,6 +129,12 @@ export interface PlanDeNutricion {
   avisos: AvisoDelPlan[];
   senales: SenalesClinicas;
   materialized: boolean;
+  /**
+   * "Tu menú se actualizó con las reglas nuevas" mientras los menús vigentes
+   * sean los que se rehicieron solos al subir `MENU_ENGINE_VERSION`
+   * (`actualizaMenusPorVersion`); `null` si no. La app lo muestra una vez.
+   */
+  aviso: string | null;
 }
 
 /** `LUN`..`DOM` de una fecha ISO. */
@@ -296,6 +303,7 @@ export async function planDeNutricion(
     avisos,
     senales,
     materialized: actual?.materialized ?? false,
+    aviso: avisoDeMenuActualizado(plans),
   };
 }
 
