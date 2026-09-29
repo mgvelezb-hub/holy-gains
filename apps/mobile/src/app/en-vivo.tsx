@@ -42,6 +42,7 @@ import {
   type WeekView,
 } from "@/lib/api";
 import { actividadDeCardio, pasosDeCardio, tituloTarjetaCardio } from "@/lib/cardio";
+import { colorDeEsfuerzo, debeAvisarCambio, protocoloDe, textoParaReloj, tramosDeSesion, unidadDe } from "@/lib/hiit";
 import {
   alCerrarSerieEnElReloj,
   alFrecuenciaDelReloj,
@@ -243,6 +244,11 @@ export default function EnVivoScreen() {
     "pendiente",
   );
   const [cardioMsg, setCardioMsg] = useState<string | null>(null);
+  /**
+   * N1: en qué paso del protocolo HIIT ya se avisó "cambia la velocidad"
+   * (una vez por tramo, 5 s antes). `null` = todavía en ninguno.
+   */
+  const [avisadoEnPaso, setAvisadoEnPaso] = useState<number | null>(null);
   const [calentamientoIniciado, setCalentamientoIniciado] = useState(false);
   const [pasoCalentamiento, setPasoCalentamiento] = useState(0);
   /**
@@ -514,6 +520,36 @@ export default function EnVivoScreen() {
     avanzarCalentamiento(pasoCalentamiento + 1);
   }, [calentamientoHasta, ahoraCalentamiento]);
 
+  // N1 — el HIIT de caminadora: 5 s antes de cada cambio de velocidad, una
+  // háptica de aviso (una sola vez por tramo) para que dé tiempo de tocar
+  // los botones de la máquina.
+  const protocoloCardio = fase === "cardio" ? protocoloDe(cardioDelDia?.sesion?.cardio) : null;
+  useEffect(() => {
+    if (!protocoloCardio || calentamientoHasta === null) return;
+    const restante = Math.ceil((calentamientoHasta - ahoraCalentamiento) / 1000);
+    const hayCambio = pasoCalentamiento < tramosDeSesion(protocoloCardio).length - 1;
+    if (debeAvisarCambio({ restanteSeg: restante, avisadoEn: avisadoEnPaso, paso: pasoCalentamiento, hayCambio })) {
+      setAvisadoEnPaso(pasoCalentamiento);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    }
+  }, [protocoloCardio, calentamientoHasta, ahoraCalentamiento, pasoCalentamiento, avisadoEnPaso]);
+
+  // Al reloj, por el canal de sesión que ya existe: el tramo actual como
+  // texto corto, al empezar cada tramo y al avisar el cambio. El reloj de hoy
+  // pinta el título; leer `cardio` aparte queda para `targets/watch`.
+  useEffect(() => {
+    if (!conReloj || !protocoloCardio || calentamientoHasta === null) return;
+    const restante = Math.max(0, Math.ceil((calentamientoHasta - Date.now()) / 1000));
+    enviarSesionAlReloj(
+      textoParaReloj({
+        protocolo: protocoloCardio,
+        paso: pasoCalentamiento,
+        restanteSeg: restante,
+        unidad: unidadDe(cardioDelDia?.sesion?.cardio),
+      }),
+    );
+  }, [conReloj, protocoloCardio, pasoCalentamiento, avisadoEnPaso, calentamientoHasta === null]);
+
   // Al volver de otra app —el video de la técnica, un mensaje— la hora se
   // pone al día de inmediato, sin esperar el siguiente tick.
   useEffect(() => {
@@ -747,7 +783,7 @@ export default function EnVivoScreen() {
   /** Los pasos que corre el timer: los del calentamiento o, al final, los del cardio. */
   function pasosEnCurso(): WarmupStep[] {
     if (fase === "cardio" && cardioDelDia?.sesion?.cardio) {
-      return pasosDeCardio(cardioDelDia.sesion.cardio, cardioDelDia.minutes);
+      return pasosDeCardio(cardioDelDia.sesion.cardio, cardioDelDia.minutes, unidadDe(cardioDelDia.sesion.cardio));
     }
     return sesion?.warmup?.pasos ?? [];
   }
@@ -758,8 +794,9 @@ export default function EnVivoScreen() {
     setCalentamientoIniciado(true);
     setPasoCalentamiento(0);
     const primero = cardioDelDia?.sesion?.cardio
-      ? pasosDeCardio(cardioDelDia.sesion.cardio, cardioDelDia.minutes)[0]
+      ? pasosDeCardio(cardioDelDia.sesion.cardio, cardioDelDia.minutes, unidadDe(cardioDelDia.sesion.cardio))[0]
       : undefined;
+    setAvisadoEnPaso(null);
     setCalentamientoHasta(primero ? Date.now() + primero.segundos * 1000 : null);
   }
 
@@ -1195,10 +1232,39 @@ export default function EnVivoScreen() {
           </Text>
           <View style={styles.descanso}>
             <Timer size={20} color={colors.champan} strokeWidth={2} />
-            <Text style={styles.descansoReloj}>{formatoReloj(restanteCalentamiento ?? 0)}</Text>
-            <Text style={styles.descansoTexto}>{pasosCardio[pasoCalentamiento]?.nombre ?? ""}</Text>
+            {protocoloCardio ? (
+              // N1: el tramo actual grande, en km/h o mph y con el color de
+              // su esfuerzo; la cuenta regresiva del tramo; el siguiente en
+              // una línea, y el aviso 5 s antes de cambiar la velocidad.
+              <>
+                <Text
+                  style={[
+                    styles.tramoActual,
+                    { color: colorDeEsfuerzo(tramosDeSesion(protocoloCardio)[pasoCalentamiento]?.esfuerzo ?? "Fácil", colors) },
+                  ]}
+                  accessibilityRole="header"
+                >
+                  {pasosCardio[pasoCalentamiento]?.nombre ?? ""}
+                </Text>
+                <Text style={styles.descansoReloj}>{formatoReloj(restanteCalentamiento ?? 0)}</Text>
+                {avisadoEnPaso === pasoCalentamiento && pasosCardio[pasoCalentamiento + 1] ? (
+                  <Text style={styles.avisoCambio} accessibilityLiveRegion="assertive">
+                    Cambia a {pasosCardio[pasoCalentamiento + 1]!.nombre}
+                  </Text>
+                ) : pasosCardio[pasoCalentamiento + 1] ? (
+                  <Text style={styles.descansoTexto}>Luego: {pasosCardio[pasoCalentamiento + 1]!.nombre}</Text>
+                ) : (
+                  <Text style={styles.descansoTexto}>Último tramo</Text>
+                )}
+              </>
+            ) : (
+              <>
+                <Text style={styles.descansoReloj}>{formatoReloj(restanteCalentamiento ?? 0)}</Text>
+                <Text style={styles.descansoTexto}>{pasosCardio[pasoCalentamiento]?.nombre ?? ""}</Text>
+              </>
+            )}
             <Text style={styles.progresoTexto}>
-              Paso {pasoCalentamiento + 1} de {pasosCardio.length}
+              {protocoloCardio ? "Tramo" : "Paso"} {pasoCalentamiento + 1} de {pasosCardio.length}
             </Text>
             <View style={styles.descansoBotones}>
               <Pressable onPress={saltarPasoCalentamiento} style={styles.botonSecundario}>
@@ -2016,6 +2082,8 @@ const makeStyles = (colors: Palette) =>
       color: colors.champan,
     },
     descansoTexto: { fontFamily: fonts.sans, ...typeScale.body, color: colors.paloRosa },
+    tramoActual: { fontFamily: fonts.sansBold, ...typeScale.title, textAlign: "center" },
+    avisoCambio: { fontFamily: fonts.sansSemiBold, ...typeScale.body, color: colors.champan, textAlign: "center" },
     descansoBotones: { flexDirection: "row", gap: spacing.md, marginTop: spacing.md },
     botonSecundario: {
       flexDirection: "row",
