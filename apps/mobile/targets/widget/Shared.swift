@@ -30,6 +30,38 @@ extension Color {
 
 // MARK: - Datos compartidos
 
+/** Un renglón de la siguiente comida (`RenglonComida` en src/lib/siguiente-comida.ts). */
+struct RenglonComida: Codable, Hashable {
+    let display: String
+    /// Este renglón ES el platillo (licuado, sopa); los `enPlatillo` que siguen van dentro.
+    var platillo: Bool? = nil
+    var enPlatillo: Bool? = nil
+}
+
+/** La siguiente comida completa que escribe `syncWidgetData` en la llave `comidaDetalle`. */
+struct ComidaDetalle: Codable {
+    struct Toma: Codable, Hashable {
+        let nombre: String
+        let dosis: String
+    }
+
+    let nombre: String
+    let hora: String
+    let items: [RenglonComida]
+    let tomas: [Toma]
+}
+
+/**
+ Lo que cabe en `capacidad` renglones sin cortar callado: si no cabe todo, el
+ último renglón visible se vuelve "+N más". Espejo de `recortarConAviso`.
+ */
+func recortarConAviso(_ renglones: [String], capacidad: Int) -> [String] {
+    if renglones.count <= capacidad { return renglones }
+    if capacidad <= 0 { return ["+\(renglones.count) más"] }
+    let visibles = Array(renglones.prefix(capacidad - 1))
+    return visibles + ["+\(renglones.count - visibles.count) más"]
+}
+
 /** Espejo de `WidgetPayload` (src/lib/widget.ts), ya leído de UserDefaults. */
 struct WidgetData {
     static let appGroup = "group.com.holygains.app"
@@ -43,6 +75,11 @@ struct WidgetData {
     let comidaLabel: String?
     let comidaHora: String?
     let comidaItems: [String]
+    /// Todos los renglones de la comida, con el platillo marcado. Si la app
+    /// todavía no escribe `comidaDetalle`, salen de `comidaItems`.
+    let comidaRenglones: [RenglonComida]
+    /// "+ Ashwagandha 300 mg", una por toma amarrada a la comida.
+    let comidaTomas: [String]
 
     /** true si la app nunca ha sincronizado nada — activa el estado "sin datos". */
     var isEmpty: Bool {
@@ -57,6 +94,10 @@ struct WidgetData {
             .map { String($0) }
             .filter { !$0.isEmpty }
 
+        let detalle = (defaults?.string(forKey: "comidaDetalle"))
+            .flatMap { $0.data(using: .utf8) }
+            .flatMap { try? JSONDecoder().decode(ComidaDetalle.self, from: $0) }
+
         return WidgetData(
             racha: defaults?.object(forKey: "racha") as? Int,
             mejorRacha: defaults?.object(forKey: "mejorRacha") as? Int,
@@ -66,7 +107,9 @@ struct WidgetData {
             hoyHecho: (defaults?.object(forKey: "hoyHecho") as? Int) == 1,
             comidaLabel: defaults?.string(forKey: "comidaLabel"),
             comidaHora: defaults?.string(forKey: "comidaHora"),
-            comidaItems: items
+            comidaItems: items,
+            comidaRenglones: detalle?.items ?? items.map { RenglonComida(display: $0) },
+            comidaTomas: (detalle?.tomas ?? []).map { "+ \($0.nombre) \($0.dosis)" }
         )
     }
 }

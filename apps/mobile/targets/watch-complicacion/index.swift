@@ -137,57 +137,205 @@ struct VistaHoy: View {
     }
 }
 
+// MARK: - La siguiente comida
+
+/// Un renglón de la comida (espejo de `SiguienteComidaReloj.Renglon` del target `watch`).
+struct RenglonComida: Codable, Hashable {
+    let display: String
+    var platillo: Bool? = nil
+    var enPlatillo: Bool? = nil
+}
+
+struct TomaComida: Codable, Hashable {
+    let nombre: String
+    let dosis: String
+}
+
+/// Una comida completa como la dejó escrita `Compartido.guardar(comida:)`.
+struct ComidaGuardada: Codable {
+    let nombre: String
+    let hora: String
+    let items: [RenglonComida]
+    let tomas: [TomaComida]
+
+    /// Alimentos y tomas en una sola lista, como se leen de corrido.
+    var renglones: [String] {
+        items.map(\.display) + tomas.map { "+ \($0.nombre) \($0.dosis)" }
+    }
+
+    /// Hoy a la `hora` ("21:00"); `nil` si no es una hora legible.
+    func fecha(hoy: Date = Date()) -> Date? {
+        let partes = hora.split(separator: ":").compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
+        guard partes.count == 2 else { return nil }
+        return Calendar.current.date(bySettingHour: partes[0], minute: partes[1], second: 0, of: hoy)
+    }
+
+    /// La comida que hay escrita: la completa si el teléfono ya la mandó, y
+    /// si no, la del resumen (nombre, hora y los renglones que traiga).
+    static func leer() -> (actual: ComidaGuardada?, luego: [ComidaGuardada]) {
+        guard let disco = UserDefaults(suiteName: GRUPO) else { return (nil, []) }
+        let nombre = disco.string(forKey: "reloj.comida") ?? ""
+        guard !nombre.isEmpty else { return (nil, []) }
+
+        let actual = ComidaGuardada(
+            nombre: nombre,
+            hora: disco.string(forKey: "reloj.comidaHora") ?? "",
+            items: decodificar([RenglonComida].self, disco.string(forKey: "reloj.comidaItems")) ?? [],
+            tomas: decodificar([TomaComida].self, disco.string(forKey: "reloj.comidaTomas")) ?? []
+        )
+        let luego = decodificar([ComidaGuardada].self, disco.string(forKey: "reloj.comidasLuego")) ?? []
+        return (actual, luego)
+    }
+
+    private static func decodificar<T: Decodable>(_ tipo: T.Type, _ json: String?) -> T? {
+        guard let data = json?.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(tipo, from: data)
+    }
+}
+
+/**
+ Lo que cabe en `capacidad` renglones sin cortar callado: si no cabe todo, el
+ último visible dice "+N más". Mismo criterio que el widget del teléfono.
+ */
+func recortarConAviso(_ renglones: [String], capacidad: Int) -> [String] {
+    if renglones.count <= capacidad { return renglones }
+    if capacidad <= 0 { return ["+\(renglones.count) más"] }
+    let visibles = Array(renglones.prefix(capacidad - 1))
+    return visibles + ["+\(renglones.count - visibles.count) más"]
+}
+
+struct EntradaComida: TimelineEntry {
+    let date: Date
+    let comida: ComidaGuardada?
+}
+
+/**
+ Una entrada ahora y una más por cada comida que sigue hoy, que arranca
+ media hora después de la hora de la anterior: a las 21:30 la carátula ya
+ dice el desayuno de mañana… si el teléfono lo mandó en `luego`; si no, se
+ queda la última hasta que llegue dato nuevo (la app recarga el timeline cada
+ vez que guarda).
+ */
+struct ProveedorComida: TimelineProvider {
+    static let margen: TimeInterval = 30 * 60
+
+    func placeholder(in context: Context) -> EntradaComida {
+        EntradaComida(
+            date: Date(),
+            comida: ComidaGuardada(
+                nombre: "Cena",
+                hora: "21:00",
+                items: [RenglonComida(display: "Pavo — 120 g"), RenglonComida(display: "3 tortillas de maíz")],
+                tomas: []
+            )
+        )
+    }
+
+    func getSnapshot(in context: Context, completion: @escaping (EntradaComida) -> Void) {
+        completion(EntradaComida(date: Date(), comida: ComidaGuardada.leer().actual ?? placeholder(in: context).comida))
+    }
+
+    func getTimeline(in context: Context, completion: @escaping (Timeline<EntradaComida>) -> Void) {
+        let ahora = Date()
+        let (actual, luego) = ComidaGuardada.leer()
+        var entradas = [EntradaComida(date: ahora, comida: actual)]
+
+        var anterior = actual
+        for siguiente in luego {
+            guard let hora = anterior?.fecha(hoy: ahora) else { break }
+            let desde = hora.addingTimeInterval(Self.margen)
+            if desde > ahora { entradas.append(EntradaComida(date: desde, comida: siguiente)) }
+            anterior = siguiente
+        }
+
+        // `.never`: el dato cambia cuando el teléfono manda uno nuevo, y ahí
+        // la app del reloj llama a `reloadAllTimelines`.
+        completion(Timeline(entries: entradas, policy: .never))
+    }
+}
+
 /// La siguiente comida. Lo que hace que el plan se cumpla es acordarse a tiempo.
 struct ComidaComplicacion: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "holygains.comida", provider: Proveedor()) { entrada in
-            VistaComida(resumen: entrada.resumen)
+        StaticConfiguration(kind: "holygains.comida", provider: ProveedorComida()) { entrada in
+            VistaComida(comida: entrada.comida)
                 .containerBackground(for: .widget) { Color.clear }
+                .widgetURL(URL(string: "holygains://comida"))
         }
-        .configurationDisplayName("Sigue")
-        .description("Tu siguiente comida del plan.")
+        .configurationDisplayName("Siguiente comida")
+        .description("Qué te toca comer, con sus tomas.")
         .supportedFamilies([.accessoryCircular, .accessoryInline, .accessoryRectangular])
     }
 }
 
 struct VistaComida: View {
     @Environment(\.widgetFamily) private var familia
-    let resumen: Resumen
+    let comida: ComidaGuardada?
 
     var body: some View {
         switch familia {
         case .accessoryInline:
-            Text(texto)
+            // "Cena 21:00 · pavo, tortillas…": el sistema pone los puntos
+            // suspensivos donde se acabe la línea.
+            Text(inline)
 
         case .accessoryCircular:
-            VStack(spacing: 0) {
-                Image(systemName: "fork.knife")
-                    .font(.system(size: 13, weight: .semibold))
-                if let hora = resumen.comidaHora {
-                    Text(hora)
-                        .font(.system(size: 10, weight: .medium))
-                        .minimumScaleFactor(0.6)
+            ZStack {
+                AccessoryWidgetBackground()
+                VStack(spacing: 0) {
+                    Image(systemName: "fork.knife")
+                        .font(.system(size: 12, weight: .semibold))
+                    if let hora = comida?.hora, !hora.isEmpty {
+                        Text(hora)
+                            .font(.system(size: 11, weight: .semibold, design: .rounded))
+                            .minimumScaleFactor(0.6)
+                            .lineLimit(1)
+                    }
                 }
+                .padding(2)
             }
 
         default:
             VStack(alignment: .leading, spacing: 1) {
-                Text(resumen.comida ?? "Sin comidas pendientes")
-                    .font(.headline)
-                    .lineLimit(1)
-                if let hora = resumen.comidaHora {
-                    Text(hora)
+                if let comida {
+                    Text(comida.hora.isEmpty ? comida.nombre : "\(comida.nombre) · \(comida.hora)")
+                        .font(.headline)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .widgetAccentable()
+                    ForEach(Array(recortarConAviso(comida.renglones, capacidad: 3).enumerated()), id: \.offset) { _, renglon in
+                        Text(renglon)
+                            .font(.caption2)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                } else {
+                    Text("Sin comidas pendientes")
+                        .font(.headline)
+                        .lineLimit(1)
+                    Text("Abre Holy Gains en el teléfono")
                         .font(.caption2)
+                        .lineLimit(1)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
-    private var texto: String {
-        guard let comida = resumen.comida else { return "Sin comidas pendientes" }
-        guard let hora = resumen.comidaHora else { return comida }
-        return "\(comida) · \(hora)"
+    private var inline: String {
+        guard let comida else { return "Sin comidas pendientes" }
+        let cabeza = comida.hora.isEmpty ? comida.nombre : "\(comida.nombre) \(comida.hora)"
+        let nombres = comida.items.filter { $0.enPlatillo != true }.map { primeraPalabra($0.display) }
+        return nombres.isEmpty ? cabeza : "\(cabeza) · \(nombres.joined(separator: ", "))"
+    }
+
+    /// "Pavo — 120 g" → "pavo"; "3 tortillas de maíz" → "tortillas": en una
+    /// línea sobre la hora solo cabe de qué se trata.
+    private func primeraPalabra(_ display: String) -> String {
+        let sinCantidad = display.components(separatedBy: " — ").first ?? display
+        let palabras = sinCantidad.split(separator: " ").map(String.init)
+        let palabra = palabras.first { $0.rangeOfCharacter(from: .decimalDigits) == nil } ?? sinCantidad
+        return palabra.lowercased()
     }
 }
 

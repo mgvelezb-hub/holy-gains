@@ -122,3 +122,33 @@ struct ResumenDelDia: Codable {
     let comidaItems: [String]?
     let racha: Int
 }
+
+/**
+ La siguiente comida completa, tal como la arma el teléfono
+ (`siguienteComida` en `src/lib/siguiente-comida.ts`): todos los alimentos,
+ el platillo marcado y las tomas amarradas ("Ashwagandha 300 mg").
+
+ Llega aparte del resumen, en la llave `siguienteComida` del contexto, porque
+ el resumen solo traía tres alimentos y ninguna toma — justo lo que faltaba
+ en la muñeca. `luego` son las que siguen hoy: la complicación las usa para
+ avanzar sola a la hora de cada comida sin esperar al teléfono.
+ */
+struct SiguienteComidaReloj: Codable {
+    struct Renglon: Codable, Hashable {
+        let display: String
+        var platillo: Bool? = nil
+        var enPlatillo: Bool? = nil
+    }
+
+    struct Toma: Codable, Hashable {
+        let nombre: String
+        let dosis: String
+    }
+
+    let slot: String
+    let nombre: String
+    let hora: String
+    let items: [Renglon]
+    let tomas: [Toma]
+    var luego: [SiguienteComidaReloj]? = nil
+}

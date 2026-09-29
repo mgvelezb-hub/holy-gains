@@ -26,6 +26,11 @@ struct HolyGainsWatchApp: App {
     var body: some Scene {
         WindowGroup {
             SesionView()
+                // Tocar la complicación de comida abre `holygains://comida`:
+                // la app va directo a "Siguiente comida" si no hay sesión.
+                .onOpenURL { url in
+                    if url.host == "comida" { Conectividad.shared.abrirComida = true }
+                }
         }
     }
 }
@@ -83,6 +88,7 @@ struct SesionView: View {
      y una que se mira de reojo el resto.
      */
     private var esperando: some View {
+        NavigationStack {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
                 if let resumen = conectividad.resumen {
@@ -104,29 +110,17 @@ struct SesionView: View {
                         }
                     }
 
-                    if let comida = resumen.comida {
+                    if let comida = conectividad.siguienteComida {
                         Divider()
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Sigue")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                            Text(comida)
-                                .font(.subheadline)
-                            if let hora = resumen.comidaHora {
-                                Text(hora)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                            // Que comer, no solo cuando: sin esto habia que
-                            // sacar el telefono para saberlo.
-                            if let items = resumen.comidaItems, !items.isEmpty {
-                                ForEach(items, id: \.self) { item in
-                                    Text(item)
-                                        .font(.caption2)
-                                        .foregroundStyle(.primary)
-                                }
-                            }
+                        NavigationLink {
+                            SiguienteComidaVista(comida: comida)
+                        } label: {
+                            avanceDeComida(nombre: comida.nombre, hora: comida.hora, renglones: comida.items.map(\.display) + comida.tomas.map { "+ \($0.nombre) \($0.dosis)" })
                         }
+                        .buttonStyle(.plain)
+                    } else if let comida = resumen.comida {
+                        Divider()
+                        avanceDeComida(nombre: comida, hora: resumen.comidaHora ?? "", renglones: resumen.comidaItems ?? [])
                     }
 
                     Divider()
@@ -147,11 +141,49 @@ struct SesionView: View {
             }
             .padding(.horizontal, 4)
         }
+        .navigationDestination(isPresented: $conectividad.abrirComida) {
+            if let comida = conectividad.siguienteComida {
+                SiguienteComidaVista(comida: comida)
+            } else {
+                Text("Abre Holy Gains en el teléfono para ver tu comida.")
+                    .font(.caption2)
+            }
+        }
+        }
         .onAppear {
             entrenamiento.terminar()
             descanso.saltar()
             contador.limpiar()
         }
+    }
+
+    /// El avance de la comida en la pantalla de inicio: nombre, hora y tres
+    /// renglones; si hay más, "+N más" y la lista entera al tocar.
+    private func avanceDeComida(nombre: String, hora: String, renglones: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Sigue")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(nombre)
+                .font(.subheadline)
+            if !hora.isEmpty {
+                Text(hora)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(Array(recortar(renglones, capacidad: 3).enumerated()), id: \.offset) { _, renglon in
+                Text(renglon)
+                    .font(.caption2)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func recortar(_ renglones: [String], capacidad: Int) -> [String] {
+        if renglones.count <= capacidad { return renglones }
+        return Array(renglones.prefix(capacidad - 1)) + ["+\(renglones.count - capacidad + 1) más"]
     }
 
     private var terminada: some View {

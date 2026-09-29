@@ -41,6 +41,8 @@ final class Puente: NSObject {
   /// Lo último que se mandó de cada cosa, para poder remandarlo junto.
   private var ultimaSesion: String?
   private var ultimoResumen: String?
+  /// La siguiente comida completa (JSON de `siguienteComida` + `luego`).
+  private var ultimaComida: String?
 
   func activar() {
     guard WCSession.isSupported() else { return }
@@ -76,6 +78,13 @@ final class Puente: NSObject {
     return empujar()
   }
 
+  /// Manda la siguiente comida completa, con todos sus renglones y tomas.
+  @discardableResult
+  func enviarSiguienteComida(_ json: String) -> Bool {
+    ultimaComida = json
+    return empujar()
+  }
+
   /**
    Manda lo que haya. `false` si en este momento no hay a quién mandarle.
 
@@ -97,6 +106,7 @@ final class Puente: NSObject {
     var contexto: [String: Any] = [:]
     if let ultimaSesion { contexto["sesion"] = ultimaSesion }
     if let ultimoResumen { contexto["resumen"] = ultimoResumen }
+    if let ultimaComida { contexto["siguienteComida"] = ultimaComida }
     guard !contexto.isEmpty else { return false }
 
     // Mensaje directo cuando el reloj está al alcance Y con la app abierta:
@@ -143,6 +153,7 @@ final class Puente: NSObject {
 
     var contexto: [String: Any] = ["tipo": "fin"]
     if let ultimoResumen { contexto["resumen"] = ultimoResumen }
+    if let ultimaComida { contexto["siguienteComida"] = ultimaComida }
     do {
       try sesion.updateApplicationContext(contexto)
       return true

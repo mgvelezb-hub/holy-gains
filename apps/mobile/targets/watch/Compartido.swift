@@ -28,13 +28,55 @@ enum Compartido {
         disco.set(resumen.hecho, forKey: "reloj.hecho")
         disco.set(resumen.comida ?? "", forKey: "reloj.comida")
         disco.set(resumen.comidaHora ?? "", forKey: "reloj.comidaHora")
-        // Los alimentos viajan en una sola cadena separada por "|": son tres
-        // como maximo y un arreglo en UserDefaults no compra nada aqui.
-        disco.set((resumen.comidaItems ?? []).joined(separator: "|"), forKey: "reloj.comidaItems")
+        // `reloj.comidaItems` ya no sale de aquí: lo escribe `guardar(comida:)`
+        // con la lista completa en JSON. Si el teléfono es viejo y no manda la
+        // comida completa, se deja lo del resumen en el mismo formato.
+        if disco.string(forKey: "reloj.comidaSlot") == nil {
+            let renglones = (resumen.comidaItems ?? []).map { SiguienteComidaReloj.Renglon(display: $0) }
+            disco.set(json(renglones), forKey: "reloj.comidaItems")
+        }
         disco.set(resumen.racha, forKey: "reloj.racha")
 
         // Sin esto la carátula se queda con lo de ayer hasta que al sistema se
         // le ocurra refrescar, que puede ser horas.
         WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    /**
+     La siguiente comida completa, para la complicación: `reloj.comidaItems`
+     (JSON de renglones), `reloj.comidaTomas` (JSON de tomas) y
+     `reloj.comidasLuego` (las que siguen hoy, para las entradas del timeline).
+     Pisa `reloj.comida` y `reloj.comidaHora` del resumen: esta es la buena.
+     */
+    static func guardar(comida: SiguienteComidaReloj?) {
+        guard let disco = UserDefaults(suiteName: grupo) else { return }
+
+        if let comida {
+            disco.set(comida.slot, forKey: "reloj.comidaSlot")
+            disco.set(comida.nombre, forKey: "reloj.comida")
+            disco.set(comida.hora, forKey: "reloj.comidaHora")
+            disco.set(json(comida.items), forKey: "reloj.comidaItems")
+            disco.set(json(comida.tomas), forKey: "reloj.comidaTomas")
+            let luego = (comida.luego ?? []).map { siguiente -> SiguienteComidaReloj in
+                var sola = siguiente
+                sola.luego = nil
+                return sola
+            }
+            disco.set(json(luego), forKey: "reloj.comidasLuego")
+        } else {
+            disco.removeObject(forKey: "reloj.comidaSlot")
+            disco.set("", forKey: "reloj.comida")
+            disco.set("", forKey: "reloj.comidaHora")
+            disco.set("[]", forKey: "reloj.comidaItems")
+            disco.set("[]", forKey: "reloj.comidaTomas")
+            disco.set("[]", forKey: "reloj.comidasLuego")
+        }
+
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    private static func json<T: Encodable>(_ valor: T) -> String {
+        guard let data = try? JSONEncoder().encode(valor) else { return "[]" }
+        return String(data: data, encoding: .utf8) ?? "[]"
     }
 }

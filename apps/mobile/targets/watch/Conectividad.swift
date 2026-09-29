@@ -24,6 +24,11 @@ final class Conectividad: NSObject, ObservableObject, WCSessionDelegate {
 
     @Published var sesion: SesionEnVivo?
     @Published var resumen: ResumenDelDia?
+    /// La siguiente comida completa. `nil` hasta que el teléfono la mande
+    /// (builds viejos del teléfono solo mandan el resumen).
+    @Published var siguienteComida: SiguienteComidaReloj?
+    /// La complicación pidió abrir la pantalla de comida (`holygains://comida`).
+    @Published var abrirComida = false
     @Published var alcanzable = false
     /// El teléfono acaba de terminar la sesión ("Terminar aquí" o se cerró la
     /// última serie). La vista lo usa para enseñar "Sesión terminada" antes de
@@ -98,6 +103,19 @@ final class Conectividad: NSObject, ObservableObject, WCSessionDelegate {
             // La complicación es otro proceso y no ve esta propiedad: hay que
             // dejarle el dato por escrito.
             Compartido.guardar(resumen)
+        }
+
+        // Después del resumen a propósito: si llegan los dos, la comida
+        // completa es la que queda escrita para la complicación.
+        if let json = contexto["siguienteComida"] as? String {
+            if json == "null" {
+                siguienteComida = nil
+                Compartido.guardar(comida: nil)
+            } else if let data = json.data(using: .utf8),
+                      let comida = try? decodificador.decode(SiguienteComidaReloj.self, from: data) {
+                siguienteComida = comida
+                Compartido.guardar(comida: comida)
+            }
         }
     }
 
