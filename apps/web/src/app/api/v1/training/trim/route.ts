@@ -28,6 +28,11 @@ const trimSchema = z.object({
   workoutId: z.uuid("workoutId inválido"),
   /** `null` deshace el recorte. */
   minutes: z.number().int().min(MIN_TRIM_MINUTES).max(MAX_TRIM_MINUTES).nullable(),
+  /**
+   * El día (`YYYY-MM-DD`). Opcional: una app vieja no lo manda. Con él, un
+   * `workoutId` que ya no existe se resuelve por `(usuario, fecha)` (O1).
+   */
+  date: z.iso.date().optional(),
 });
 
 export async function POST(request: Request): Promise<NextResponse> {
@@ -55,8 +60,8 @@ export async function POST(request: Request): Promise<NextResponse> {
   try {
     const result =
       parsed.data.minutes === null
-        ? await restoreSession(user.id, user.profile, parsed.data.workoutId)
-        : await trimSession(user.id, user.profile, parsed.data.workoutId, parsed.data.minutes);
+        ? await restoreSession(user.id, user.profile, parsed.data.workoutId, parsed.data.date)
+        : await trimSession(user.id, user.profile, parsed.data.workoutId, parsed.data.minutes, parsed.data.date);
 
     return NextResponse.json({ sesion: result });
   } catch (error) {

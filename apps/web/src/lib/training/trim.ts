@@ -10,6 +10,7 @@ import { calentamientoPara } from "@/lib/training/calentamiento";
 import { minutosDeSesion } from "@/lib/training/duracion";
 import { mondayOf } from "@/lib/training/generate";
 import {
+  ensureWeekMaterialized,
   loadCatalog,
   loadHistory,
   parseStoredPlan,
@@ -103,6 +104,24 @@ export function recortarPendiente(
 }
 
 /**
+ * La sesión a recortar: por id y, si ese id ya no existe, por `(userId, fecha)`.
+ *
+ * O1 — una app con la semana de antes en memoria manda un id que un rearmado
+ * viejo (antes de que los ids fueran estables) o un cambio de bloque ya
+ * reemplazó. La fecha es lo que la persona está mirando: "hoy". Si la semana
+ * de esa fecha no está materializada todavía, se materializa primero.
+ */
+async function sesionDe(userId: string, profile: Profile, workoutId: string, fecha?: string) {
+  const include = { sets: { select: { exerciseName: true, clientId: true } } } as const;
+  const porId = await prisma.workout.findFirst({ where: { id: workoutId, userId }, include });
+  if (porId || !fecha) return porId;
+
+  const date = fromISODate(fecha);
+  await ensureWeekMaterialized(userId, profile, date);
+  return prisma.workout.findUnique({ where: { userId_date: { userId, date } }, include });
+}
+
+/**
  * Rearma UN día con los minutos dados (`null` = los del plan), desde la misma
  * semana canónica que la materialización (`armarPlanSemana`).
  */
@@ -111,11 +130,9 @@ async function rearmarDia(
   profile: Profile,
   workoutId: string,
   minutes: number | null,
+  fecha?: string,
 ): Promise<TrimResult & { trimmed: number | null }> {
-  const workout = await prisma.workout.findFirst({
-    where: { id: workoutId, userId },
-    include: { sets: { select: { exerciseName: true, clientId: true } } },
-  });
+  const workout = await sesionDe(userId, profile, workoutId, fecha);
   if (!workout) throw new SessionNotFoundError();
   if (workout.completedAt !== null) throw new SessionAlreadyStartedError();
 
@@ -196,8 +213,10 @@ export async function trimSession(
   profile: Profile,
   workoutId: string,
   minutes: number,
+  /** `YYYY-MM-DD` del día: respaldo si el id ya no existe (O1). */
+  fecha?: string,
 ): Promise<TrimResult> {
-  const { trimmed: _trimmed, ...resultado } = await rearmarDia(userId, profile, workoutId, minutes);
+  const { trimmed: _trimmed, ...resultado } = await rearmarDia(userId, profile, workoutId, minutes, fecha);
   return resultado;
 }
 
@@ -206,8 +225,9 @@ export async function restoreSession(
   userId: string,
   profile: Profile,
   workoutId: string,
+  fecha?: string,
 ): Promise<TrimResult> {
-  const { trimmed: _trimmed, ...resultado } = await rearmarDia(userId, profile, workoutId, null);
+  const { trimmed: _trimmed, ...resultado } = await rearmarDia(userId, profile, workoutId, null, fecha);
   return resultado;
 }
 

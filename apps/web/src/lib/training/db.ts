@@ -703,8 +703,24 @@ export async function ensureWeekMaterialized(
     return existing.map(({ _count, ...workout }) => workout);
   }
 
-  if (stale.length > 0) {
-    await prisma.workout.deleteMany({ where: { id: { in: stale.map((workout) => workout.id) } } });
+  // O1 — los ids son estables. Un día que se rearma y sigue en el plan se
+  // ACTUALIZA en su misma fila; solo se borra el que el plan ya no pide.
+  // Antes se borraban todos y se recreaban con ids nuevos: la pantalla que
+  // tenía la semana en memoria (Rutinas) mandaba un id que ya no existía y
+  // "¿Cuánto tiempo tienes?" respondía "No existe esa sesión.".
+  const semanaPlaneada = new Set(planned);
+  const rearmables = new Map(
+    stale
+      .filter((workout) => semanaPlaneada.has(isoFromDateColumn(workout.date)))
+      .map((workout) => [isoFromDateColumn(workout.date), workout.id] as const),
+  );
+  const sobrantes = stale.filter((workout) => !rearmables.has(isoFromDateColumn(workout.date)));
+  if (sobrantes.length > 0) {
+    // `sets: none` otra vez aquí, no solo en `seRearma`: una serie que llegó
+    // por sync entre la lectura y este borrado no se lleva la sesión.
+    await prisma.workout.deleteMany({
+      where: { id: { in: sobrantes.map((workout) => workout.id) }, sets: { none: {} }, completedAt: null },
+    });
   }
 
   const conPlan = options.plan?.weekStart === toISODate(monday) && options.plan?.firma === contexto.firma;
@@ -740,6 +756,20 @@ export async function ensureWeekMaterialized(
     if (!missingSet.has(workout.date)) continue;
 
     const date = fromISODate(workout.date);
+    const idExistente = rearmables.get(workout.date);
+    if (idExistente) {
+      await prisma.workout.updateMany({
+        where: { id: idExistente, sets: { none: {} }, completedAt: null },
+        data: {
+          muscleGroup: workout.muscleGroup,
+          scheme: workout.scheme,
+          exercisesJson: planGuardable(workout, semana.firma),
+          // Lo mismo que dejaba el borrar-y-crear: un rearmado parte sin recorte.
+          trimmedMinutes: null,
+        },
+      });
+      continue;
+    }
     await prisma.workout.upsert({
       where: { userId_date: { userId, date } },
       create: {

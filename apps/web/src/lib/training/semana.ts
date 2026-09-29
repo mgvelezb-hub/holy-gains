@@ -45,6 +45,23 @@ function ordenado(valor: unknown): unknown {
 }
 
 /**
+ * O1 — lo que solo cambia cómo SE VE el plan, no qué se entrena, fuera de la
+ * firma. El chip km/h ↔ mph de la hoja del cardio guarda `unidadVelocidad`
+ * en `otherDisciplines`; con ella dentro, tocarlo cambiaba la firma y la
+ * siguiente lectura rearmaba toda la semana no entrenada.
+ */
+function sinPreferenciasDeVista(training: TrainingProfile): TrainingProfile {
+  return {
+    ...training,
+    otherDisciplines: training.otherDisciplines.map((carga) => {
+      if (!carga.cardio || carga.cardio.unidadVelocidad === undefined) return carga;
+      const { unidadVelocidad: _vista, ...cardio } = carga.cardio;
+      return { ...carga, cardio };
+    }),
+  };
+}
+
+/**
  * La huella de las preferencias con las que se armó una sesión.
  *
  * EL DEFECTO QUE CIERRA: la semana se materializaba una vez y solo se
@@ -56,7 +73,7 @@ function ordenado(valor: unknown): unknown {
  * FNV-1a de 32 bits: no es criptografía, es un "¿cambió algo?" barato.
  */
 export function firmaDelPlan(training: TrainingProfile): string {
-  const texto = JSON.stringify(ordenado({ v: VERSION_DEL_PLAN, training }));
+  const texto = JSON.stringify(ordenado({ v: VERSION_DEL_PLAN, training: sinPreferenciasDeVista(training) }));
   let hash = 0x811c9dc5;
   for (let i = 0; i < texto.length; i += 1) {
     hash ^= texto.charCodeAt(i);

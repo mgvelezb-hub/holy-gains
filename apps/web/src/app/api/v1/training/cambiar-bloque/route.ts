@@ -112,7 +112,7 @@ export async function POST(request: Request): Promise<NextResponse> {
  */
 async function borraGimnasioSinEntrenarEn(userId: string, dateISO: string): Promise<void> {
   const fecha = new Date(`${dateISO}T12:00:00`);
-  await prisma.workout.deleteMany({ where: { userId, date: fecha, completedAt: null } });
+  await prisma.workout.deleteMany({ where: { userId, date: fecha, completedAt: null, sets: { none: {} } } });
 }
 
 /**
