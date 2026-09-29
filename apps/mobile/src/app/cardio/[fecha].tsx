@@ -1,5 +1,5 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { Check, ChevronLeft, PlayCircle, RotateCcw } from "lucide-react-native";
+import { Check, ChevronDown, ChevronLeft, ChevronUp, PlayCircle, RotateCcw } from "lucide-react-native";
 import { useCallback, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -8,7 +8,15 @@ import { InfoTip, TextoInfo } from "@/components/InfoTip";
 import { ProtocoloCardio } from "@/components/ProtocoloCardio";
 import { ErrorState, LoadingState } from "@/components/States";
 import { useTheme } from "@/context/theme";
-import { getActivities, getTrainingWeek, type OtherSessionView, type UnidadVelocidad, type WeekView } from "@/lib/api";
+import {
+  getActivities,
+  getMe,
+  getTrainingWeek,
+  patchEntrenamiento,
+  type OtherSessionView,
+  type UnidadVelocidad,
+  type WeekView,
+} from "@/lib/api";
 import {
   cardioDeLaFecha,
   hayPesasPendientes,
@@ -17,9 +25,17 @@ import {
   pasosDeCardio,
   tituloTarjetaCardio,
 } from "@/lib/cardio";
-import { leeCardioEnCurso, leeCardioHecho } from "@/lib/cardio-en-curso";
-import { programaDe } from "@/lib/api-cardio";
+import {
+  guardaCardioDelDia,
+  leeCardioDelDia,
+  leeCardioEnCurso,
+  leeCardioHecho,
+  olvidaCardioDelDia,
+  type CardioDelDiaGuardado,
+} from "@/lib/cardio-en-curso";
+import { getCardioDelDia, programaDe, type EquipoCardioP1, type TipoCardioP1 } from "@/lib/api-cardio";
 import { unidadDe } from "@/lib/hiit";
+import { conMaquinaYModalidad, OPCIONES_MAQUINA, OPCIONES_MODALIDAD } from "@/lib/programa-cardio";
 import { todayISO } from "@/lib/streak";
 import { fonts, radius, spacing, type as typeScale, withAlpha, type Palette } from "@/lib/theme";
 import { getCachedWeek } from "@/lib/training-db";
@@ -27,8 +43,13 @@ import { guardarUnidadVelocidad } from "@/lib/unidad-velocidad";
 
 /**
  * La hoja del cardio (N2) — su propia pantalla, porque cada zoom abre hoja
- * nueva: "HIIT 15' · Nivel 0", el chip km/h ↔ mph, la tabla COMPLETA con
- * scroll, la caminata suave si sobra bloque y "Empezar cardio" fijo abajo.
+ * nueva: el título del programa ("HIIT 15' + 5' caminata · Nivel 0 ·
+ * Caminadora"), la tabla COMPLETA con scroll y "Empezar cardio" fijo abajo.
+ *
+ * P1b: "Máquina de hoy" y "Modalidad de hoy" re-piden el cardio de ESTA
+ * fecha al servidor con los mismos minutos ("la caminadora está ocupada →
+ * elíptica") sin tocar la preferencia; se guarda en el teléfono para que el
+ * corredor corra esa tabla. "Usar siempre" sí la vuelve preferencia.
  *
  * Antes la tabla vivía en un Modal de Rutinas que cortaba lo que pasaba del
  * 85 % y el corredor solo existía al cerrar la última serie de pesas: no
@@ -49,6 +70,11 @@ export default function CardioScreen() {
   const [unidad, setUnidad] = useState<UnidadVelocidad>("kmh");
   const [error, setError] = useState<string | null>(null);
   const [cargando, setCargando] = useState(true);
+  /** Lo elegido solo para hoy, o `null` si va la tabla del plan. */
+  const [delDia, setDelDia] = useState<CardioDelDiaGuardado | null>(null);
+  const [cambiando, setCambiando] = useState(false);
+  const [abierto, setAbierto] = useState(false);
+  const [avisoCambio, setAvisoCambio] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
     setError(null);
@@ -63,8 +89,10 @@ export default function CardioScreen() {
         setError("Ese cardio no está en el teléfono. Abre Rutinas una vez con señal.");
         return;
       }
+      const elegido = await leeCardioDelDia(fecha);
+      if (elegido) encontrado = { ...encontrado, minutes: elegido.minutes, sesion: elegido.sesion };
       const hoy = todayISO();
-      const pasos = pasosDeCardio(encontrado.sesion.cardio, encontrado.minutes);
+      const pasos = pasosDeCardio(encontrado.sesion!.cardio!, encontrado.minutes);
       const [local, actividades, enCurso] = await Promise.all([
         leeCardioHecho(fecha),
         getActivities(30).catch(() => null),
@@ -73,7 +101,8 @@ export default function CardioScreen() {
       const delServidor = actividades ? minutosDeCardioHechos(actividades.actividades, fecha) : null;
 
       setCardio(encontrado);
-      setUnidad(unidadDe(encontrado.sesion.cardio));
+      setDelDia(elegido);
+      setUnidad(unidadDe(encontrado.sesion!.cardio));
       setPesasPendientes(hayPesasPendientes(semana?.sessions ?? [], fecha));
       setHechoMin(delServidor ?? local);
       setTramoEnCurso(enCurso ? enCurso.paso : null);
@@ -97,6 +126,56 @@ export default function CardioScreen() {
     guardarUnidadVelocidad(siguiente).catch(() => {
       // Sin señal: se ve en la unidad elegida y la próxima vez se vuelve a intentar.
     });
+  }
+
+  /** Pide al servidor el cardio de hoy con otra máquina o modalidad (mismos minutos). */
+  async function cambiarDelDia(cambios: { maquina?: EquipoCardioP1; modalidad?: TipoCardioP1 }) {
+    if (!cardio?.sesion?.cardio || cambiando) return;
+    const actual = programaDe(cardio.sesion.cardio);
+    const maquina = cambios.maquina ?? delDia?.maquina ?? (actual?.maquina as EquipoCardioP1 | undefined);
+    const modalidad = cambios.modalidad ?? delDia?.modalidad;
+    setCambiando(true);
+    setAvisoCambio(null);
+    try {
+      const respuesta = await getCardioDelDia(fecha, { ...(maquina ? { maquina } : {}), ...(modalidad ? { modalidad } : {}) });
+      const guardado: CardioDelDiaGuardado = {
+        fecha,
+        maquina: maquina ?? "CAMINADORA",
+        ...(modalidad ? { modalidad } : {}),
+        minutes: respuesta.minutes,
+        sesion: respuesta.sesion,
+      };
+      await guardaCardioDelDia(guardado);
+      setDelDia(guardado);
+      setCardio({ ...cardio, minutes: respuesta.minutes, sesion: respuesta.sesion });
+      setUnidad(unidadDe(respuesta.sesion.cardio));
+    } catch {
+      setAvisoCambio("Sin señal no se puede recalcular la tabla. Inténtalo de nuevo.");
+    } finally {
+      setCambiando(false);
+    }
+  }
+
+  /** Vuelve a la tabla del plan. */
+  async function volverAlPlan() {
+    await olvidaCardioDelDia();
+    setAvisoCambio(null);
+    setCargando(true);
+    await cargar();
+  }
+
+  /** "Usar siempre": la máquina y la modalidad de hoy pasan a la preferencia de cardio. */
+  async function usarSiempre() {
+    if (!delDia) return;
+    try {
+      const me = await getMe();
+      const otras = me.profile?.otherDisciplines ?? [];
+      if (!otras.some((carga) => carga.discipline === "CARDIO")) return;
+      await patchEntrenamiento({ otherDisciplines: conMaquinaYModalidad(otras, delDia.maquina, delDia.modalidad) });
+      setAvisoCambio("Listo: desde ahora tu cardio es así.");
+    } catch {
+      setAvisoCambio("No se pudo guardar sin señal. Inténtalo de nuevo.");
+    }
   }
 
   function empezar() {
@@ -143,6 +222,76 @@ export default function CardioScreen() {
         )}
 
         {cardio.note ? <Text style={styles.nota}>{cardio.note}</Text> : null}
+
+        {programa && (
+          <View style={styles.hoy}>
+            <Pressable
+              onPress={() => setAbierto((valor) => !valor)}
+              style={styles.hoyCabeza}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: abierto }}
+            >
+              <Text style={styles.hoyTitulo}>{delDia ? "Cambiado solo para hoy" : "Cambiar máquina o modalidad de hoy"}</Text>
+              {abierto ? (
+                <ChevronUp size={18} color={colors.paloRosa} strokeWidth={2} />
+              ) : (
+                <ChevronDown size={18} color={colors.paloRosa} strokeWidth={2} />
+              )}
+            </Pressable>
+            {abierto && (
+              <>
+                <Text style={styles.hoyLabel}>Máquina de hoy</Text>
+                <View style={styles.chips}>
+                  {OPCIONES_MAQUINA.map((opcion) => {
+                    const activo = programa.maquina === opcion.valor;
+                    return (
+                      <Pressable
+                        key={opcion.valor}
+                        onPress={() => void cambiarDelDia({ maquina: opcion.valor })}
+                        disabled={cambiando || activo}
+                        style={[styles.chip, activo && styles.chipOn]}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: activo }}
+                      >
+                        <Text style={[styles.chipTexto, activo && styles.chipTextoOn]}>{opcion.nombre}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <Text style={styles.hoyLabel}>Modalidad de hoy</Text>
+                <View style={styles.chips}>
+                  {OPCIONES_MODALIDAD.filter((opcion) => opcion.valor !== "VARIADO").map((opcion) => {
+                    const activo = programa.modalidad === opcion.valor;
+                    return (
+                      <Pressable
+                        key={opcion.valor}
+                        onPress={() => void cambiarDelDia({ modalidad: opcion.valor })}
+                        disabled={cambiando || activo}
+                        style={[styles.chip, activo && styles.chipOn]}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: activo }}
+                      >
+                        <Text style={[styles.chipTexto, activo && styles.chipTextoOn]}>{opcion.nombre}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                {cambiando && <Text style={styles.nota}>Recalculando con los mismos {cardio.minutes} min…</Text>}
+                {delDia && !cambiando && (
+                  <View style={styles.hoyAcciones}>
+                    <Pressable onPress={() => void usarSiempre()} style={styles.secundario} accessibilityRole="button">
+                      <Text style={styles.secundarioTexto}>Usar siempre</Text>
+                    </Pressable>
+                    <Pressable onPress={() => void volverAlPlan()} style={styles.secundario} accessibilityRole="button">
+                      <Text style={styles.secundarioTexto}>Volver al plan</Text>
+                    </Pressable>
+                  </View>
+                )}
+              </>
+            )}
+            {avisoCambio && <Text style={styles.nota}>{avisoCambio}</Text>}
+          </View>
+        )}
 
         {programa ? (
           <ProtocoloCardio programa={programa} unidad={unidad} onUnidad={cambiarUnidad} />
@@ -235,6 +384,31 @@ const makeStyles = (colors: Palette) =>
     ordenTexto: { flex: 1, fontFamily: fonts.sansMedium, ...typeScale.bodySm, color: colors.marfil },
     nota: { fontFamily: fonts.sans, ...typeScale.bodySm, color: colors.paloRosa },
     pasos: { gap: spacing.xs },
+    hoy: {
+      gap: spacing.sm,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.cardBorder,
+      backgroundColor: colors.superficie,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+    },
+    hoyCabeza: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 36 },
+    hoyTitulo: { fontFamily: fonts.sansSemiBold, ...typeScale.bodySm, color: colors.marfil },
+    hoyLabel: { fontFamily: fonts.sansMedium, ...typeScale.label, color: colors.paloRosa },
+    chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs },
+    chip: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: 6,
+      borderRadius: radius.full,
+      borderWidth: 1,
+      borderColor: colors.cardBorder,
+      backgroundColor: colors.cardBg,
+    },
+    chipOn: { backgroundColor: colors.guinda, borderColor: colors.guindaLight },
+    chipTexto: { fontFamily: fonts.sansMedium, ...typeScale.bodySm, color: colors.marfil },
+    chipTextoOn: { color: colors.pergamino },
+    hoyAcciones: { flexDirection: "row", justifyContent: "space-around" },
     pasoFila: {
       flexDirection: "row",
       justifyContent: "space-between",

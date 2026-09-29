@@ -199,3 +199,11 @@ describe("Aquí voy moderado: el corredor salta a la zona 2", () => {
     expect(irAPasoCorredor(enPausa, pasos, 5, 40_000)).toMatchObject({ paso: 5, pausadoMs: 10_000, hasta: 40_000 + 13 * 60_000 });
   });
 });
+
+describe("Usar siempre sin modalidad elegida", () => {
+  it("solo cambia la máquina y deja la modalidad de la preferencia", () => {
+    const otras = [{ discipline: "CARDIO", sessionsPerWeek: 5, cardio: { equipo: "CAMINADORA", tipo: "VARIADO" } }] as unknown as DisciplineLoad[];
+    const siguiente = conMaquinaYModalidad(otras, "REMO");
+    expect((siguiente[0] as unknown as { cardio: unknown }).cardio).toEqual({ equipo: "REMO", tipo: "VARIADO" });
+  });
+});

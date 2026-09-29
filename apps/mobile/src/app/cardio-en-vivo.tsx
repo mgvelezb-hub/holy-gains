@@ -10,6 +10,7 @@ import { ErrorState, LoadingState } from "@/components/States";
 import { useTheme } from "@/context/theme";
 import { getTrainingWeek, type OtherSessionView } from "@/lib/api";
 import { cardioDeLaFecha, lunesDe } from "@/lib/cardio";
+import { leeCardioDelDia } from "@/lib/cardio-en-curso";
 import { todayISO } from "@/lib/streak";
 import { fonts, radius, spacing, type as typeScale, type Palette } from "@/lib/theme";
 import { getCachedWeek } from "@/lib/training-db";
@@ -46,7 +47,9 @@ export default function CardioEnVivoScreen() {
         setError("Ese cardio no está en el teléfono. Abre Rutinas una vez con señal.");
         return;
       }
-      setCardio(encontrado);
+      // P1b: si en la hoja se cambió la máquina o la modalidad de hoy, corre ESA tabla.
+      const elegido = await leeCardioDelDia(fecha);
+      setCardio(elegido ? { ...encontrado, minutes: elegido.minutes, sesion: elegido.sesion } : encontrado);
     } catch {
       setError("No se pudo abrir el cardio.");
     }

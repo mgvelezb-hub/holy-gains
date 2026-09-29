@@ -42,7 +42,7 @@ import {
   type WeekView,
 } from "@/lib/api";
 import { cardioDeLaFecha, pasosDeCardio, tituloTarjetaCardio } from "@/lib/cardio";
-import { leeCardioEnCurso, leeCardioHecho } from "@/lib/cardio-en-curso";
+import { leeCardioDelDia, leeCardioEnCurso, leeCardioHecho } from "@/lib/cardio-en-curso";
 import {
   alCerrarSerieEnElReloj,
   alFrecuenciaDelReloj,
@@ -385,7 +385,9 @@ export default function EnVivoScreen() {
       setSesion(encontrada);
       setDraft(guardadas);
       const cardio = cardioDeLaFecha(semana?.otherSessions, encontrada.date);
-      setCardioDelDia(cardio);
+      // P1b: la máquina o modalidad que se eligió en la hoja para hoy manda.
+      const elegido = cardio ? await leeCardioDelDia(encontrada.date) : null;
+      setCardioDelDia(cardio && elegido ? { ...cardio, minutes: elegido.minutes, sesion: elegido.sesion } : cardio);
 
       const base = estadoInicial(ejercicios);
 

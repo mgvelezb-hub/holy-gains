@@ -131,9 +131,9 @@ export function conNivelBase(otras: readonly DisciplineLoad[], maquina: MaquinaC
 export function conMaquinaYModalidad(
   otras: readonly DisciplineLoad[],
   equipo: EquipoCardioP1,
-  tipo: TipoCardioP1,
+  tipo?: TipoCardioP1,
 ): DisciplineLoad[] {
-  return conPreferencias(otras, (prefs) => ({ ...prefs, equipo, tipo }));
+  return conPreferencias(otras, (prefs) => ({ ...prefs, equipo, ...(tipo ? { tipo } : {}) }));
 }
 
 function conPreferencias(

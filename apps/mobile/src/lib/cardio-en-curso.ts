@@ -1,5 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import type { SesionDisciplina } from "@/lib/api";
+import type { EquipoCardioP1, TipoCardioP1 } from "@/lib/api-cardio";
 import { corredorGuardado, type CorredorCardio } from "@/lib/cardio";
 
 /**
@@ -60,5 +62,53 @@ export async function leeCardioHecho(fecha: string): Promise<number | null> {
     return leido.fecha === fecha && typeof leido.minutos === "number" ? leido.minutos : null;
   } catch {
     return null;
+  }
+}
+
+/* ------------------------------------------------------------------------ */
+/* P1b — la máquina y la modalidad de HOY (sin tocar la preferencia)         */
+/* ------------------------------------------------------------------------ */
+
+const LLAVE_DEL_DIA = "holygains.cardio.deldia";
+
+/**
+ * El cardio de un día re-prescrito con otra máquina o modalidad (la hoja lo
+ * pide a `GET /training/cardio`). Se guarda para que el corredor corra ESA
+ * tabla y no la del plan; solo se recuerda el último día.
+ */
+export type CardioDelDiaGuardado = {
+  fecha: string;
+  maquina: EquipoCardioP1;
+  /** Solo si se eligió; sin ella va la de la preferencia. */
+  modalidad?: TipoCardioP1;
+  minutes: number;
+  sesion: SesionDisciplina;
+};
+
+export async function guardaCardioDelDia(cardio: CardioDelDiaGuardado): Promise<void> {
+  try {
+    await AsyncStorage.setItem(LLAVE_DEL_DIA, JSON.stringify(cardio));
+  } catch {
+    // Sin él, el corredor corre la tabla del plan: se ve y se elige otra vez.
+  }
+}
+
+export async function leeCardioDelDia(fecha: string): Promise<CardioDelDiaGuardado | null> {
+  try {
+    const crudo = await AsyncStorage.getItem(LLAVE_DEL_DIA);
+    if (!crudo) return null;
+    const leido = JSON.parse(crudo) as Partial<CardioDelDiaGuardado>;
+    if (leido.fecha !== fecha || !leido.sesion?.cardio || typeof leido.minutes !== "number") return null;
+    return leido as CardioDelDiaGuardado;
+  } catch {
+    return null;
+  }
+}
+
+export async function olvidaCardioDelDia(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(LLAVE_DEL_DIA);
+  } catch {
+    // `leeCardioDelDia` filtra por fecha.
   }
 }
