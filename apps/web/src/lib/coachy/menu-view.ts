@@ -41,10 +41,10 @@ export interface MenuItemView {
 export interface PreparacionView {
   id: string;
   nombre: string;
-  tipo: "licuado" | "sopa" | "crema" | "caldo";
+  tipo: "licuado" | "sopa" | "crema" | "caldo" | "platillo";
 }
 
-const TIPOS_DE_PREPARACION = ["licuado", "sopa", "crema", "caldo"] as const;
+const TIPOS_DE_PREPARACION = ["licuado", "sopa", "crema", "caldo", "platillo"] as const;
 
 function toPreparacion(raw: unknown): PreparacionView | null {
   if (typeof raw !== "object" || raw === null) return null;

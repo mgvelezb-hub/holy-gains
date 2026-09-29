@@ -145,3 +145,24 @@ describe("equivalencias por grupo SMAE en la vista", () => {
     expect(eq.noVan).toEqual([{ name: "Arroz blanco cocido", grams: 40, portion: null, motivo: "no va con tu papa" }]);
   });
 });
+
+describe("platillos mexicanos en la vista", () => {
+  it("el platillo (tacos) se lee como la sopa: nombre y sus ingredientes agrupados", () => {
+    const prep = { id: "tacos_pollo", nombre: "Tacos de pollo", tipo: "platillo" };
+    const view = toMenuView(1, [
+      {
+        slot: "COMIDA",
+        label: "Comida",
+        timeHint: "14:00",
+        preparacion: { ...prep, display: "Tacos de pollo — 150 g de pechuga · 3 tortillas" },
+        items: [
+          { foodId: "pechuga_pollo", name: "Pechuga de pollo cocida", grams: 150, free: false, preparacion: prep },
+          { foodId: "tortilla_maiz", name: "Tortilla de maiz", grams: 90, free: false, preparacion: prep },
+        ],
+        equivalences: [],
+      },
+    ]);
+    expect(view.meals[0]!.preparacion).toEqual({ id: "tacos_pollo", nombre: "Tacos de pollo", tipo: "platillo" });
+    expect(view.meals[0]!.items.every((i) => i.preparacionId === "tacos_pollo")).toBe(true);
+  });
+});

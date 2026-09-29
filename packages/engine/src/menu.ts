@@ -990,6 +990,19 @@ function macroDeGrupo(grupo: GrupoSmae): 'proteinPer100' | 'carbPer100' | 'fatPe
   return 'carbPer100';
 }
 
+/**
+ * El grupo SMAE sin su subgrupo: AOA muy bajo, bajo y moderado son el mismo
+ * grupo de "alimentos de origen animal" (la tilapia se cambia por muslo
+ * ajustando la grasa), igual que los cereales con y sin grasa y las grasas con
+ * y sin proteina.
+ */
+function grupoMayor(grupo: GrupoSmae): string {
+  if (grupo.startsWith('aoa_')) return 'aoa';
+  if (grupo.startsWith('grasas_')) return 'grasas';
+  if (grupo.startsWith('cereales_')) return 'cereales';
+  return grupo;
+}
+
 /** "papa", "arroz blanco", "pechuga de pollo": el alimento como se dice en la mesa. */
 function nombreCorto(food: Food): string {
   if (food.nombreEnPlatillo) return food.nombreEnPlatillo;
@@ -1029,6 +1042,7 @@ function equivalentesSmae(
   const companeros = (comida?.foods ?? []).filter((f) => f.id !== slot.food.id);
 
   const motivoDe = (f: Food): string | undefined => {
+    if (companeros.some((otro) => otro.id === f.id)) return 'ya esta en esta comida';
     const choca = companeros.find((otro) => incompatibles(f, otro, config));
     if (choca) return `no va con tu ${nombreCorto(choca)}`;
     if (comida?.desayuno && f.tags.includes('no_desayuno')) return 'no va en el desayuno';
@@ -1041,7 +1055,13 @@ function equivalentesSmae(
   };
 
   const candidatos = pool
-    .filter((f) => f.id !== slot.food.id && f.grupoSmae === grupo && f[key] > 0)
+    .filter(
+      (f) =>
+        f.id !== slot.food.id &&
+        f.grupoSmae !== undefined &&
+        grupoMayor(f.grupoSmae) === grupoMayor(grupo) &&
+        f[key] > 0,
+    )
     .filter((f) => eligible([f], profile, config, f.role).length === 1)
     .map((f) => {
       const grams = Math.max(roundingFor(f, config), quantize((slot.grams * base) / f[key], f, config));
@@ -1053,7 +1073,9 @@ function equivalentesSmae(
   const nivel = (c: { food: Food; desviacion: number }): number =>
     (enCasa(c.food) ? 0 : 10) +
     (c.desviacion > config.equivalenceMaxDeviation ? 2 : 0) +
-    (c.food.tags.includes('mexicano') ? 0 : 1);
+    (c.food.tags.includes('mexicano') ? 0 : 1) +
+    // Del mismo subgrupo primero: la tilapia antes por pechuga que por muslo.
+    (c.food.grupoSmae === grupo ? 0 : 0.5);
   const ofrecidas = candidatos
     .filter((c) => c.motivo === undefined)
     .sort((a, b) => nivel(a) - nivel(b) || a.desviacion - b.desviacion || a.food.name.localeCompare(b.food.name))
@@ -1115,18 +1137,19 @@ export function equivalenciasDeAlimento(
   const food = pool.find((f) => normalize(f.name) === buscado || normalize(f.id) === buscado);
   if (food === undefined || gramos <= 0) return null;
 
+  // Por id primero: "platano" es la fruta, aunque el platano del post-entreno
+  // se llame igual.
+  const buscaEnPool = (valor: string): Food | undefined => {
+    const n = normalize(valor);
+    return pool.find((f) => normalize(f.id) === n) ?? pool.find((f) => normalize(f.name) === n);
+  };
   const evitar = new Set<string>();
   for (const otro of opciones.enElDia ?? []) {
-    const n = normalize(otro);
-    const encontrado = pool.find((f) => normalize(f.name) === n || normalize(f.id) === n);
+    const encontrado = buscaEnPool(otro);
     if (!encontrado) continue;
     for (const grupo of gruposDe(encontrado)) evitar.add(grupo);
     if (encontrado.role === 'fruta') evitar.add(`${MARCA_FRUTA_DEL_DIA}${encontrado.id}`);
   }
-  const buscaEnPool = (valor: string): Food | undefined => {
-    const n = normalize(valor);
-    return pool.find((f) => normalize(f.name) === n || normalize(f.id) === n);
-  };
   const enLaComida = (opciones.enLaComida ?? [])
     .map(buscaEnPool)
     .filter((f): f is Food => f !== undefined);
@@ -1775,10 +1798,17 @@ function ajustarPorciones(
 
 /** Gramos de proteina que un licuado se puede pasar de su comida (ver `resolverPreparacion`). */
 const HOLGURA_PROTEINA_LICUADO_G = 5;
+/** Lo mismo para el platillo mexicano: la tortilla y la verdura traen proteina de pilon. */
+const HOLGURA_PROTEINA_PLATILLO_G = 4;
 
 /** Probabilidad de servir un licuado en un slot que lo admite. */
 const PROBA_LICUADO = 0.35;
-/** Probabilidad de servir sopa, crema o caldo en la comida o la cena. */
+/**
+ * Probabilidad de servir un platillo mexicano (tacos, tostadas, enfrijoladas)
+ * en la comida o la cena: la mitad de las veces, antes que alimentos sueltos.
+ */
+const PROBA_PLATILLO = 0.5;
+/** Probabilidad de servir sopa, crema o caldo en la comida o la cena (cuando no toco platillo). */
 const PROBA_PLATO = 0.4;
 
 /**
@@ -1801,6 +1831,7 @@ function tipoAceptado(prep: Preparacion, profile: Profile): boolean {
   if (!pref) return true;
   if (prep.tipo === 'licuado') return pref.licuados;
   if (prep.tipo === 'crema') return pref.cremas;
+  if (prep.tipo === 'platillo') return pref.platillos ?? pref.sopas;
   return pref.sopas;
 }
 
@@ -1820,6 +1851,18 @@ function preparacionesPara(slot: MealSlot, profile: Profile): Preparacion[] {
     if (!tipoAceptado(prep, profile)) return false;
     // Keto cambia la formula: solo entra lo que no depende de fruta ni cereal.
     if (profile.diet === 'keto' && !prep.tags.includes('keto_ok')) return false;
+    // La comida fuerte vegetariana es leguminosa o tofu con cereal (J2, regla
+    // 4): los tacos de nopal con queso van en la cena, las enfrijoladas si.
+    if (
+      profile.diet === 'vegetariana' &&
+      slot.id === 'COMIDA' &&
+      prep.tipo === 'platillo' &&
+      !prep.ingredientes.some((i) =>
+        [i.foodId, ...(i.opciones ?? [])].some((id) => id === 'tofu_firme' || (id !== undefined && FOODS.find((f) => f.id === id)?.tags.includes('leguminosa'))),
+      )
+    ) {
+      return false;
+    }
     if (prep.costRel > topeDeCosto) return false;
     // El platillo de olla solo cuenta como recalentar si la persona cocina en
     // lote; si no, se cocina ese dia y cuenta entero (Irma, 20 min, recibia
@@ -2034,9 +2077,13 @@ function resolverPreparacion(
   // El licuado se mide en tazas y scoops enteros —no hay "0.8 de taza"—, asi
   // que su holgura es de gramos, no de porcentaje: en la colacion de 13 g de
   // Irma el 10 % eran 1.3 g y ningun licuado cabia.
+  // El platillo mexicano igual: la tortilla y la verdura traen su proteina de
+  // pilon, y en la cena de 23 g de Irma el muslo de los tacos ya son 24.
   const topeDeProteina = esLicuado
     ? slot.proteinG + Math.max(slot.proteinG * 0.1, HOLGURA_PROTEINA_LICUADO_G)
-    : slot.proteinG * 1.1;
+    : prep.tipo === 'platillo'
+      ? slot.proteinG + Math.max(slot.proteinG * 0.1, HOLGURA_PROTEINA_PLATILLO_G)
+      : slot.proteinG * 1.1;
   let proteinaMinima = 0;
   // La proteina del licuado es el vaso entero: la taza de leche ya trae 8 g,
   // y el polvo o el yogur solo ponen lo que falta para el piso de la comida.
@@ -2184,6 +2231,18 @@ function resolverPreparacion(
   // lentejas mas su pechuga tambien tiene que caber.
   const reserva = cubre.proteina ? 0 : plantilla.proteinaMinG + 2;
   if (slot.proteinG > 0 && proteinaMinima + reserva > topeDeProteina) return undefined;
+  // El platillo es el plato completo: si su queso, su huevo o su aguacate ya
+  // traen buena parte de la grasa de la comida, no se le pone aceite al lado
+  // (los huevos a la mexicana con dos cucharaditas de aceite encima).
+  if (prep.tipo === 'platillo' && slot.fatG > 0) {
+    // Con la proteina ya en su piso: los tres huevos, no el primero.
+    const gramosReales = (s: Slot): number =>
+      s.minProteinG && s.food.proteinPer100 > 0
+        ? Math.max(s.grams, (s.minProteinG * 100) / s.food.proteinPer100)
+        : s.grams;
+    const grasa = slots.reduce((acc, s) => acc + (gramosReales(s) * s.food.fatPer100) / 100, 0);
+    if (grasa >= slot.fatG * 0.5) cubre.grasa = true;
+  }
   if (fruta) ref.nombre = nombreDePlatillo(prep.id, fruta.id, pool) ?? prep.nombre;
   const requeridos = slots.filter((s) => s.requerido).length;
   for (const s of slots) {
@@ -2208,21 +2267,44 @@ function elegirPlatillo(
   vaCarbohidrato: boolean,
   random: () => number,
   avoid: Set<string>,
-  /** Grupos que ya salieron hoy: un licuado y una sopa al dia, a lo mucho. */
-  usados: Set<'licuado' | 'plato'>,
+  /**
+   * Lo que ya salio hoy: un licuado (o desayuno armado) y una sopa al dia, a
+   * lo mucho, y cada platillo mexicano una vez (`platillo:<id>`).
+   */
+  usados: Set<string>,
   familiasDelDia: ReadonlySet<string> = new Set(),
+  /** El platillo mexicano apartado para esta comida, si le toco. */
+  reservado?: Preparacion,
 ): PlatilloResuelto | undefined {
   const tiro = random();
   const esSlotDeLicuado = ['PRE', 'DESAYUNO', 'SNACK', 'POST'].includes(slot.id);
-  const grupo = esSlotDeLicuado ? 'licuado' : 'plato';
-  const proba = esSlotDeLicuado ? PROBA_LICUADO : PROBA_PLATO;
-  // Dos licuados el mismo dia ya no son variedad, son una dieta liquida.
-  if (tiro >= proba || usados.has(grupo)) return undefined;
+  const candidatas = preparacionesPara(slot, profile).filter(
+    (p) => !platillosApagados || p.tipo !== 'platillo',
+  );
 
-  const candidatas = preparacionesPara(slot, profile);
+  let grupo: string;
+  let delGrupo: Preparacion[];
+  if (esSlotDeLicuado) {
+    // Dos licuados el mismo dia ya no son variedad, son una dieta liquida.
+    if (tiro >= PROBA_LICUADO || usados.has('licuado')) return undefined;
+    grupo = 'licuado';
+    delGrupo = candidatas;
+  } else if (reservado && candidatas.some((p) => p.id === reservado.id)) {
+    // El platillo que se aparto al empezar el dia (ver `reservarPlatillos`):
+    // las comidas de antes ya dejaron libres su tortilla y su proteina.
+    grupo = 'platillo';
+    delGrupo = [reservado];
+  } else {
+    // Sin platillo apartado, la sopa, crema o caldo con su probabilidad de
+    // siempre; el sorteo queda como era antes de los platillos.
+    if (tiro >= PROBA_PLATO || usados.has('plato')) return undefined;
+    grupo = 'plato';
+    delGrupo = candidatas.filter((p) => p.tipo !== 'platillo');
+  }
+
   // Orden sorteado y determinista: se prueba la primera, y si sus
   // ingredientes no pasan (despensa, presupuesto, dieta), la siguiente.
-  const orden = candidatas
+  const orden = delGrupo
     .map((prep) => ({ prep, llave: random() }))
     .sort((a, b) => a.llave - b.llave)
     .map((c) => c.prep);
@@ -2232,7 +2314,7 @@ function elegirPlatillo(
       familiasDelDia,
     );
     if (resuelto) {
-      usados.add(grupo);
+      usados.add(grupo === 'platillo' ? `platillo:${prep.id}` : grupo);
       return resuelto;
     }
   }
@@ -2317,12 +2399,13 @@ function buildMeal(
   residual: Residual,
   /** Sorteo aparte para los platillos: no mueve el de los alimentos. */
   prepRandom: () => number = () => 1,
-  platillosDelDia: Set<'licuado' | 'plato'> = new Set(),
+  platillosDelDia: Set<string> = new Set(),
   /**
    * Proteina principal y cereal que ya salieron en las comidas anteriores del
    * dia. Esta comida los evita, y al terminar suma los suyos.
    */
   familiasDelDia: Set<string> = new Set(),
+  reservado?: Preparacion,
 ): { meal: MenuMeal; slots: Slot[] } {
   const slots: Slot[] = [];
   const periWorkout = slot.id === 'PRE' || slot.id === 'POST';
@@ -2498,7 +2581,7 @@ function buildMeal(
   // despues —la proteina de la comida corrida junto a la sopa— lo acompaña.
   const platillo = elegirPlatillo(
     slot, profile, config, pool, filters, plantilla, vaCarbohidrato, prepRandom, avoid,
-    platillosDelDia, familiasDelDia,
+    platillosDelDia, familiasDelDia, reservado,
   );
   if (platillo) slots.push(...platillo.slots);
   const cubre = platillo?.cubre ?? {
@@ -2689,8 +2772,12 @@ function buildMeal(
     if (esCena) s.cena = true;
     if (profile.diet === 'keto') s.keto = true;
   }
+  // El refuerzo del pre-entreno tampoco trae grasa: la proteina que entra de
+  // segunda (el requeson junto al jamon) lo pasaba de sus 10 g (J2, regla 12).
   ajustarPorciones(
-    slots, effective, profile, config, pool, filters, random, avoid, plantilla, familiasDelDia,
+    slots, effective, profile, config, pool,
+    slot.id === 'PRE' ? { ...filters, grasaMaxG: 5 } : filters,
+    random, avoid, plantilla, familiasDelDia,
   );
   // La comida vegetariana no es tofu con una tortilla: trae al menos tres
   // alimentos contados. Si le falta, entra media taza de leguminosa (frijol
@@ -3145,6 +3232,131 @@ function moverGramos(
   }
 }
 
+/**
+ * Apaga los platillos mexicanos mientras se rearma un menu de respaldo (ver
+ * `buildMenuConRespaldo`). Con ellos apagados el sorteo es exactamente el de
+ * antes de que existieran.
+ */
+let platillosApagados = false;
+
+/**
+ * Aparta un platillo mexicano para la comida y la cena, cada una con su
+ * sorteo (~50 %), con su propio generador para no mover el de los alimentos.
+ */
+function reservarPlatillos(
+  slots: MealSlot[],
+  profile: Profile,
+  config: EngineConfig,
+  pool: Food[],
+  seed: number,
+): Map<number, Preparacion> {
+  const random = rng((Math.imul(seed, 0x2545f491) ^ 0x68e31da4) >>> 0);
+  const reservas = new Map<number, Preparacion>();
+  slots.forEach((slot, i) => {
+    if (slot.id !== 'COMIDA' && slot.id !== 'CENA') return;
+    const tiro = random();
+    const apartados = new Set([...reservas.values()].map((p) => p.id));
+    // Dos platillos del dia no comparten tortilla ni proteina: tacos en la
+    // comida y quesadillas en la cena serian tortilla dos veces.
+    const ocupadas = new Set([...reservas.values()].flatMap((p) => [...familiasDePlatillo(p)]));
+    const candidatas = preparacionesPara(slot, profile)
+      .filter((p) => p.tipo === 'platillo' && !apartados.has(p.id))
+      .filter((p) => ![...familiasDePlatillo(p)].some((f) => ocupadas.has(f)))
+      .filter((p) => platilloPosible(p, slot, profile, config, pool))
+      .map((prep) => ({ prep, llave: random() }))
+      .sort((a, b) => a.llave - b.llave);
+    const elegida = candidatas[0]?.prep;
+    if (tiro < PROBA_PLATILLO && elegida) reservas.set(i, elegida);
+  });
+  return reservas;
+}
+
+/**
+ * Filtro grueso antes de apartar un platillo: que cada ingrediente requerido
+ * tenga algo que la persona come (dieta, excluidos, presupuesto) y que el
+ * platillo alcance el carbohidrato de la comida. Los tacos de pollo no se
+ * apartan para una vegetariana ni la tostada para una comida de 130 g.
+ */
+function platilloPosible(
+  prep: Preparacion,
+  slot: MealSlot,
+  profile: Profile,
+  config: EngineConfig,
+  pool: Food[],
+): boolean {
+  let carbos = 0;
+  for (const ing of prep.ingredientes) {
+    if (ing.tag !== undefined || ing.fruta !== undefined) continue;
+    const ids = ing.foodId ? [ing.foodId] : (ing.opciones ?? []);
+    const comibles = ids
+      .map((id) => pool.find((f) => f.id === id))
+      .filter((f): f is Food => f !== undefined && eligible([f], profile, config, f.role).length === 1);
+    if (comibles.length === 0 && !ing.opcional) return false;
+    const carbo = comibles.filter((f) => DENSE_CARB_ROLES.includes(f.role));
+    if (carbo.length > 0) carbos += Math.max(...carbo.map((f) => (maxGrams(acotar(f, ing)) * f.carbPer100) / 100));
+  }
+  const vaCarbohidrato = slot.allowDenseCarb && slot.carbG >= 15;
+  return !vaCarbohidrato || slot.carbG <= (carbos + 40) * 1.1;
+}
+
+/**
+ * Las familias que un platillo va a usar: la tortilla de los tacos, el pollo
+ * de la tinga, la lata de las tostadas de atun, la leguminosa de las
+ * enfrijoladas. Solo las que comparten todas sus opciones.
+ */
+function familiasDePlatillo(prep: Preparacion): Set<string> {
+  const salida = new Set<string>();
+  for (const ing of prep.ingredientes) {
+    const ids = ing.foodId ? [ing.foodId] : (ing.opciones ?? []);
+    const foods = ids.map((id) => FOODS.find((f) => f.id === id)).filter((f): f is Food => f !== undefined);
+    if (foods.length === 0 || ing.opcional) continue;
+    const comunes = foods.map((f) => new Set(gruposDe(f))).reduce((a, b) => new Set([...a].filter((g) => b.has(g))));
+    for (const grupo of comunes) salida.add(grupo);
+    if (foods.every((f) => f.tags.includes('leguminosa'))) salida.add(LEGUMINOSA);
+  }
+  return salida;
+}
+
+/** La peor desviacion del menu: % de kcal y de cada macro, y gramos de proteina. */
+function peorDesvio(menu: Menu, target: MacroTargets): number {
+  const d = menu.deviationPct;
+  return Math.max(
+    Math.abs(d.kcal),
+    Math.abs(d.proteinG),
+    Math.abs(d.carbG),
+    Math.abs(d.fatG),
+    Math.abs(menu.totals.proteinG - target.proteinG),
+  );
+}
+
+/** Banda en la que un menu cuadra: 4.5 % por macro y 4.5 g de proteina. */
+const BANDA_DEL_MENU = 4.5;
+
+/**
+ * El platillo manda sobre los alimentos sueltos, pero no sobre los macros: la
+ * receta trae porciones que no se mueven (la cucharadita de aceite, las tres
+ * rebanadas de panela) y a veces el dia ya no cuadra. Entonces se rearma ese
+ * menu sin platillos y se queda el que cuadre mejor.
+ */
+function buildMenuConRespaldo(...args: Parameters<typeof buildMenu>): Menu {
+  const target = args[7];
+  const semanaAntes = deFueraDeLaSemana ? new Set(deFueraDeLaSemana) : null;
+  const con = buildMenu(...args);
+  const conPlatillo = con.meals.some((m) => m.preparacion?.tipo === 'platillo');
+  if (!conPlatillo || peorDesvio(con, target) <= BANDA_DEL_MENU) return con;
+  const semanaCon = deFueraDeLaSemana;
+  deFueraDeLaSemana = semanaAntes;
+  platillosApagados = true;
+  try {
+    const sin = buildMenu(...args);
+    if (peorDesvio(sin, target) < peorDesvio(con, target)) return sin;
+    deFueraDeLaSemana = semanaCon;
+    return con;
+  } finally {
+    platillosApagados = false;
+  }
+}
+
 function buildMenu(
   id: 1 | 2,
   slots: MealSlot[],
@@ -3165,14 +3377,26 @@ function buildMenu(
   const prepRandom = rng((Math.imul(seed, 0x9e3779b1) ^ 0x5bd1e995) >>> 0);
   const avoid = new Set<string>();
   const residual: Residual = { p: 0, c: 0, f: 0 };
-  const platillosDelDia = new Set<'licuado' | 'plato'>();
-  const familiasDelDia = new Set<string>(vetadas);
-  const built = slots.map((slot) =>
-    buildMeal(
+  const platillosDelDia = new Set<string>();
+  // Los platillos de la comida y la cena se apartan antes de armar el dia: si
+  // no, el desayuno ya se habia comido la tortilla y el pollo, y a la hora de
+  // los tacos no quedaba con que.
+  const reservas = platillosApagados
+    ? new Map<number, Preparacion>()
+    : reservarPlatillos(slots, profile, config, pool, seed);
+  const delDia = new Set<string>(vetadas);
+  const built = slots.map((slot, i) => {
+    const familiasDelDia = new Set(delDia);
+    for (const [j, prep] of reservas) {
+      if (j > i) for (const familia of familiasDePlatillo(prep)) familiasDelDia.add(familia);
+    }
+    const hecho = buildMeal(
       slot, profile, config, random, avoid, pool, options, residual, prepRandom, platillosDelDia,
-      familiasDelDia,
-    ),
-  );
+      familiasDelDia, reservas.get(i),
+    );
+    for (const familia of familiasDe(hecho.slots)) delDia.add(familia);
+    return hecho;
+  });
   repairDay(
     built.map((b) => b.slots),
     { p: target.proteinG, c: target.carbG, f: target.fatG },
@@ -3386,7 +3610,7 @@ export function generateMenu(
   }
 
   function armarSemana(): MenuPlan {
-  const menu1 = buildMenu(1, slots, profile, config, seed, pool, options, target);
+  const menu1 = buildMenuConRespaldo(1, slots, profile, config, seed, pool, options, target);
   if (fijo) menu1.label = 'Menu de la semana';
   // El atun es la lata de la semana: si el menu 1 ya lo trae (3.5 dias), el 2
   // no lo repite; con los dos serian 7 dias de atun.
@@ -3395,7 +3619,7 @@ export function generateMenu(
   );
   const menu2 = fijo
     ? { ...menu1, id: 2 as const }
-    : buildMenu(
+    : buildMenuConRespaldo(
         2, slots, profile, config, seed * 7919 + 13, pool, options, target,
         atunEnMenu1 ? new Set(['atun']) : new Set(),
       );
@@ -3447,7 +3671,9 @@ export function generateMenu(
 
 /** Los tipos entre los que se cambia un platillo: la sopa es sopa, crema o caldo. */
 function grupoDeTipo(tipo: Preparacion['tipo']): Preparacion['tipo'][] {
-  return tipo === 'licuado' ? ['licuado'] : ['sopa', 'crema', 'caldo'];
+  if (tipo === 'licuado') return ['licuado'];
+  if (tipo === 'platillo') return ['platillo'];
+  return ['sopa', 'crema', 'caldo'];
 }
 
 /** Lo que hace falta para cambiar el platillo de una comida ya guardada. */

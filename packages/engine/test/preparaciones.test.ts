@@ -7,10 +7,10 @@ const LICUADO_SLOTS: MealSlotId[] = ['PRE', 'DESAYUNO', 'SNACK', 'POST'];
 const PLATO_SLOTS: MealSlotId[] = ['COMIDA', 'CENA'];
 
 describe('catalogo de preparaciones', () => {
-  it('trae al menos 14 platillos y de los cuatro tipos', () => {
+  it('trae al menos 14 platillos y de los cinco tipos', () => {
     expect(PREPARACIONES.length).toBeGreaterThanOrEqual(14);
     const tipos = new Set(PREPARACIONES.map((p) => p.tipo));
-    expect([...tipos].sort()).toEqual(['caldo', 'crema', 'licuado', 'sopa']);
+    expect([...tipos].sort()).toEqual(['caldo', 'crema', 'licuado', 'platillo', 'sopa']);
   });
 
   it('los ids son unicos', () => {
@@ -64,7 +64,8 @@ describe('catalogo de preparaciones', () => {
   });
 
   it('el licuado es de desayuno, colacion o post; la sopa, crema y caldo de comida o cena', () => {
-    for (const prep of PREPARACIONES) {
+    // El platillo va donde se come: los huevos a la mexicana tambien son desayuno.
+    for (const prep of PREPARACIONES.filter((p) => p.tipo !== 'platillo')) {
       const permitidos = prep.tipo === 'licuado' ? LICUADO_SLOTS : PLATO_SLOTS;
       for (const slot of prep.slots) expect(permitidos, `${prep.id} ${slot}`).toContain(slot);
     }

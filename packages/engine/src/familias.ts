@@ -58,6 +58,7 @@ const POR_ID: Record<string, FamiliaPrincipal> = {
   pasta_integral: 'pasta',
   tortilla_maiz: 'tortilla',
   tostada_horneada: 'tortilla',
+  tortilla_harina_integral: 'tortilla',
   pan_integral: 'pan',
   pan_centeno: 'pan',
 };

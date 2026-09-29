@@ -26,9 +26,12 @@ const MAU: Profile = {
 function menuConSopa() {
   const kcal = kcalForDeficit(MAU, pickDeficit("CUT", DEFAULT_CONFIG), DEFAULT_CONFIG);
   const slots = distribute(macrosFor("CUT", MAU, kcal, DEFAULT_CONFIG), MAU, "CUT");
-  for (const seed of [101, 102, 103, 104, 105, 106, 107]) {
+  for (let seed = 101; seed <= 140; seed += 1) {
     for (const menu of generateMenu(slots, MAU, DEFAULT_CONFIG, seed, { phase: "CUT" }).menus) {
-      const meal = menu.meals.find((m) => m.preparacion && m.preparacion.tipo !== "licuado");
+      // Una sopa, crema o caldo: los platillos (tacos) se cambian entre platillos.
+      const meal = menu.meals.find(
+        (m) => m.preparacion && ["sopa", "crema", "caldo"].includes(m.preparacion.tipo),
+      );
       if (!meal) continue;
       const mealsJson = JSON.parse(JSON.stringify(menu.meals)) as Prisma.JsonValue;
       const opciones = opcionesDePlatilloGuardado(mealsJson, meal.slot, MAU);

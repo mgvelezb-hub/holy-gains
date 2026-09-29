@@ -31,8 +31,8 @@ export const TIPOS_DE_PREPARACION: ReadonlyArray<{
   },
   {
     clave: "sopas",
-    nombre: "Sopas y caldos",
-    detalle: "En la comida o la cena: lentejas, frijol de olla, caldo de pollo con verdura.",
+    nombre: "Sopas, caldos y platillos",
+    detalle: "En la comida o la cena: lentejas, caldo de pollo, tacos, tostadas o enfrijoladas.",
   },
   {
     clave: "cremas",

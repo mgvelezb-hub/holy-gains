@@ -912,5 +912,849 @@
       "ayuno_ok"
     ],
     "costRel": 2
+  },
+  {
+    "id": "tacos_pollo",
+    "nombre": "Tacos de pollo",
+    "tipo": "platillo",
+    "slots": [
+      "COMIDA",
+      "CENA"
+    ],
+    "ingredientes": [
+      {
+        "rolePool": [
+          "proteina_magra",
+          "proteina_grasa"
+        ],
+        "opciones": [
+          "pechuga_pollo",
+          "muslo_pollo"
+        ]
+      },
+      {
+        "foodId": "tortilla_maiz",
+        "maxUnits": 4
+      },
+      {
+        "foodId": "pico_de_gallo",
+        "fijo": true,
+        "gramos": 80
+      },
+      {
+        "foodId": "aguacate",
+        "opcional": true
+      }
+    ],
+    "prepMin": 15,
+    "tags": [
+      "meal_prep",
+      "ayuno_ok"
+    ],
+    "costRel": 2,
+    "fuente": "Cocina mexicana"
+  },
+  {
+    "id": "tacos_carne_asada",
+    "nombre": "Tacos de carne asada",
+    "tipo": "platillo",
+    "slots": [
+      "COMIDA",
+      "CENA"
+    ],
+    "ingredientes": [
+      {
+        "foodId": "res_magra"
+      },
+      {
+        "rolePool": [
+          "carbo_complejo",
+          "carbo_post"
+        ],
+        "opciones": [
+          "nopal_asado_carb",
+          "tortilla_maiz"
+        ],
+        "maxUnits": 3
+      },
+      {
+        "foodId": "cebolla",
+        "fijo": true,
+        "gramos": 40
+      },
+      {
+        "foodId": "aguacate",
+        "opcional": true
+      }
+    ],
+    "prepMin": 15,
+    "tags": [
+      "ayuno_ok"
+    ],
+    "costRel": 3,
+    "fuente": "Jousfit, Bye bye celulitis p. 15"
+  },
+  {
+    "id": "tacos_pescado",
+    "nombre": "Tacos de pescado",
+    "tipo": "platillo",
+    "slots": [
+      "COMIDA",
+      "CENA"
+    ],
+    "ingredientes": [
+      {
+        "rolePool": [
+          "proteina_magra"
+        ],
+        "opciones": [
+          "tilapia",
+          "pescado_blanco"
+        ]
+      },
+      {
+        "foodId": "tortilla_maiz",
+        "maxUnits": 4
+      },
+      {
+        "foodId": "col",
+        "fijo": true,
+        "gramos": 60
+      },
+      {
+        "foodId": "aguacate",
+        "opcional": true
+      }
+    ],
+    "prepMin": 15,
+    "tags": [
+      "ayuno_ok"
+    ],
+    "costRel": 2,
+    "fuente": "Cocina mexicana"
+  },
+  {
+    "id": "tacos_nopal_queso",
+    "nombre": "Tacos de nopal con queso",
+    "tipo": "platillo",
+    "slots": [
+      "COMIDA",
+      "CENA"
+    ],
+    "ingredientes": [
+      {
+        "rolePool": [
+          "proteina_grasa"
+        ],
+        "opciones": [
+          "queso_panela",
+          "queso_fresco"
+        ]
+      },
+      {
+        "foodId": "nopal",
+        "fijo": true,
+        "gramos": 150
+      },
+      {
+        "foodId": "tortilla_maiz",
+        "maxUnits": 3
+      }
+    ],
+    "prepMin": 15,
+    "tags": [
+      "vegetariano",
+      "ayuno_ok"
+    ],
+    "costRel": 2,
+    "fuente": "Cocina mexicana"
+  },
+  {
+    "id": "burrito_pollo",
+    "nombre": "Burrito de pollo",
+    "tipo": "platillo",
+    "slots": [
+      "COMIDA",
+      "CENA"
+    ],
+    "ingredientes": [
+      {
+        "rolePool": [
+          "proteina_magra",
+          "proteina_grasa"
+        ],
+        "opciones": [
+          "pechuga_pollo",
+          "muslo_pollo"
+        ]
+      },
+      {
+        "foodId": "frijol_negro",
+        "maxUnits": 0.5
+      },
+      {
+        "foodId": "tortilla_harina_integral",
+        "maxUnits": 1
+      },
+      {
+        "foodId": "pico_de_gallo",
+        "fijo": true,
+        "gramos": 60
+      }
+    ],
+    "prepMin": 10,
+    "tags": [
+      "meal_prep",
+      "ayuno_ok"
+    ],
+    "costRel": 2,
+    "fuente": "Jousfit, Bye bye celulitis p. 29 (sin arroz: dos carbohidratos por comida)"
+  },
+  {
+    "id": "nachos_saludables",
+    "nombre": "Nachos saludables",
+    "tipo": "platillo",
+    "slots": [
+      "COMIDA",
+      "CENA"
+    ],
+    "ingredientes": [
+      {
+        "rolePool": [
+          "proteina_grasa"
+        ],
+        "opciones": [
+          "queso_fresco",
+          "queso_panela"
+        ]
+      },
+      {
+        "foodId": "frijol_negro",
+        "maxUnits": 0.5
+      },
+      {
+        "foodId": "tostada_horneada"
+      },
+      {
+        "foodId": "pico_de_gallo",
+        "fijo": true,
+        "gramos": 60
+      }
+    ],
+    "prepMin": 10,
+    "tags": [
+      "vegetariano",
+      "ayuno_ok"
+    ],
+    "costRel": 2,
+    "fuente": "Jousfit, Bye bye celulitis p. 30"
+  },
+  {
+    "id": "tostadas_pollo",
+    "nombre": "Tostadas de pollo",
+    "tipo": "platillo",
+    "slots": [
+      "COMIDA",
+      "CENA"
+    ],
+    "ingredientes": [
+      {
+        "rolePool": [
+          "proteina_magra",
+          "proteina_grasa"
+        ],
+        "opciones": [
+          "pechuga_pollo",
+          "muslo_pollo"
+        ]
+      },
+      {
+        "foodId": "tostada_horneada"
+      },
+      {
+        "foodId": "lechuga_romana",
+        "fijo": true,
+        "gramos": 60
+      },
+      {
+        "foodId": "aguacate",
+        "opcional": true
+      }
+    ],
+    "prepMin": 10,
+    "tags": [
+      "meal_prep",
+      "ayuno_ok"
+    ],
+    "costRel": 2,
+    "fuente": "Cocina mexicana"
+  },
+  {
+    "id": "tostadas_atun",
+    "nombre": "Tostadas de atún",
+    "tipo": "platillo",
+    "slots": [
+      "COMIDA",
+      "CENA"
+    ],
+    "ingredientes": [
+      {
+        "rolePool": [
+          "proteina_magra",
+          "proteina_grasa"
+        ],
+        "opciones": [
+          "atun_agua",
+          "atun_aceite"
+        ],
+        "maxUnits": 150
+      },
+      {
+        "foodId": "tostada_horneada"
+      },
+      {
+        "foodId": "pico_de_gallo",
+        "fijo": true,
+        "gramos": 60
+      },
+      {
+        "foodId": "aguacate",
+        "opcional": true
+      }
+    ],
+    "prepMin": 5,
+    "tags": [
+      "ayuno_ok"
+    ],
+    "costRel": 1,
+    "fuente": "Cocina mexicana"
+  },
+  {
+    "id": "enfrijoladas_ligeras",
+    "nombre": "Enfrijoladas ligeras",
+    "tipo": "platillo",
+    "slots": [
+      "COMIDA",
+      "CENA"
+    ],
+    "ingredientes": [
+      {
+        "foodId": "tortilla_maiz",
+        "maxUnits": 3
+      },
+      {
+        "foodId": "frijol_negro",
+        "maxUnits": 0.5
+      },
+      {
+        "rolePool": [
+          "proteina_grasa"
+        ],
+        "opciones": [
+          "queso_fresco",
+          "queso_panela"
+        ]
+      },
+      {
+        "foodId": "cebolla",
+        "fijo": true,
+        "gramos": 30
+      }
+    ],
+    "prepMin": 15,
+    "tags": [
+      "meal_prep",
+      "vegetariano",
+      "ayuno_ok"
+    ],
+    "costRel": 1,
+    "fuente": "Cocina mexicana"
+  },
+  {
+    "id": "huevos_mexicana",
+    "nombre": "Huevos a la mexicana con tortilla",
+    "tipo": "platillo",
+    "slots": [
+      "COMIDA",
+      "CENA"
+    ],
+    "ingredientes": [
+      {
+        "rolePool": [
+          "proteina_grasa"
+        ],
+        "opciones": [
+          "huevo_entero"
+        ]
+      },
+      {
+        "foodId": "pico_de_gallo",
+        "fijo": true,
+        "gramos": 80
+      },
+      {
+        "foodId": "tortilla_maiz",
+        "maxUnits": 3
+      }
+    ],
+    "prepMin": 10,
+    "tags": [
+      "vegetariano",
+      "ayuno_ok"
+    ],
+    "costRel": 1,
+    "fuente": "Cocina mexicana"
+  },
+  {
+    "id": "chilaquiles_horneados",
+    "nombre": "Chilaquiles horneados",
+    "tipo": "platillo",
+    "slots": [
+      "COMIDA"
+    ],
+    "ingredientes": [
+      {
+        "rolePool": [
+          "proteina_magra",
+          "proteina_grasa"
+        ],
+        "opciones": [
+          "pechuga_pollo",
+          "huevo_entero"
+        ]
+      },
+      {
+        "foodId": "tostada_horneada"
+      },
+      {
+        "foodId": "jitomate",
+        "fijo": true,
+        "gramos": 100
+      },
+      {
+        "foodId": "cebolla",
+        "fijo": true,
+        "gramos": 30
+      }
+    ],
+    "prepMin": 15,
+    "tags": [
+      "ayuno_ok"
+    ],
+    "costRel": 1,
+    "fuente": "Cocina mexicana"
+  },
+  {
+    "id": "quesadillas_nopal",
+    "nombre": "Quesadillas de nopal",
+    "tipo": "platillo",
+    "slots": [
+      "COMIDA",
+      "CENA"
+    ],
+    "ingredientes": [
+      {
+        "foodId": "tortilla_maiz",
+        "maxUnits": 3
+      },
+      {
+        "rolePool": [
+          "proteina_grasa"
+        ],
+        "opciones": [
+          "queso_panela",
+          "queso_fresco"
+        ]
+      },
+      {
+        "foodId": "nopal",
+        "fijo": true,
+        "gramos": 100
+      }
+    ],
+    "prepMin": 10,
+    "tags": [
+      "vegetariano",
+      "ayuno_ok"
+    ],
+    "costRel": 2,
+    "fuente": "Cocina mexicana"
+  },
+  {
+    "id": "sopa_tortilla_ligera",
+    "nombre": "Sopa de tortilla ligera",
+    "tipo": "sopa",
+    "slots": [
+      "COMIDA",
+      "CENA"
+    ],
+    "ingredientes": [
+      {
+        "foodId": "tostada_horneada",
+        "maxUnits": 2
+      },
+      {
+        "rolePool": [
+          "proteina_magra",
+          "proteina_grasa"
+        ],
+        "opciones": [
+          "pechuga_pollo",
+          "muslo_pollo"
+        ]
+      },
+      {
+        "foodId": "jitomate",
+        "fijo": true,
+        "gramos": 100
+      },
+      {
+        "foodId": "cebolla",
+        "fijo": true,
+        "gramos": 30
+      },
+      {
+        "foodId": "chile_poblano",
+        "fijo": true,
+        "gramos": 20
+      }
+    ],
+    "prepMin": 25,
+    "tags": [
+      "meal_prep",
+      "ayuno_ok"
+    ],
+    "costRel": 2,
+    "fuente": "Cocina mexicana"
+  },
+  {
+    "id": "tinga_pollo",
+    "nombre": "Tinga de pollo",
+    "tipo": "platillo",
+    "slots": [
+      "COMIDA",
+      "CENA"
+    ],
+    "ingredientes": [
+      {
+        "rolePool": [
+          "proteina_magra",
+          "proteina_grasa"
+        ],
+        "opciones": [
+          "pechuga_pollo",
+          "muslo_pollo"
+        ]
+      },
+      {
+        "foodId": "jitomate",
+        "fijo": true,
+        "gramos": 100
+      },
+      {
+        "foodId": "cebolla",
+        "fijo": true,
+        "gramos": 40
+      },
+      {
+        "foodId": "tostada_horneada"
+      }
+    ],
+    "prepMin": 20,
+    "tags": [
+      "meal_prep",
+      "ayuno_ok"
+    ],
+    "costRel": 2,
+    "fuente": "Cocina mexicana"
+  },
+  {
+    "id": "pollo_verduras_arroz",
+    "nombre": "Pollo con verduras y arroz",
+    "tipo": "platillo",
+    "slots": [
+      "COMIDA"
+    ],
+    "ingredientes": [
+      {
+        "rolePool": [
+          "proteina_magra",
+          "proteina_grasa"
+        ],
+        "opciones": [
+          "pechuga_pollo",
+          "muslo_pollo"
+        ]
+      },
+      {
+        "foodId": "calabacita",
+        "fijo": true,
+        "gramos": 100
+      },
+      {
+        "foodId": "zanahoria",
+        "fijo": true,
+        "gramos": 50
+      },
+      {
+        "rolePool": [
+          "carbo_post",
+          "carbo_complejo"
+        ],
+        "opciones": [
+          "arroz_integral",
+          "arroz_blanco"
+        ]
+      },
+      {
+        "foodId": "aceite_oliva",
+        "fijo": true,
+        "minUnits": 1,
+        "maxUnits": 1
+      }
+    ],
+    "prepMin": 20,
+    "tags": [
+      "meal_prep",
+      "ayuno_ok"
+    ],
+    "costRel": 2,
+    "fuente": "Cocina mexicana"
+  },
+  {
+    "id": "caldo_res_verdura",
+    "nombre": "Caldo de res con verdura",
+    "tipo": "caldo",
+    "slots": [
+      "COMIDA",
+      "CENA"
+    ],
+    "ingredientes": [
+      {
+        "foodId": "res_magra"
+      },
+      {
+        "foodId": "zanahoria",
+        "fijo": true,
+        "gramos": 50
+      },
+      {
+        "foodId": "calabacita",
+        "fijo": true,
+        "gramos": 80
+      },
+      {
+        "foodId": "col",
+        "fijo": true,
+        "gramos": 50
+      },
+      {
+        "foodId": "elote",
+        "maxUnits": 0.5,
+        "opcional": true
+      }
+    ],
+    "prepMin": 45,
+    "tags": [
+      "meal_prep",
+      "ayuno_ok"
+    ],
+    "costRel": 3,
+    "fuente": "Cocina mexicana"
+  },
+  {
+    "id": "pollo_papas_horno",
+    "nombre": "Pollo horneado con papas al air fryer",
+    "tipo": "platillo",
+    "slots": [
+      "COMIDA",
+      "CENA"
+    ],
+    "ingredientes": [
+      {
+        "rolePool": [
+          "proteina_magra",
+          "proteina_grasa"
+        ],
+        "opciones": [
+          "pechuga_pollo",
+          "muslo_pollo"
+        ]
+      },
+      {
+        "foodId": "papa"
+      },
+      {
+        "foodId": "aceite_oliva",
+        "fijo": true,
+        "minUnits": 1,
+        "maxUnits": 1
+      }
+    ],
+    "prepMin": 25,
+    "tags": [
+      "meal_prep",
+      "ayuno_ok"
+    ],
+    "costRel": 2,
+    "fuente": "Jousfit, Bye bye celulitis p. 25"
+  },
+  {
+    "id": "avena_proteica_frutos_rojos",
+    "nombre": "Avena proteica con {fruta}",
+    "tipo": "platillo",
+    "slots": [
+      "DESAYUNO",
+      "SNACK"
+    ],
+    "ingredientes": [
+      {
+        "foodId": "avena",
+        "maxUnits": 50
+      },
+      {
+        "tag": "leche",
+        "fijo": true,
+        "minUnits": 1,
+        "maxUnits": 1
+      },
+      {
+        "rolePool": [
+          "proteina_magra"
+        ],
+        "opciones": [
+          "whey_isolate",
+          "proteina_vegetal"
+        ],
+        "opcional": true
+      },
+      {
+        "fruta": {
+          "rolePool": [
+            "fruta"
+          ],
+          "preferidas": [
+            "frutos_rojos",
+            "fresa",
+            "frambuesa",
+            "arandano"
+          ]
+        }
+      }
+    ],
+    "prepMin": 10,
+    "tags": [
+      "vegetariano",
+      "ayuno_ok"
+    ],
+    "costRel": 2,
+    "fuente": "Jousfit, Bye bye celulitis p. 12"
+  },
+  {
+    "id": "hotcakes_platano_avena",
+    "nombre": "Hotcakes de plátano y avena",
+    "tipo": "platillo",
+    "slots": [
+      "DESAYUNO"
+    ],
+    "ingredientes": [
+      {
+        "rolePool": [
+          "proteina_grasa"
+        ],
+        "opciones": [
+          "huevo_entero"
+        ],
+        "minUnits": 2,
+        "maxUnits": 2
+      },
+      {
+        "foodId": "platano"
+      },
+      {
+        "foodId": "avena",
+        "maxUnits": 40
+      }
+    ],
+    "prepMin": 15,
+    "tags": [
+      "vegetariano",
+      "ayuno_ok"
+    ],
+    "costRel": 1,
+    "fuente": "Jousfit, Bye bye celulitis p. 13"
+  },
+  {
+    "id": "yogur_manzana_proteina",
+    "nombre": "Yogur griego con {fruta}",
+    "tipo": "platillo",
+    "slots": [
+      "SNACK",
+      "POST"
+    ],
+    "ingredientes": [
+      {
+        "foodId": "yogur_griego_0"
+      },
+      {
+        "fruta": {
+          "rolePool": [
+            "fruta"
+          ],
+          "preferidas": [
+            "manzana"
+          ]
+        }
+      },
+      {
+        "rolePool": [
+          "proteina_magra"
+        ],
+        "opciones": [
+          "whey_isolate",
+          "proteina_vegetal"
+        ],
+        "opcional": true
+      }
+    ],
+    "prepMin": 3,
+    "tags": [
+      "vegetariano",
+      "ayuno_ok"
+    ],
+    "costRel": 2,
+    "fuente": "Jousfit, Bye bye celulitis p. 24"
+  },
+  {
+    "id": "pan_aguacate_huevo",
+    "nombre": "Pan integral con aguacate y huevo",
+    "tipo": "platillo",
+    "slots": [
+      "DESAYUNO"
+    ],
+    "ingredientes": [
+      {
+        "rolePool": [
+          "proteina_grasa"
+        ],
+        "opciones": [
+          "huevo_entero"
+        ]
+      },
+      {
+        "foodId": "pan_integral",
+        "maxUnits": 2
+      },
+      {
+        "foodId": "aguacate"
+      }
+    ],
+    "prepMin": 10,
+    "tags": [
+      "vegetariano",
+      "ayuno_ok"
+    ],
+    "costRel": 2,
+    "fuente": "Jousfit, Bye bye celulitis p. 11"
   }
 ]

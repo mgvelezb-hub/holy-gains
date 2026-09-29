@@ -1517,6 +1517,36 @@
     "grupoSmae": "cereales_sin_grasa"
   },
   {
+    "id": "tortilla_harina_integral",
+    "name": "Tortilla de harina integral",
+    "role": "carbo_complejo",
+    "proteinPer100": 8.5,
+    "carbPer100": 48,
+    "fatPer100": 7.5,
+    "fiberPer100": 6,
+    "kcalPer100": 293.5,
+    "gi": 50,
+    "costRel": 1,
+    "prepMin": 1,
+    "tags": [
+      "cereal_comida",
+      "mexicano",
+      "rapido",
+      "vegetariano"
+    ],
+    "servingG": 40,
+    "unit": "pieza",
+    "maxG": 80,
+    "serving": {
+      "unit": "pieza",
+      "gramsPerUnit": 40,
+      "minUnits": 1,
+      "maxUnits": 2,
+      "step": 1
+    },
+    "grupoSmae": "cereales_con_grasa"
+  },
+  {
     "id": "avena_cocida",
     "name": "Avena cocida en agua",
     "role": "carbo_complejo",

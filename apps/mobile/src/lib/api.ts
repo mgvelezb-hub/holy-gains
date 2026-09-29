@@ -2516,7 +2516,7 @@ export function postReplanSemana(
 export type OpcionPlatillo = {
   id: string;
   nombre: string;
-  tipo: "licuado" | "sopa" | "crema" | "caldo";
+  tipo: "licuado" | "sopa" | "crema" | "caldo" | "platillo";
   /** Los macros con que quedaría la comida completa. */
   totals: { kcal: number; proteinG: number; carbG: number; fatG: number; fiberG: number };
 };

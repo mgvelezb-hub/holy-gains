@@ -162,6 +162,11 @@ export interface PreferenciaPreparaciones {
   licuados: boolean;
   sopas: boolean;
   cremas: boolean;
+  /**
+   * Tacos, tostadas, enfrijoladas... Sin el campo siguen a `sopas`: los dos
+   * son "comida de plato", y apagar todo tiene que apagarlos tambien.
+   */
+  platillos?: boolean;
 }
 
 import type { Supplement } from './suplementos.js';
@@ -444,7 +449,12 @@ export interface MenuItem {
   preparacion?: PreparacionRef;
 }
 
-export type TipoPreparacion = 'licuado' | 'sopa' | 'crema' | 'caldo';
+/**
+ * `platillo` es el plato mexicano reconocible (tacos, tostadas, enfrijoladas)
+ * o el desayuno armado (avena proteica, hotcakes de platano): lo que se
+ * sirve con nombre, no como alimentos sueltos.
+ */
+export type TipoPreparacion = 'licuado' | 'sopa' | 'crema' | 'caldo' | 'platillo';
 
 /**
  * Un ingrediente de una preparacion. Sale del catalogo de alimentos: o es un
@@ -501,6 +511,11 @@ export interface Preparacion {
   /** `vegetariano`, `keto_ok`, `ayuno_ok`, `meal_prep`... */
   tags: string[];
   costRel: 1 | 2 | 3;
+  /**
+   * De donde sale la receta: "Jousfit, Bye bye celulitis p. 15" o "Cocina
+   * mexicana". Referencia de combinaciones reales, no calco de porciones.
+   */
+  fuente?: string;
 }
 
 /** La preparacion a la que pertenece un alimento del menu. */

@@ -250,7 +250,9 @@ describe('generador de menus (spec §6)', () => {
         for (const option of equiv.options) {
           expect(option.foodId).not.toBe(equiv.forFoodId);
           const otro = findFood(option.foodId)!;
-          if (food.grupoSmae) expect(otro.grupoSmae, `${food.id} -> ${otro.id}`).toBe(food.grupoSmae);
+          // El grupo mayor: AOA, cereales y grasas incluyen sus subgrupos.
+          const mayor = (g?: string): string | undefined => g?.replace(/^(aoa|grasas|cereales)_.*$/, '$1');
+          if (food.grupoSmae) expect(mayor(otro.grupoSmae), `${food.id} -> ${otro.id}`).toBe(mayor(food.grupoSmae));
           else expect(otro.role).toBe(food.role);
         }
       }
@@ -794,7 +796,16 @@ describe('la lista de equivalencias da de donde elegir', () => {
   // elegible de la persona da para mas, la lista tiene que llenarse.
   it('llena hasta 20 opciones cuando el catalogo da para eso', () => {
     const { plan } = planFor(P, 'BASE', 42);
-    const equivalencias = plan.menus.flatMap((m) => m.meals.flatMap((meal) => meal.equivalences));
+    // El ingrediente de un platillo solo se cambia dentro de su receta (la
+    // tortilla de los tacos, el pollo de la tinga): esa lista es corta a
+    // proposito y no cuenta aqui.
+    const equivalencias = plan.menus.flatMap((m) =>
+      m.meals.flatMap((meal) =>
+        meal.equivalences.filter(
+          (e) => !meal.items.some((i) => i.foodId === e.forFoodId && i.preparacion !== undefined),
+        ),
+      ),
+    );
     const conVarias = equivalencias.filter((e) => e.options.length >= 3);
 
     // La gran mayoria trae al menos 3; las que no, es porque su rol tiene
