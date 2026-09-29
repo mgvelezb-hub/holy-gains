@@ -1,9 +1,10 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { ChevronLeft, Clock } from "lucide-react-native";
 import { useCallback, useMemo, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { Hoja } from "@/components/Hoja";
 import { Card } from "@/components/Card";
 import { Chip } from "@/components/Chip";
 import { EmptyState, ErrorState, LoadingState } from "@/components/States";
@@ -185,29 +186,27 @@ export default function ComidaSlotScreen() {
         {error && <Text style={styles.error}>{error}</Text>}
       </ScrollView>
 
-      <Modal visible={eligiendoHora} transparent animationType="fade" onRequestClose={() => setEligiendoHora(false)}>
-        <Pressable style={styles.fondo} onPress={() => setEligiendoHora(false)}>
-          <Pressable style={styles.hoja} onPress={() => {}}>
-            <Text style={styles.hojaTitulo}>¿A qué hora comiste?</Text>
-            <ScrollView style={styles.hojaLista}>
-              {HORAS.map((hora) => (
-                <Pressable
-                  key={hora}
-                  style={styles.hojaOpcion}
-                  onPress={() => {
-                    const [h, m] = hora.split(":").map(Number);
-                    const fecha = new Date();
-                    fecha.setHours(h!, m!, 0, 0);
-                    void guardar({ taken: true, takenAt: fecha.toISOString() });
-                  }}
-                >
-                  <Text style={styles.hojaHora}>{hora}</Text>
-                </Pressable>
-              ))}
-            </ScrollView>
+      <Hoja
+        visible={eligiendoHora}
+        onClose={() => setEligiendoHora(false)}
+        titulo="¿A qué hora comiste?"
+        contenidoStyle={styles.hojaLista}
+      >
+        {HORAS.map((hora) => (
+          <Pressable
+            key={hora}
+            style={styles.hojaOpcion}
+            onPress={() => {
+              const [h, m] = hora.split(":").map(Number);
+              const fecha = new Date();
+              fecha.setHours(h!, m!, 0, 0);
+              void guardar({ taken: true, takenAt: fecha.toISOString() });
+            }}
+          >
+            <Text style={styles.hojaHora}>{hora}</Text>
           </Pressable>
-        </Pressable>
-      </Modal>
+        ))}
+      </Hoja>
     </SafeAreaView>
   );
 }
@@ -245,18 +244,7 @@ const makeStyles = (colors: Palette) =>
     menuTitulo: { fontFamily: fonts.sansSemiBold, ...typeScale.bodySm, color: colors.paloRosa, marginBottom: 4 },
     menuItem: { fontFamily: fonts.sans, ...typeScale.body, color: colors.marfil },
     error: { fontFamily: fonts.sans, ...typeScale.bodySm, color: colors.error, marginTop: spacing.sm },
-    fondo: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
-    hoja: {
-      backgroundColor: colors.cardBg,
-      borderTopLeftRadius: radius.lg,
-      borderTopRightRadius: radius.lg,
-      borderWidth: 1,
-      borderColor: colors.cardBorder,
-      padding: spacing.lg,
-      maxHeight: "70%",
-    },
-    hojaTitulo: { fontFamily: fonts.sansMedium, ...typeScale.subheading, color: colors.marfil, marginBottom: spacing.sm },
-    hojaLista: { marginTop: spacing.sm },
+    hojaLista: { gap: 0 },
     hojaOpcion: { minHeight: 44, justifyContent: "center", paddingHorizontal: spacing.md, borderRadius: radius.md },
     hojaHora: { fontFamily: fonts.sansMedium, ...typeScale.body, color: colors.marfil },
   });

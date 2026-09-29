@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { paletteChampan, paletteDark, paletteLight, type Palette } from "@/lib/theme";
+import { paletteChampan, paletteDark, paletteLight, VELO_OPACIDAD, type Palette } from "@/lib/theme";
 
 /**
  * Contraste de la paleta, medido con la fórmula de WCAG.
@@ -101,6 +101,36 @@ describe("N1 · superficie opaca y colores de esfuerzo", () => {
         const ratio = contraste(paleta[rol], paleta.superficie);
         expect(ratio, `${nombre} · ${rol} da ${ratio.toFixed(2)}`).toBeGreaterThanOrEqual(4.5);
       }
+    });
+  }
+});
+
+/**
+ * N2 — la hoja común (`components/Hoja.tsx`). Toda hoja y diálogo es
+ * `superficie` (opaca) sobre un velo ≥ 0.75: con `cardBg` (5 % de blanco en
+ * oscuro) y un velo de 0.6, la lista de atrás se leía a través de la hoja.
+ * Cada rol de texto que carga una hoja tiene que pasar AA sobre ella.
+ */
+describe("N2 · hojas opacas", () => {
+  const TEXTO_EN_HOJA = ["marfil", "paloRosa", "paloRosaLight", "champan", "error"] as const;
+
+  it("el velo tapa lo de atrás (≥ 0.75)", () => {
+    expect(VELO_OPACIDAD).toBeGreaterThanOrEqual(0.75);
+    expect(VELO_OPACIDAD).toBeLessThanOrEqual(1);
+  });
+
+  for (const [nombre, paleta] of PALETAS) {
+    it(`${nombre}: cada texto de una hoja pasa AA sobre la superficie`, () => {
+      expect(paleta.superficie).toMatch(/^#[0-9A-F]{6}$/i);
+      for (const rol of TEXTO_EN_HOJA) {
+        const ratio = contraste(paleta[rol], paleta.superficie);
+        expect(ratio, `${nombre} · ${rol} sobre la hoja da ${ratio.toFixed(2)}`).toBeGreaterThanOrEqual(4.5);
+      }
+    });
+
+    it(`${nombre}: el botón principal de una hoja se lee`, () => {
+      const ratio = contraste(paleta.pergamino, paleta.guinda);
+      expect(ratio, `${nombre} · pergamino sobre guinda`).toBeGreaterThanOrEqual(4.5);
     });
   }
 });

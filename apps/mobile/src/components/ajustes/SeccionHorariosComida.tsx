@@ -1,7 +1,8 @@
 import { ChevronRight, Clock } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
+import { Hoja } from "@/components/Hoja";
 import { Card } from "@/components/Card";
 import { InfoTip, TextoInfo } from "@/components/InfoTip";
 import { Parrafo } from "@/components/Parrafo";
@@ -262,35 +263,28 @@ export function SeccionHorariosComida() {
         </View>
       )}
 
-      <Modal
+      <Hoja
         visible={eligiendo !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setEligiendo(null)}
+        onClose={() => setEligiendo(null)}
+        titulo={eligiendo?.label}
+        contenidoStyle={styles.hojaLista}
       >
-        <Pressable style={styles.fondo} onPress={() => setEligiendo(null)}>
-          <Pressable style={styles.hoja} onPress={() => {}}>
-            <Text style={styles.hojaTitulo}>{eligiendo?.label}</Text>
-            <Parrafo style={styles.hojaNota}>
-              Elige la hora. Si choca con otra comida te lo digo y no se guarda.
-            </Parrafo>
-            <ScrollView style={styles.hojaLista}>
-              {HORAS.map((hora) => {
-                const actual = eligiendo?.hora === hora;
-                return (
-                  <Pressable
-                    key={hora}
-                    onPress={() => eligiendo && poner(eligiendo.slot, hora)}
-                    style={[styles.hojaOpcion, actual && styles.hojaOpcionOn]}
-                  >
-                    <Text style={[styles.hojaHora, actual && styles.hojaHoraOn]}>{hora}</Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </Pressable>
-        </Pressable>
-      </Modal>
+        <Parrafo style={styles.hojaNota}>
+          Elige la hora. Si choca con otra comida te lo digo y no se guarda.
+        </Parrafo>
+        {HORAS.map((hora) => {
+          const actual = eligiendo?.hora === hora;
+          return (
+            <Pressable
+              key={hora}
+              onPress={() => eligiendo && poner(eligiendo.slot, hora)}
+              style={[styles.hojaOpcion, actual && styles.hojaOpcionOn]}
+            >
+              <Text style={[styles.hojaHora, actual && styles.hojaHoraOn]}>{hora}</Text>
+            </Pressable>
+          );
+        })}
+      </Hoja>
 
       {tiempos.length > 0 && (
         <View style={styles.porDia}>
@@ -342,32 +336,25 @@ export function SeccionHorariosComida() {
         </View>
       </Modal>
 
-      <Modal
+      <Hoja
         visible={eligiendoDia !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setEligiendoDia(null)}
+        onClose={() => setEligiendoDia(null)}
+        titulo={eligiendoDia?.label}
+        contenidoStyle={styles.hojaLista}
       >
-        <Pressable style={styles.fondo} onPress={() => setEligiendoDia(null)}>
-          <Pressable style={styles.hoja} onPress={() => {}}>
-            <Text style={styles.hojaTitulo}>{eligiendoDia?.label}</Text>
-            <ScrollView style={styles.hojaLista}>
-              {HORAS.map((hora) => {
-                const actual = eligiendoDia?.hora === hora;
-                return (
-                  <Pressable
-                    key={hora}
-                    onPress={() => eligiendoDia && void ponerDia(eligiendoDia.slot, hora)}
-                    style={[styles.hojaOpcion, actual && styles.hojaOpcionOn]}
-                  >
-                    <Text style={[styles.hojaHora, actual && styles.hojaHoraOn]}>{hora}</Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </Pressable>
-        </Pressable>
-      </Modal>
+        {HORAS.map((hora) => {
+          const actual = eligiendoDia?.hora === hora;
+          return (
+            <Pressable
+              key={hora}
+              onPress={() => eligiendoDia && void ponerDia(eligiendoDia.slot, hora)}
+              style={[styles.hojaOpcion, actual && styles.hojaOpcionOn]}
+            >
+              <Text style={[styles.hojaHora, actual && styles.hojaHoraOn]}>{hora}</Text>
+            </Pressable>
+          );
+        })}
+      </Hoja>
 
       {error && <Text style={styles.error}>{error}</Text>}
       {avisos.map((aviso) => (
@@ -435,29 +422,15 @@ const makeStyles = (colors: Palette) =>
     hora: { flexDirection: "row", alignItems: "center", gap: 4, minWidth: 68, justifyContent: "center" },
     horaTexto: { fontFamily: fonts.sansMedium, ...typeScale.bodySm, color: colors.marfil },
     vacio: { fontFamily: fonts.sans, ...typeScale.bodySm, color: colors.pergaminoSoft, marginTop: spacing.md },
-    fondo: {
-      flex: 1,
-      backgroundColor: "rgba(0,0,0,0.6)",
-      justifyContent: "flex-end",
-    },
-    hoja: {
-      backgroundColor: colors.cardBg,
-      borderTopLeftRadius: radius.lg,
-      borderTopRightRadius: radius.lg,
-      borderWidth: 1,
-      borderColor: colors.cardBorder,
-      padding: spacing.lg,
-      maxHeight: "70%",
-    },
     hojaTitulo: { fontFamily: fonts.sansMedium, ...typeScale.subheading, color: colors.marfil },
     hojaNota: {
       fontFamily: fonts.sans,
       ...typeScale.label,
-      color: colors.pergaminoSoft,
-      marginTop: 4,
-      marginBottom: spacing.md,
+      // Sobre la hoja opaca (N2): pergaminoSoft no pasa AA en Claro/Champán.
+      color: colors.paloRosaLight,
+      marginBottom: spacing.sm,
     },
-    hojaLista: { marginTop: spacing.sm },
+    hojaLista: { gap: 0 },
     hojaOpcion: {
       minHeight: 44,
       justifyContent: "center",

@@ -1,7 +1,8 @@
 import { CalendarOff, RefreshCw } from "lucide-react-native";
 import { useMemo, useState } from "react";
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 
+import { Hoja } from "@/components/Hoja";
 import { Parrafo } from "@/components/Parrafo";
 import { useTheme } from "@/context/theme";
 import { ApiError, postCambiarBloque, postCambiarBloqueDia, type Discipline } from "@/lib/api";
@@ -102,89 +103,85 @@ export function CambiarBloque({
         <Text style={styles.enlaceTexto}>No pude ir · cambiar por otra cosa</Text>
       </Pressable>
 
-      <Modal visible={abierto} transparent animationType="fade" onRequestClose={cerrar}>
-        <Pressable style={styles.fondo} onPress={cerrar}>
-          <Pressable style={styles.hoja} onPress={() => {}}>
-            {vista === "cambiar" ? (
-              <>
-                <Text style={styles.titulo}>¿Por qué lo cambias?</Text>
-                <Parrafo style={styles.nota}>
-                  Solo cambia hoy. Mañana tu semana sigue como la armaste. Si eliges pesas, te armo
-                  la sesión completa con tus pesos.
-                </Parrafo>
+      <Hoja visible={abierto} onClose={cerrar}>
+        {vista === "cambiar" ? (
+          <>
+            <Text style={styles.titulo}>¿Por qué lo cambias?</Text>
+            <Parrafo style={styles.nota}>
+              Solo cambia hoy. Mañana tu semana sigue como la armaste. Si eliges pesas, te armo
+              la sesión completa con tus pesos.
+            </Parrafo>
 
-                <View style={styles.lista}>
-                  {opciones.map((opcion) => {
-                    const Icono = iconoDe(opcion.valor);
-                    return (
-                      <Pressable
-                        key={opcion.valor}
-                        onPress={() => cambiar(opcion.valor)}
-                        disabled={guardando}
-                        style={styles.opcion}
-                      >
-                        <Icono size={18} color={colors.marfil} strokeWidth={2} />
-                        <Text style={styles.opcionTexto}>{opcion.nombre}</Text>
-                        {guardando && <ActivityIndicator size="small" color={colors.champan} />}
-                      </Pressable>
-                    );
-                  })}
-
+            <View style={styles.lista}>
+              {opciones.map((opcion) => {
+                const Icono = iconoDe(opcion.valor);
+                return (
                   <Pressable
-                    onPress={() => setVista("sinGym")}
+                    key={opcion.valor}
+                    onPress={() => cambiar(opcion.valor)}
                     disabled={guardando}
                     style={styles.opcion}
                   >
-                    <CalendarOff size={18} color={colors.marfil} strokeWidth={2} />
-                    <Text style={styles.opcionTexto}>Hoy solo squash / natación (sin gym)</Text>
+                    <Icono size={18} color={colors.marfil} strokeWidth={2} />
+                    <Text style={styles.opcionTexto}>{opcion.nombre}</Text>
+                    {guardando && <ActivityIndicator size="small" color={colors.champan} />}
                   </Pressable>
-                </View>
-              </>
-            ) : (
-              <>
-                <Text style={styles.titulo}>Hoy sin gimnasio</Text>
-                <Parrafo style={styles.nota}>
-                  Elige una o dos: es todo lo de hoy, ya no hay sesión de pesas.
-                </Parrafo>
+                );
+              })}
 
-                <View style={styles.chips}>
-                  {opcionesSinGym.map((opcion) => {
-                    const Icono = iconoDe(opcion.valor);
-                    const activa = elegidas.includes(opcion.valor);
-                    return (
-                      <Pressable
-                        key={opcion.valor}
-                        onPress={() => alternarElegida(opcion.valor)}
-                        disabled={guardando}
-                        style={[styles.chip, activa && styles.chipOn]}
-                      >
-                        <Icono size={16} color={activa ? colors.pergamino : colors.marfil} strokeWidth={2} />
-                        <Text style={[styles.chipTexto, activa && styles.chipTextoOn]}>
-                          {opcion.nombre}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
+              <Pressable
+                onPress={() => setVista("sinGym")}
+                disabled={guardando}
+                style={styles.opcion}
+              >
+                <CalendarOff size={18} color={colors.marfil} strokeWidth={2} />
+                <Text style={styles.opcionTexto}>Hoy solo squash / natación (sin gym)</Text>
+              </Pressable>
+            </View>
+          </>
+        ) : (
+          <>
+            <Text style={styles.titulo}>Hoy sin gimnasio</Text>
+            <Parrafo style={styles.nota}>
+              Elige una o dos: es todo lo de hoy, ya no hay sesión de pesas.
+            </Parrafo>
 
-                <Pressable
-                  onPress={guardarSinGym}
-                  disabled={guardando || elegidas.length === 0}
-                  style={[styles.guardar, elegidas.length === 0 && styles.guardarDeshabilitado]}
-                >
-                  {guardando ? (
-                    <ActivityIndicator size="small" color={colors.pergamino} />
-                  ) : (
-                    <Text style={styles.guardarTexto}>Guardar</Text>
-                  )}
-                </Pressable>
-              </>
-            )}
+            <View style={styles.chips}>
+              {opcionesSinGym.map((opcion) => {
+                const Icono = iconoDe(opcion.valor);
+                const activa = elegidas.includes(opcion.valor);
+                return (
+                  <Pressable
+                    key={opcion.valor}
+                    onPress={() => alternarElegida(opcion.valor)}
+                    disabled={guardando}
+                    style={[styles.chip, activa && styles.chipOn]}
+                  >
+                    <Icono size={16} color={activa ? colors.pergamino : colors.marfil} strokeWidth={2} />
+                    <Text style={[styles.chipTexto, activa && styles.chipTextoOn]}>
+                      {opcion.nombre}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
 
-            {error && <Text style={styles.error}>{error}</Text>}
-          </Pressable>
-        </Pressable>
-      </Modal>
+            <Pressable
+              onPress={guardarSinGym}
+              disabled={guardando || elegidas.length === 0}
+              style={[styles.guardar, elegidas.length === 0 && styles.guardarDeshabilitado]}
+            >
+              {guardando ? (
+                <ActivityIndicator size="small" color={colors.pergamino} />
+              ) : (
+                <Text style={styles.guardarTexto}>Guardar</Text>
+              )}
+            </Pressable>
+          </>
+        )}
+
+        {error && <Text style={styles.error}>{error}</Text>}
+      </Hoja>
     </>
   );
 }
@@ -198,18 +195,8 @@ const makeStyles = (colors: Palette) =>
       minHeight: 44,
     },
     enlaceTexto: { fontFamily: fonts.sansMedium, ...typeScale.bodySm, color: colors.champan },
-    fondo: { flex: 1, backgroundColor: "rgba(0,0,0,0.65)", justifyContent: "flex-end" },
-    hoja: {
-      backgroundColor: colors.cardBg,
-      borderTopLeftRadius: radius.lg,
-      borderTopRightRadius: radius.lg,
-      borderWidth: 1,
-      borderColor: colors.cardBorder,
-      padding: spacing.lg,
-      gap: spacing.sm,
-    },
     titulo: { fontFamily: fonts.sansMedium, ...typeScale.subheading, color: colors.marfil },
-    nota: { fontFamily: fonts.sans, ...typeScale.label, color: colors.pergaminoSoft },
+    nota: { fontFamily: fonts.sans, ...typeScale.label, color: colors.paloRosaLight },
     lista: { gap: spacing.sm, marginTop: spacing.sm },
     opcion: {
       flexDirection: "row",

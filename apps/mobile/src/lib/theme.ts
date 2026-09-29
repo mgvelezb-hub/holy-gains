@@ -276,6 +276,18 @@ export const parrafo = { textAlign: "justify" } as const;
  * el mismo trabajo. Es lo que evita que la pantalla se vea como una lista de
  * rectángulos planos del mismo tono.
  */
+/**
+ * El velo que oscurece la pantalla detrás de una hoja o un globito (N2).
+ *
+ * Con 0.6–0.65 la lista de atrás se seguía leyendo a través del velo y, con
+ * la hoja en `cardBg` (5 % de blanco en oscuro), las letras de la hoja se
+ * encimaban con las de la pantalla. La hoja ahora es `superficie` (opaca) y
+ * el velo baja la pantalla de atrás a ruido: ≥ 0.75, lo cuida
+ * `contraste.test.ts`.
+ */
+export const VELO_OPACIDAD = 0.78;
+export const velo = `rgba(0,0,0,${VELO_OPACIDAD})`;
+
 export const shadow = {
   card: {
     shadowColor: "#000",

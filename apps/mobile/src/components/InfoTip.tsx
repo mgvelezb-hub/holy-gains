@@ -1,10 +1,12 @@
 import { HelpCircle } from "lucide-react-native";
 import { useMemo, useState, type ReactNode } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+
+import { Hoja } from "@/components/Hoja";
 
 import { Parrafo } from "@/components/Parrafo";
 import { useTheme } from "@/context/theme";
-import { fonts, radius, shadow, spacing, type as typeScale, type Palette } from "@/lib/theme";
+import { fonts, spacing, type as typeScale, type Palette } from "@/lib/theme";
 
 /**
  * El "porqué" de un dato, guardado en un globito que solo se abre si alguien
@@ -49,23 +51,12 @@ export function InfoTip({ titulo, children }: { titulo?: string; children: React
         <HelpCircle size={16} color={colors.pergaminoSoft} strokeWidth={2} />
       </Pressable>
 
-      <Modal
-        visible={abierto}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setAbierto(false)}
-      >
-        <Pressable style={styles.fondo} onPress={() => setAbierto(false)}>
-          {/* Pressable interno con onPress vacío: absorbe el toque para que
-              tocar el texto del globito no lo cierre igual que tocar afuera. */}
-          <Pressable style={styles.globo} onPress={() => {}} accessibilityViewIsModal>
-            <ScrollView contentContainerStyle={styles.contenido} bounces={false}>
-              {titulo && <Text style={styles.titulo}>{titulo}</Text>}
-              <View style={styles.cuerpo}>{children}</View>
-            </ScrollView>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      {/* N2: la hoja común — velo hermano (tocar el texto no cierra, sin el
+          `Pressable` vacío que se quedaba con el gesto del scroll). */}
+      <Hoja visible={abierto} onClose={() => setAbierto(false)} variante="centro" hojaStyle={styles.globo}>
+        {titulo && <Text style={styles.titulo}>{titulo}</Text>}
+        <View style={styles.cuerpo}>{children}</View>
+      </Hoja>
     </>
   );
 }
@@ -79,31 +70,8 @@ export function TextoInfo({ children }: { children: ReactNode }) {
 
 const makeStyles = (colors: Palette) =>
   StyleSheet.create({
-    fondo: {
-      flex: 1,
-      backgroundColor: "rgba(0,0,0,0.65)",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: spacing.xl,
-    },
-    globo: {
-      maxWidth: 360,
-      width: "100%",
-      maxHeight: "80%",
-      // Opaca: nada de lo de atrás se asoma entre las letras.
-      backgroundColor: colors.superficie,
-      borderRadius: radius.xl,
-      borderWidth: 1,
-      borderColor: colors.cardBorder,
-      overflow: "hidden",
-      zIndex: 1000,
-      ...shadow.hero,
-    },
-    contenido: {
-      paddingHorizontal: spacing.xl,
-      paddingVertical: spacing.lg,
-      gap: spacing.sm,
-    },
+    // La hoja común pone la superficie opaca, el borde, la sombra y el velo.
+    globo: { maxWidth: 360, paddingHorizontal: spacing.xl },
     titulo: {
       fontFamily: fonts.sansSemiBold,
       ...typeScale.subheading,

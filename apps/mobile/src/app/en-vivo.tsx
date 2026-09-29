@@ -16,7 +16,6 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AppState,
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -26,6 +25,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { Hoja } from "@/components/Hoja";
 import { InfoTip, TextoInfo } from "@/components/InfoTip";
 import { Parrafo } from "@/components/Parrafo";
 import { ErrorState, LoadingState } from "@/components/States";
@@ -1702,139 +1702,131 @@ export default function EnVivoScreen() {
       {/* Teclado para la cantidad exacta: sirve para teclear el peso de la
           serie que viene y también para anotar el que faltó en una serie ya
           cerrada, tocándola en la lista. */}
-      <Modal
+      <Hoja
         visible={capturando !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setCapturando(null)}
+        onClose={() => setCapturando(null)}
+        variante="centro"
+        contenidoStyle={styles.tecladoCaja}
       >
-        <Pressable style={styles.tecladoFondo} onPress={() => setCapturando(null)}>
-          <Pressable style={styles.tecladoCaja} onPress={() => {}}>
-            <Text style={styles.tecladoTitulo}>
-              {capturando?.campo === "reps" ? "Repeticiones" : unidad === "kg" ? "Kilos" : "Libras"}
-            </Text>
-            {capturando?.serie && (
-              <Text style={styles.tecladoNota}>
-                Corrigiendo la serie {capturando.serie.serie + 1} de {ejercicio?.nombre}.
-              </Text>
-            )}
+        <Text style={styles.tecladoTitulo}>
+          {capturando?.campo === "reps" ? "Repeticiones" : unidad === "kg" ? "Kilos" : "Libras"}
+        </Text>
+        {capturando?.serie && (
+          <Text style={styles.tecladoNota}>
+            Corrigiendo la serie {capturando.serie.serie + 1} de {ejercicio?.nombre}.
+          </Text>
+        )}
 
-            <TextInput
-              value={borrador}
-              onChangeText={setBorrador}
-              keyboardType="decimal-pad"
-              autoFocus
-              selectTextOnFocus
-              style={styles.tecladoInput}
-              onSubmitEditing={aplicarCaptura}
-              returnKeyType="done"
-            />
+        <TextInput
+          value={borrador}
+          onChangeText={setBorrador}
+          keyboardType="decimal-pad"
+          autoFocus
+          selectTextOnFocus
+          style={styles.tecladoInput}
+          onSubmitEditing={aplicarCaptura}
+          returnKeyType="done"
+        />
 
-            <View style={styles.tecladoBotones}>
-              <Pressable onPress={() => setCapturando(null)} style={styles.botonSecundario}>
-                <Text style={styles.botonSecundarioTexto}>Cancelar</Text>
-              </Pressable>
-              <Pressable onPress={aplicarCaptura} style={[styles.botonSecundario, { flex: 1 }]}>
-                <Check size={16} color={colors.marfil} strokeWidth={2} />
-                <Text style={styles.botonSecundarioTexto}>Guardar</Text>
-              </Pressable>
-            </View>
+        <View style={styles.tecladoBotones}>
+          <Pressable onPress={() => setCapturando(null)} style={styles.botonSecundario}>
+            <Text style={styles.botonSecundarioTexto}>Cancelar</Text>
           </Pressable>
-        </Pressable>
-      </Modal>
+          <Pressable onPress={aplicarCaptura} style={[styles.botonSecundario, { flex: 1 }]}>
+            <Check size={16} color={colors.marfil} strokeWidth={2} />
+            <Text style={styles.botonSecundarioTexto}>Guardar</Text>
+          </Pressable>
+        </View>
+      </Hoja>
 
       {/* "¿Esta máquina se carga por lado?" — una vez por ejercicio, y se
           recuerda (Profile.exercisePrefs). Con carga por lado se teclea UN
           lado y se registra el total: lado × 2 + barra. */}
-      <Modal
+      <Hoja
         visible={preguntaMontaje !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setPreguntaMontaje(null)}
+        onClose={() => setPreguntaMontaje(null)}
+        variante="centro"
+        contenidoStyle={styles.tecladoCaja}
       >
-        <Pressable style={styles.tecladoFondo} onPress={() => setPreguntaMontaje(null)}>
-          <Pressable style={styles.tecladoCaja} onPress={() => {}}>
-            {preguntaMontaje?.paso === "lado" ? (
-              <>
-                <Text style={styles.tecladoTitulo}>¿Esta máquina se carga por lado?</Text>
-                <Text style={styles.tecladoNota}>{preguntaMontaje.nombre}</Text>
-                <View style={styles.tecladoBotones}>
-                  <Pressable
-                    onPress={() => {
-                      guardarMontaje(preguntaMontaje.exerciseId, { cargaPorLado: false, barraKg: 0 });
-                      setPreguntaMontaje(null);
-                    }}
-                    style={[styles.botonSecundario, { flex: 1 }]}
-                  >
-                    <Text style={styles.botonSecundarioTexto}>No, peso total</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => {
-                      const previa = datos.montajes[preguntaMontaje.exerciseId];
-                      const barra =
-                        previa?.cargaPorLado === true
-                          ? previa.barraKg
-                          : barraPorDefecto(preguntaMontaje.nombre, unidad);
-                      setBarraBorrador(formatoPeso(aUnidad(barra, unidad)));
-                      setPreguntaMontaje({ ...preguntaMontaje, paso: "barra" });
-                    }}
-                    style={[styles.botonSecundario, { flex: 1 }]}
-                  >
-                    <Check size={16} color={colors.marfil} strokeWidth={2} />
-                    <Text style={styles.botonSecundarioTexto}>Sí, por lado</Text>
-                  </Pressable>
-                </View>
-              </>
-            ) : preguntaMontaje ? (
-              <>
-                <Text style={styles.tecladoTitulo}>¿Cuánto pesa la barra o el carro?</Text>
-                <Text style={styles.tecladoNota}>
-                  En {unidad}. Barra olímpica: {unidad === "kg" ? "20 kg" : "45 lb"}; carro de prensa,
-                  0 si no sabes.
-                </Text>
-                <TextInput
-                  value={barraBorrador}
-                  onChangeText={setBarraBorrador}
-                  keyboardType="decimal-pad"
-                  autoFocus
-                  selectTextOnFocus
-                  style={styles.tecladoInput}
-                  returnKeyType="done"
-                />
-                <View style={styles.tecladoBotones}>
-                  <Pressable
-                    onPress={() => {
-                      guardarMontaje(preguntaMontaje.exerciseId, {
-                        cargaPorLado: true,
-                        barraKg: barraPorDefecto(preguntaMontaje.nombre, unidad),
-                      });
-                      setPreguntaMontaje(null);
-                    }}
-                    style={styles.botonSecundario}
-                  >
-                    <Text style={styles.botonSecundarioTexto}>No sé</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => {
-                      const numero = Number(barraBorrador.replace(",", "."));
-                      const barraKg =
-                        Number.isFinite(numero) && numero >= 0
-                          ? aKilos(numero, unidad)
-                          : barraPorDefecto(preguntaMontaje.nombre, unidad);
-                      guardarMontaje(preguntaMontaje.exerciseId, { cargaPorLado: true, barraKg });
-                      setPreguntaMontaje(null);
-                    }}
-                    style={[styles.botonSecundario, { flex: 1 }]}
-                  >
-                    <Check size={16} color={colors.marfil} strokeWidth={2} />
-                    <Text style={styles.botonSecundarioTexto}>Guardar</Text>
-                  </Pressable>
-                </View>
-              </>
-            ) : null}
-          </Pressable>
-        </Pressable>
-      </Modal>
+        {preguntaMontaje?.paso === "lado" ? (
+          <>
+            <Text style={styles.tecladoTitulo}>¿Esta máquina se carga por lado?</Text>
+            <Text style={styles.tecladoNota}>{preguntaMontaje.nombre}</Text>
+            <View style={styles.tecladoBotones}>
+              <Pressable
+                onPress={() => {
+                  guardarMontaje(preguntaMontaje.exerciseId, { cargaPorLado: false, barraKg: 0 });
+                  setPreguntaMontaje(null);
+                }}
+                style={[styles.botonSecundario, { flex: 1 }]}
+              >
+                <Text style={styles.botonSecundarioTexto}>No, peso total</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  const previa = datos.montajes[preguntaMontaje.exerciseId];
+                  const barra =
+                    previa?.cargaPorLado === true
+                      ? previa.barraKg
+                      : barraPorDefecto(preguntaMontaje.nombre, unidad);
+                  setBarraBorrador(formatoPeso(aUnidad(barra, unidad)));
+                  setPreguntaMontaje({ ...preguntaMontaje, paso: "barra" });
+                }}
+                style={[styles.botonSecundario, { flex: 1 }]}
+              >
+                <Check size={16} color={colors.marfil} strokeWidth={2} />
+                <Text style={styles.botonSecundarioTexto}>Sí, por lado</Text>
+              </Pressable>
+            </View>
+          </>
+        ) : preguntaMontaje ? (
+          <>
+            <Text style={styles.tecladoTitulo}>¿Cuánto pesa la barra o el carro?</Text>
+            <Text style={styles.tecladoNota}>
+              En {unidad}. Barra olímpica: {unidad === "kg" ? "20 kg" : "45 lb"}; carro de prensa,
+              0 si no sabes.
+            </Text>
+            <TextInput
+              value={barraBorrador}
+              onChangeText={setBarraBorrador}
+              keyboardType="decimal-pad"
+              autoFocus
+              selectTextOnFocus
+              style={styles.tecladoInput}
+              returnKeyType="done"
+            />
+            <View style={styles.tecladoBotones}>
+              <Pressable
+                onPress={() => {
+                  guardarMontaje(preguntaMontaje.exerciseId, {
+                    cargaPorLado: true,
+                    barraKg: barraPorDefecto(preguntaMontaje.nombre, unidad),
+                  });
+                  setPreguntaMontaje(null);
+                }}
+                style={styles.botonSecundario}
+              >
+                <Text style={styles.botonSecundarioTexto}>No sé</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  const numero = Number(barraBorrador.replace(",", "."));
+                  const barraKg =
+                    Number.isFinite(numero) && numero >= 0
+                      ? aKilos(numero, unidad)
+                      : barraPorDefecto(preguntaMontaje.nombre, unidad);
+                  guardarMontaje(preguntaMontaje.exerciseId, { cargaPorLado: true, barraKg });
+                  setPreguntaMontaje(null);
+                }}
+                style={[styles.botonSecundario, { flex: 1 }]}
+              >
+                <Check size={16} color={colors.marfil} strokeWidth={2} />
+                <Text style={styles.botonSecundarioTexto}>Guardar</Text>
+              </Pressable>
+            </View>
+          </>
+        ) : null}
+      </Hoja>
     </SafeAreaView>
   );
 }
@@ -2018,22 +2010,10 @@ const makeStyles = (colors: Palette) =>
     terminarPregunta: { fontFamily: fonts.sans, ...typeScale.bodySm, color: colors.marfil },
     terminarBotones: { flexDirection: "row", gap: spacing.sm },
     campoValorCaja: { minWidth: 96, alignItems: "center", justifyContent: "center", minHeight: 44 },
-    tecladoFondo: {
-      flex: 1,
-      backgroundColor: "rgba(0,0,0,0.65)",
-      justifyContent: "center",
-      padding: spacing.lg,
-    },
-    tecladoCaja: {
-      backgroundColor: colors.cardBg,
-      borderRadius: radius.lg,
-      borderWidth: 1,
-      borderColor: colors.cardBorder,
-      padding: spacing.lg,
-      gap: spacing.md,
-    },
+    // La hoja común (N2) pone la superficie opaca, el borde y el velo.
+    tecladoCaja: { gap: spacing.md },
     tecladoTitulo: { fontFamily: fonts.sansMedium, ...typeScale.subheading, color: colors.marfil },
-    tecladoNota: { fontFamily: fonts.sans, ...typeScale.label, color: colors.pergaminoSoft },
+    tecladoNota: { fontFamily: fonts.sans, ...typeScale.label, color: colors.paloRosaLight },
     tecladoInput: {
       fontFamily: fonts.sansSemiBold,
       ...typeScale.title,

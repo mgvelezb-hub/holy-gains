@@ -1,8 +1,9 @@
 import NetInfo from "@react-native-community/netinfo";
 import { useRouter } from "expo-router";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
+import { Hoja } from "@/components/Hoja";
 import { Chip } from "@/components/Chip";
 import { CalendarRange, PlayCircle, Timer } from "lucide-react-native";
 import { Collapsible } from "@/components/Collapsible";
@@ -677,55 +678,49 @@ function TiempoDeHoy({
         onPress={() => setAbierto(true)}
       />
 
-      <Modal visible={abierto} transparent animationType="fade" onRequestClose={() => setAbierto(false)}>
-        <Pressable style={styles.fondo} onPress={() => setAbierto(false)}>
-          <Pressable style={styles.hoja} onPress={() => {}}>
-            <Text style={styles.hojaTitulo}>¿Cuánto tiempo tienes?</Text>
+      <Hoja visible={abierto} onClose={() => setAbierto(false)} titulo="¿Cuánto tiempo tienes?">
+        <View style={styles.trimLista}>
+          {RECORTES.map((opcion) => {
+            const activo = session.trimmedMinutes === opcion.minutos;
+            return (
+              <Pressable
+                key={opcion.nombre}
+                disabled={working}
+                onPress={() => {
+                  onTrim(opcion.minutos);
+                  setAbierto(false);
+                }}
+                style={[
+                  styles.trimOpcion,
+                  activo && styles.trimOpcionOn,
+                  working && styles.trimChipDisabled,
+                ]}
+              >
+                <Text style={[styles.trimOpcionNombre, activo && styles.trimOpcionNombreOn]}>
+                  {opcion.nombre}
+                </Text>
+                <Text style={styles.trimOpcionDetalle}>{opcion.detalle}</Text>
+              </Pressable>
+            );
+          })}
 
-            <View style={styles.trimLista}>
-              {RECORTES.map((opcion) => {
-                const activo = session.trimmedMinutes === opcion.minutos;
-                return (
-                  <Pressable
-                    key={opcion.nombre}
-                    disabled={working}
-                    onPress={() => {
-                      onTrim(opcion.minutos);
-                      setAbierto(false);
-                    }}
-                    style={[
-                      styles.trimOpcion,
-                      activo && styles.trimOpcionOn,
-                      working && styles.trimChipDisabled,
-                    ]}
-                  >
-                    <Text style={[styles.trimOpcionNombre, activo && styles.trimOpcionNombreOn]}>
-                      {opcion.nombre}
-                    </Text>
-                    <Text style={styles.trimOpcionDetalle}>{opcion.detalle}</Text>
-                  </Pressable>
-                );
-              })}
+          {recortada && (
+            <Pressable
+              disabled={working}
+              onPress={() => {
+                onTrim(null);
+                setAbierto(false);
+              }}
+              style={[styles.trimOpcion, working && styles.trimChipDisabled]}
+            >
+              <Text style={styles.trimOpcionNombre}>Rutina completa</Text>
+              <Text style={styles.trimOpcionDetalle}>Como venía en tu plan</Text>
+            </Pressable>
+          )}
+        </View>
 
-              {recortada && (
-                <Pressable
-                  disabled={working}
-                  onPress={() => {
-                    onTrim(null);
-                    setAbierto(false);
-                  }}
-                  style={[styles.trimOpcion, working && styles.trimChipDisabled]}
-                >
-                  <Text style={styles.trimOpcionNombre}>Rutina completa</Text>
-                  <Text style={styles.trimOpcionDetalle}>Como venía en tu plan</Text>
-                </Pressable>
-              )}
-            </View>
-
-            {error && <Text style={styles.trimError}>{error}</Text>}
-          </Pressable>
-        </Pressable>
-      </Modal>
+        {error && <Text style={styles.trimError}>{error}</Text>}
+      </Hoja>
     </>
   );
 }
@@ -762,6 +757,10 @@ function OtraDisciplina({
     });
   }
 
+  function abrir() {
+    setAbierto(true);
+  }
+
   return (
     <>
       <ScoreCard
@@ -785,100 +784,100 @@ function OtraDisciplina({
             </InfoTip>
           )
         }
-        onPress={() => setAbierto(true)}
+        onPress={abrir}
       />
 
-      <Modal visible={abierto} transparent animationType="fade" onRequestClose={() => setAbierto(false)}>
-        <Pressable style={styles.fondo} onPress={() => setAbierto(false)}>
-          <Pressable style={styles.hoja} onPress={() => {}}>
-            <ScrollView contentContainerStyle={styles.hojaScroll}>
-              <Text style={styles.hojaTitulo}>{nombre}</Text>
-              <Text style={styles.swimNote}>{session.note}</Text>
-
-              {protocolo ? (
-                // N1: la caminadora HIIT se lee como la tabla de Mau, por
-                // velocidad real; el chip km/h ↔ mph guarda la preferencia.
-                <View style={styles.swimBlocks}>
-                  <ProtocoloHiit protocolo={protocolo} unidad={unidad} onUnidad={cambiarUnidad} />
-                  {session.sesion!.notes.map((note) => (
-                    <Text key={note} style={styles.swimNote}>
-                      {note}
-                    </Text>
-                  ))}
-                </View>
-              ) : session.sesion ? (
-                <View style={styles.swimBlocks}>
-                  {session.sesion.blocks.map((block) => (
-                    <View key={block.title} style={styles.swimBlock}>
-                      <View style={styles.swimBlockHead}>
-                        <Text style={styles.swimBlockTitle}>{block.title}</Text>
-                        {block.carga !== null && (
-                          <Text style={styles.swimBlockMeters}>
-                            {block.carga} {session.sesion!.unidad}
-                          </Text>
-                        )}
-                      </View>
-                      <Text style={styles.swimBlockDetail}>
-                        {block.detail}
-                        {block.restSeconds !== null ? ` · ${block.restSeconds} s de descanso` : " · continuo"}
-                      </Text>
-                      <Text style={styles.swimBlockNote}>{block.note}</Text>
-                    </View>
-                  ))}
-
-                  {session.sesion.notes.map((note) => (
-                    <Text key={note} style={styles.swimNote}>
-                      {note}
-                    </Text>
-                  ))}
-                </View>
-              ) : null}
-
-              {/* Dos maneras de cerrar el ciclo, y el orden importa: entrenarla
-                  con el cronómetro es lo que da duración real y pulso por
-                  tramo; registrarla a mano es para cuando ya pasó. */}
-              {isToday && (
-                <Pressable
-                  onPress={() => {
-                    setAbierto(false);
-                    router.push({
-                      pathname: "/sesion-libre",
-                      // La disciplina va en el param: un día puede tener DOS
-                      // sesiones con la misma fecha, y sin ella "empezar"
-                      // siempre abriría la primera.
-                      params: { fecha: session.date, discipline: session.discipline },
-                    });
-                  }}
-                  style={styles.enVivoOtra}
-                >
-                  <PlayCircle size={20} color={colors.pergamino} strokeWidth={2} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.enVivoTitulo}>Empezar la sesión</Text>
-                    <Text style={styles.enVivoDetalle}>
-                      Con cronómetro, tramo por tramo y el pulso de tu reloj
-                    </Text>
-                  </View>
-                </Pressable>
-              )}
-
+      <Hoja
+        visible={abierto}
+        onClose={() => setAbierto(false)}
+        titulo={nombre}
+        pie={
+          <>
+            {/* Dos maneras de cerrar el ciclo, y el orden importa: entrenarla
+                con el cronómetro es lo que da duración real y pulso por
+                tramo; registrarla a mano es para cuando ya pasó. */}
+            {isToday && (
               <Pressable
                 onPress={() => {
                   setAbierto(false);
                   router.push({
-                    pathname: "/actividad",
-                    params: { discipline: session.discipline, minutes: `${session.minutes}` },
+                    pathname: "/sesion-libre",
+                    // La disciplina va en el param: un día puede tener DOS
+                    // sesiones con la misma fecha, y sin ella "empezar"
+                    // siempre abriría la primera.
+                    params: { fecha: session.date, discipline: session.discipline },
                   });
                 }}
-                style={styles.registrarOtra}
+                style={styles.enVivoOtra}
               >
-                <Text style={styles.registrarOtraTexto}>
-                  {isToday ? "Ya la hice: registrarla a mano" : "Registrar esta sesión"}
-                </Text>
+                <PlayCircle size={20} color={colors.pergamino} strokeWidth={2} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.enVivoTitulo}>Empezar la sesión</Text>
+                  <Text style={styles.enVivoDetalle}>
+                    Con cronómetro, tramo por tramo y el pulso de tu reloj
+                  </Text>
+                </View>
               </Pressable>
-            </ScrollView>
-          </Pressable>
-        </Pressable>
-      </Modal>
+            )}
+
+            <Pressable
+              onPress={() => {
+                setAbierto(false);
+                router.push({
+                  pathname: "/actividad",
+                  params: { discipline: session.discipline, minutes: `${session.minutes}` },
+                });
+              }}
+              style={styles.registrarOtra}
+            >
+              <Text style={styles.registrarOtraTexto}>
+                {isToday ? "Ya la hice: registrarla a mano" : "Registrar esta sesión"}
+              </Text>
+            </Pressable>
+          </>
+        }
+      >
+        <Text style={styles.swimNote}>{session.note}</Text>
+
+        {protocolo ? (
+          // N1: la caminadora HIIT se lee como la tabla de Mau, por
+          // velocidad real; el chip km/h ↔ mph guarda la preferencia.
+          <View style={styles.swimBlocks}>
+            <ProtocoloHiit protocolo={protocolo} unidad={unidad} onUnidad={cambiarUnidad} />
+            {session.sesion!.notes.map((note) => (
+              <Text key={note} style={styles.swimNote}>
+                {note}
+              </Text>
+            ))}
+          </View>
+        ) : session.sesion ? (
+          <View style={styles.swimBlocks}>
+            {session.sesion.blocks.map((block) => (
+              <View key={block.title} style={styles.swimBlock}>
+                <View style={styles.swimBlockHead}>
+                  <Text style={styles.swimBlockTitle}>{block.title}</Text>
+                  {block.carga !== null && (
+                    <Text style={styles.swimBlockMeters}>
+                      {block.carga} {session.sesion!.unidad}
+                    </Text>
+                  )}
+                </View>
+                <Text style={styles.swimBlockDetail}>
+                  {block.detail}
+                  {block.restSeconds !== null ? ` · ${block.restSeconds} s de descanso` : " · continuo"}
+                </Text>
+                <Text style={styles.swimBlockNote}>{block.note}</Text>
+              </View>
+            ))}
+
+            {session.sesion.notes.map((note) => (
+              <Text key={note} style={styles.swimNote}>
+                {note}
+              </Text>
+            ))}
+          </View>
+        ) : null}
+      </Hoja>
     </>
   );
 }
@@ -1131,47 +1130,43 @@ function SummaryModal({
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
-    <Modal visible={open} animationType="fade" transparent onRequestClose={onClose}>
-      <View style={styles.modalBackdrop}>
-        <View style={styles.modalSheet}>
-          <Text style={styles.modalTitle}>Sesión terminada</Text>
-          <Text style={styles.modalSubtitle}>{muscleGroup}</Text>
+    <Hoja visible={open} onClose={onClose} variante="centro" cerrarConVelo={false} contenidoStyle={styles.modalSheet}>
+      <Text style={styles.modalTitle}>Sesión terminada</Text>
+      <Text style={styles.modalSubtitle}>{muscleGroup}</Text>
 
-          <View style={styles.statsRow}>
-            <View style={styles.statBox}>
-              <Text style={styles.statLabel}>Volumen</Text>
-              <Text style={styles.statValue}>{totals.volume.toLocaleString("es-MX")} kg</Text>
-            </View>
-            <View style={styles.statBox}>
-              <Text style={styles.statLabel}>Series</Text>
-              <Text style={styles.statValue}>{totals.sets}</Text>
-            </View>
-          </View>
-
-          {totals.prs.length > 0 && (
-            <View style={styles.prSummary}>
-              <Text style={styles.prSummaryTitle}>
-                {totals.prs.length === 1 ? "¡Récord personal!" : "¡Récords personales!"}
-              </Text>
-              <Text style={styles.prSummaryText}>{totals.prs.join(" · ")}</Text>
-            </View>
-          )}
-
-          {!online && (
-            <Parrafo style={styles.modalSubtitle}>
-              Sin conexión: quedó guardado en el teléfono y se sube solo cuando vuelva la red.
-            </Parrafo>
-          )}
-
-          <Pressable onPress={onConfirm} style={styles.confirmButton}>
-            <Text style={styles.confirmButtonText}>GUARDAR</Text>
-          </Pressable>
-          <Pressable onPress={onClose} style={styles.modalClose}>
-            <Text style={styles.modalCloseText}>SEGUIR CAPTURANDO</Text>
-          </Pressable>
+      <View style={styles.statsRow}>
+        <View style={styles.statBox}>
+          <Text style={styles.statLabel}>Volumen</Text>
+          <Text style={styles.statValue}>{totals.volume.toLocaleString("es-MX")} kg</Text>
+        </View>
+        <View style={styles.statBox}>
+          <Text style={styles.statLabel}>Series</Text>
+          <Text style={styles.statValue}>{totals.sets}</Text>
         </View>
       </View>
-    </Modal>
+
+      {totals.prs.length > 0 && (
+        <View style={styles.prSummary}>
+          <Text style={styles.prSummaryTitle}>
+            {totals.prs.length === 1 ? "¡Récord personal!" : "¡Récords personales!"}
+          </Text>
+          <Text style={styles.prSummaryText}>{totals.prs.join(" · ")}</Text>
+        </View>
+      )}
+
+      {!online && (
+        <Parrafo style={styles.modalSubtitle}>
+          Sin conexión: quedó guardado en el teléfono y se sube solo cuando vuelva la red.
+        </Parrafo>
+      )}
+
+      <Pressable onPress={onConfirm} style={styles.confirmButton}>
+        <Text style={styles.confirmButtonText}>GUARDAR</Text>
+      </Pressable>
+      <Pressable onPress={onClose} style={styles.modalClose}>
+        <Text style={styles.modalCloseText}>SEGUIR CAPTURANDO</Text>
+      </Pressable>
+    </Hoja>
   );
 }
 
@@ -1273,23 +1268,6 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
   trimChipText: { fontFamily: fonts.sansMedium, ...typeScale.bodySm, color: colors.marfil },
   trimChipTextSelected: { color: colors.pergamino },
   trimError: { fontFamily: fonts.sansMedium, ...typeScale.bodySm, color: colors.error },
-  fondo: { flex: 1, backgroundColor: "rgba(0,0,0,0.65)", justifyContent: "flex-end" },
-  hoja: {
-    maxHeight: "85%",
-    backgroundColor: colors.cardBg,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    padding: spacing.lg,
-  },
-  hojaScroll: { gap: spacing.sm },
-  hojaTitulo: {
-    fontFamily: fonts.sansBold,
-    ...typeScale.heading,
-    color: colors.marfil,
-    marginBottom: spacing.sm,
-  },
   weekCard: {
     borderRadius: radius.xxl,
     borderWidth: 1,
@@ -1429,16 +1407,8 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   nextChipText: { fontFamily: fonts.sans, ...typeScale.label, color: colors.paloRosaLight },
-  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", padding: spacing.lg },
-  modalSheet: {
-    width: "100%",
-    backgroundColor: colors.obsidiana,
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
+  // La hoja común (N2) pone la superficie opaca, el borde y el velo.
+  modalSheet: { gap: spacing.md },
   modalTitle: { fontFamily: fonts.display, ...typeScale.heading, color: colors.marfil },
   modalSubtitle: { fontFamily: fonts.sans, ...typeScale.bodySm, color: colors.paloRosaLight },
   statsRow: { flexDirection: "row", gap: spacing.md },

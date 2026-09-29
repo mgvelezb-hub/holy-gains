@@ -1,7 +1,8 @@
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useMemo, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { Hoja } from "@/components/Hoja";
 import { Card } from "@/components/Card";
 import { NumberStepper } from "@/components/NumberStepper";
 import { Parrafo } from "@/components/Parrafo";
@@ -287,31 +288,12 @@ function SwapModal({
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
-    <Modal visible={open} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.modalBackdrop}>
-        <View style={styles.modalSheet}>
-          <Text style={styles.modalTitle}>Cambiar ejercicio</Text>
-          <Parrafo style={styles.modalSubtitle}>
-            En lugar de {exercise.name}. Mismas series y esquema; el peso lo escribes tú, porque no
-            es la misma máquina.
-          </Parrafo>
-
-          <ScrollView style={styles.modalList}>
-            {exercise.alternatives.map((alternative) => (
-              <Pressable
-                key={alternative.exerciseId}
-                onPress={() => onPick(alternative)}
-                style={styles.modalOption}
-              >
-                <Text style={styles.modalOptionName}>{alternative.name}</Text>
-                <Text style={styles.modalOptionMeta}>
-                  {alternative.declared ? "Sustituto del mismo movimiento" : "Mismo grupo muscular"}
-                  {!alternative.videoPath ? " · sin video" : ""}
-                </Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-
+    <Hoja
+      visible={open}
+      onClose={onClose}
+      titulo="Cambiar ejercicio"
+      pie={
+        <>
           {captured > 0 && (
             <Parrafo style={styles.modalWarning}>
               Ojo: {captured === 1 ? "la serie que ya marcaste se borra" : `las ${captured} series que ya marcaste se borran`}
@@ -323,9 +305,28 @@ function SwapModal({
           <Pressable onPress={onClose} style={styles.modalClose}>
             <Text style={styles.modalCloseText}>CANCELAR</Text>
           </Pressable>
-        </View>
-      </View>
-    </Modal>
+        </>
+      }
+    >
+      <Parrafo style={styles.modalSubtitle}>
+        En lugar de {exercise.name}. Mismas series y esquema; el peso lo escribes tú, porque no
+        es la misma máquina.
+      </Parrafo>
+
+      {exercise.alternatives.map((alternative) => (
+        <Pressable
+          key={alternative.exerciseId}
+          onPress={() => onPick(alternative)}
+          style={styles.modalOption}
+        >
+          <Text style={styles.modalOptionName}>{alternative.name}</Text>
+          <Text style={styles.modalOptionMeta}>
+            {alternative.declared ? "Sustituto del mismo movimiento" : "Mismo grupo muscular"}
+            {!alternative.videoPath ? " · sin video" : ""}
+          </Text>
+        </Pressable>
+      ))}
+    </Hoja>
   );
 }
 
@@ -428,26 +429,12 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
   nextButtonDisabled: { opacity: 0.5 },
   // pergamino: rol "texto sobre fondo de acento" (aquí guinda, siempre).
   nextButtonText: { fontFamily: fonts.sansSemiBold, ...typeScale.label, letterSpacing: 3, color: colors.pergamino },
-  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
-  modalSheet: {
-    backgroundColor: colors.obsidiana,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    padding: spacing.lg,
-    gap: spacing.md,
-    maxHeight: "80%",
-  },
-  modalTitle: { fontFamily: fonts.display, ...typeScale.heading, color: colors.marfil },
   modalSubtitle: { fontFamily: fonts.sans, ...typeScale.bodySm, color: colors.paloRosaLight },
-  modalList: { gap: spacing.sm },
   modalOption: {
     borderWidth: 1,
     borderColor: colors.cardBorder,
     borderRadius: radius.md,
     padding: spacing.md,
-    marginBottom: spacing.sm,
   },
   modalOptionName: { fontFamily: fonts.sansSemiBold, ...typeScale.body, color: colors.marfil },
   modalOptionMeta: { fontFamily: fonts.sans, ...typeScale.label, color: colors.paloRosaLight, marginTop: 2 },
