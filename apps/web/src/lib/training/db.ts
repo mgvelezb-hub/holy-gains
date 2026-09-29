@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Phase, Prisma, Profile, Workout } from "@prisma/client";
 
+import { edadEnAnios } from "@/lib/edad";
 import { fromISODate, isoFromDateColumn, shiftISODate, toISODate } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 import { parseCambiosDeBloque } from "@/lib/training/bloques";
@@ -209,7 +210,9 @@ export function toTrainingProfile(profile: Profile): TrainingProfile {
       ? (profile.trainingSchedule as Record<string, string>)
       : null;
 
+  const edad = edadEnAnios(profile.birthDate, profile.ageRange);
   return {
+    ...(edad !== null ? { edad } : {}),
     liftingDays: profile.liftingDays,
     trainingSchedule: schedule,
     conditions: profile.conditions,

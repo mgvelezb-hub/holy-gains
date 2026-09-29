@@ -662,6 +662,8 @@ export function planDisciplines(input: {
    * nivel del HIIT de caminadora (N1). Ausente = arranca en el piso.
    */
   historialCardio?: ReadonlyArray<{ isoWeek: number; planeadas: number; registradas: number }>;
+  /** Años cumplidos: con ellos el cardio trae la zona de pulso de cada tramo (P1). */
+  edad?: number;
 }): DisciplinePlan {
   const { weekStart, otherDisciplines, gymByDay, niveles, objetivo, isoWeek, timePerDay, compactos } = input;
 
@@ -829,6 +831,7 @@ export function planDisciplines(input: {
           objetivo,
           ...(discipline === "CARDIO" && prefsCardio ? { cardio: prefsCardio } : {}),
           ...(discipline === "CARDIO" && input.historialCardio ? { historialCardio: input.historialCardio } : {}),
+          ...(discipline === "CARDIO" && input.edad !== undefined ? { edad: input.edad } : {}),
         }),
         note: colocacion.note,
         sharesDayWithGym: colocacion.sharesDayWithGym,

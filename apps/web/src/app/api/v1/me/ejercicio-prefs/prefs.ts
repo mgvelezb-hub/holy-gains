@@ -47,23 +47,5 @@ export function conMontaje(
   };
 }
 
-/**
- * Años cumplidos, para estimar la FC máxima del descanso por pulso. Con solo
- * el rango declarado ("35_44") se usa su punto medio; sin nada, `null` y el
- * teléfono se queda con la FC en reposo.
- */
-export function edadEnAnios(
-  birthDate: Date | null,
-  ageRange: string | null,
-  hoy: Date = new Date(),
-): number | null {
-  if (birthDate) {
-    let anios = hoy.getUTCFullYear() - birthDate.getUTCFullYear();
-    const mes = hoy.getUTCMonth() - birthDate.getUTCMonth();
-    if (mes < 0 || (mes === 0 && hoy.getUTCDate() < birthDate.getUTCDate())) anios -= 1;
-    return anios > 0 ? anios : null;
-  }
-  const rango = /^(\d{2})_(\d{2})$/.exec(ageRange ?? "");
-  if (rango) return Math.round((Number(rango[1]) + Number(rango[2]) + 1) / 2);
-  return null;
-}
+/** Años cumplidos (fecha o punto medio del rango); vive en `@/lib/edad` porque también la usa el cardio. */
+export { edadEnAnios } from "@/lib/edad";

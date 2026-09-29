@@ -388,6 +388,12 @@ export type TrainingProfile = {
    */
   historialCardio?: Array<{ isoWeek: number; planeadas: number; registradas: number }>;
   /**
+   * Años cumplidos (de `Profile.birthDate` o el punto medio de `ageRange`,
+   * `edadEnAnios`): con ella cada tramo de cardio trae su zona de pulso
+   * (P1). Ausente = el cardio se prescribe sin lpm.
+   */
+  edad?: number;
+  /**
    * Presupuesto semanal de sesiones de entrenamiento. Se llama `liftingDays`
    * por historia: cuando solo había pesas, las sesiones y los días de pesas
    * eran lo mismo. Con otras disciplinas activas ya no lo son — ver

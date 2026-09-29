@@ -66,6 +66,8 @@ export function prescribirSesion(input: {
   cardio?: PreferenciasCardio;
   /** Solo CARDIO: semanas anteriores planeadas vs registradas (nivel del HIIT de caminadora, N1). */
   historialCardio?: ReadonlyArray<{ isoWeek: number; planeadas: number; registradas: number }>;
+  /** Solo CARDIO: años cumplidos, para la zona de pulso de cada tramo (P1). */
+  edad?: number;
 }): SesionDisciplina | null {
   if (input.discipline === "CARDIO" && input.cardio) {
     return prescribirCardio({
@@ -76,6 +78,7 @@ export function prescribirSesion(input: {
       nivelDisciplina: input.nivel,
       ordinal: input.ordinal,
       ...(input.historialCardio ? { historial: input.historialCardio } : {}),
+      ...(input.edad !== undefined ? { edad: input.edad } : {}),
     });
   }
 
