@@ -394,18 +394,30 @@ export default function GymScreen() {
    * Se recarga en vez de parchar el estado local porque el plan nuevo trae
    * ejercicios, esquemas y pesos sugeridos distintos: reconstruirlo aquí sería
    * duplicar en el cliente lo que el generador ya decidió.
+   *
+   * O1: manda también la fecha —si el id en memoria ya no existe, el servidor
+   * resuelve la sesión por el día— y recarga SIN la pantalla de carga: con
+   * `load()` la hoja se desmontaba antes de enseñar cómo quedó el día. Regresa
+   * el día ya recargado para que la hoja lo diga antes de cerrarse.
    */
-  async function recortarSesion(minutes: number | null) {
-    if (!session || trimming) return;
+  async function recortarSesion(minutes: number | null): Promise<DiaRecortado | null> {
+    if (!session || trimming) return null;
     setTrimming(true);
     setTrimError(null);
     try {
-      await trimSession(session.workoutId, minutes);
-      await load();
+      await trimSession(session.workoutId, minutes, session.date);
+      const fresh = await getTrainingWeek();
+      setWeek(fresh);
+      setToday(fresh.today);
+      await saveWeek(fresh.weekStart, fresh);
+      const dia = fresh.sessions.find((entry) => entry.date === session.date);
+      if (!dia) return null;
+      return { ejercicios: dia.exercises.length, minutos: dia.estimatedMin ?? dia.trimmedMinutes ?? null };
     } catch (error) {
       setTrimError(
         error instanceof ApiError ? error.message : "No se pudo ajustar tu sesión",
       );
+      return null;
     } finally {
       setTrimming(false);
     }
@@ -631,6 +643,14 @@ function ConnectionBadge({
  * abajo es el terreno. Tocar una fila con sesión cambia `selectedDate`, y
  * la lista de ejercicios de abajo se redibuja para ese día.
  */
+/** Cómo quedó el día tras recortar, leído de la semana recargada. */
+type DiaRecortado = { ejercicios: number; minutos: number | null };
+
+function textoDelRecorte(dia: DiaRecortado): string {
+  const minutos = dia.minutos !== null ? ` · ${Math.round(dia.minutos)} min` : "";
+  return `Listo: ${dia.ejercicios} ejercicios${minutos}`;
+}
+
 /**
  * "Hoy tengo menos tiempo".
  *
@@ -648,12 +668,28 @@ function TiempoDeHoy({
   session: SessionView;
   working: boolean;
   error: string | null;
-  onTrim: (minutes: number | null) => void;
+  onTrim: (minutes: number | null) => Promise<DiaRecortado | null>;
 }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [abierto, setAbierto] = useState(false);
   const recortada = session.trimmedMinutes !== null;
+  const [hecho, setHecho] = useState<string | null>(null);
+
+  /**
+   * La hoja se queda abierta hasta que la semana recargada confirma cómo quedó
+   * el día; solo entonces se cierra. Con error se queda abierta y lo dice.
+   */
+  async function elegir(minutes: number | null) {
+    setHecho(null);
+    const dia = await onTrim(minutes);
+    if (!dia) return;
+    setHecho(textoDelRecorte(dia));
+    setTimeout(() => {
+      setAbierto(false);
+      setHecho(null);
+    }, 1400);
+  }
 
   return (
     <>
@@ -687,8 +723,7 @@ function TiempoDeHoy({
                 key={opcion.nombre}
                 disabled={working}
                 onPress={() => {
-                  onTrim(opcion.minutos);
-                  setAbierto(false);
+                  void elegir(opcion.minutos);
                 }}
                 style={[
                   styles.trimOpcion,
@@ -708,8 +743,7 @@ function TiempoDeHoy({
             <Pressable
               disabled={working}
               onPress={() => {
-                onTrim(null);
-                setAbierto(false);
+                void elegir(null);
               }}
               style={[styles.trimOpcion, working && styles.trimChipDisabled]}
             >
@@ -720,6 +754,7 @@ function TiempoDeHoy({
         </View>
 
         {error && <Text style={styles.trimError}>{error}</Text>}
+        {hecho && <Text style={styles.trimOpcionNombre}>{hecho}</Text>}
       </Hoja>
     </>
   );

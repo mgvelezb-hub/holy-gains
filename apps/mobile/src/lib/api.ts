@@ -553,10 +553,15 @@ export type TrimResponse = {
  * rechaza con 409 una sesión que ya tiene series capturadas — recortarla
  * dejaría esas series apuntando a un plan que ya no existe.
  */
-export function trimSession(workoutId: string, minutes: number | null): Promise<TrimResponse> {
+export function trimSession(
+  workoutId: string,
+  minutes: number | null,
+  /** El día (`YYYY-MM-DD`): si el id en memoria ya no existe, el servidor resuelve por fecha (O1). */
+  date?: string,
+): Promise<TrimResponse> {
   return apiFetch<TrimResponse>("/api/v1/training/trim", {
     method: "POST",
-    body: { workoutId, minutes },
+    body: { workoutId, minutes, ...(date ? { date } : {}) },
   });
 }
 
