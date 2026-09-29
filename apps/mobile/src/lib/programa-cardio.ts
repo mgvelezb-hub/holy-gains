@@ -207,22 +207,34 @@ export function valorDeCalibracion(programa: ProgramaCardio, paso: number): Nive
 }
 
 /**
- * Lo que se lee grande en un tramo: "Resist. 10 · 140 SPM · Moderado". Tras
- * calibrar, los tramos que decían "El que marcaste" dicen el valor marcado.
+ * Lo que se pone en la máquina en un tramo. Tras calibrar, los tramos que
+ * decían "El que marcaste" dicen el valor marcado.
  */
+export function controlDelTramo(
+  tramo: TramoCardio,
+  unidad: UnidadVelocidad,
+  marcado?: { maquina: MaquinaConBase; valor: NivelBase } | null,
+): string {
+  if (marcado && tramo.control.texto.includes("marcaste")) {
+    const valor = textoNivelBase(marcado.maquina, marcado.valor);
+    return tramo.fase === "enfriamiento" ? `Un poco menos que ${valor}` : valor;
+  }
+  return textoControl(tramo, unidad);
+}
+
+/** El esfuerzo como se lee: la caminata de relleno es "Caminata suave". */
+export function nombreDeEsfuerzo(tramo: Pick<TramoCardio, "esfuerzo" | "fase">): string {
+  const esfuerzo = esfuerzoDeTramo(tramo);
+  return esfuerzo === "Caminata" ? "Caminata suave" : esfuerzo;
+}
+
+/** Lo que se lee de un tramo en una línea: "Resist. 10 · 140 SPM · Moderado". */
 export function textoDelTramoCardio(
   tramo: TramoCardio,
   unidad: UnidadVelocidad,
   marcado?: { maquina: MaquinaConBase; valor: NivelBase } | null,
 ): string {
-  const control =
-    marcado && (tramo.fase === "continuo" || tramo.fase === "enfriamiento") && tramo.control.texto.includes("marcaste")
-      ? tramo.fase === "enfriamiento"
-        ? `Un poco menos que ${textoNivelBase(marcado.maquina, marcado.valor)}`
-        : textoNivelBase(marcado.maquina, marcado.valor)
-      : textoControl(tramo, unidad);
-  const esfuerzo = esfuerzoDeTramo(tramo);
-  return `${control} · ${esfuerzo === "Caminata" ? "Caminata suave" : esfuerzo}`;
+  return `${controlDelTramo(tramo, unidad, marcado)} · ${nombreDeEsfuerzo(tramo)}`;
 }
 
 /** Los pasos que corre el timer: un paso por tramo. */

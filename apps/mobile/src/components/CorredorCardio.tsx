@@ -1,17 +1,19 @@
 import * as Haptics from "expo-haptics";
 import { useKeepAwake } from "expo-keep-awake";
-import { Pause, Play, SkipForward, Square, Timer } from "lucide-react-native";
+import { Check, HeartPulse, Pause, Play, SkipForward, Square, Timer } from "lucide-react-native";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppState, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { useTheme } from "@/context/theme";
-import { postActivities, type DetalleCardio } from "@/lib/api";
+import { getMe, patchEntrenamiento, postActivities, type DetalleCardio } from "@/lib/api";
+import { programaDe, type MaquinaConBase, type NivelBase } from "@/lib/api-cardio";
 import {
   activoMsCorredor,
   actividadDeCardio,
   alcanzarCorredor,
   finDelCorredor,
   iniciarCorredor,
+  irAPasoCorredor,
   pasosDeCardio,
   pausarCorredor,
   reanudarCorredor,
@@ -22,7 +24,19 @@ import {
   type CorredorCardio as EstadoCorredor,
 } from "@/lib/cardio";
 import { guardaCardioEnCurso, leeCardioEnCurso, marcaCardioHecho, olvidaCardioEnCurso } from "@/lib/cardio-en-curso";
-import { colorDeEsfuerzo, debeAvisarCambio, protocoloDe, textoParaReloj, tramosDeSesion, unidadDe } from "@/lib/hiit";
+import { colorDeEsfuerzo, debeAvisarCambio, protocoloDe, textoParaReloj, tramosDeSesion, unidadDe, type EsfuerzoDeFila } from "@/lib/hiit";
+import {
+  conNivelBase,
+  controlDelTramo,
+  esfuerzoDeTramo,
+  indiceTrasCalibracion,
+  nombreDeEsfuerzo,
+  pasosDePrograma,
+  textoLpm,
+  textoNivelBase,
+  textoParaRelojPrograma,
+  valorDeCalibracion,
+} from "@/lib/programa-cardio";
 import { enviarFinAlReloj, enviarSesionAlReloj, estadoDelReloj } from "@/lib/reloj-nativo";
 import { formatoReloj } from "@/lib/sesion-viva";
 import { fonts, radius, spacing, type as typeScale, withAlpha, type Palette } from "@/lib/theme";
@@ -35,6 +49,11 @@ export type ResultadoCardio = { registrado: boolean; minutos: number; mensaje: s
 /**
  * El corredor del cardio (N2) — el MISMO en la sesión de pesas y en el cardio
  * suelto (`/cardio-en-vivo`), para que la lógica no se duplique.
+ *
+ * P1: con `programa`, cualquier máquina: lo que se pone en ella en grande
+ * ("Resist. 10 · 140 SPM", "2:15/500 · 26 SPM"), el esfuerzo con su color,
+ * el siguiente, la zona de pulso si hay reloj y, en la calibración, el botón
+ * "Aquí voy moderado" que guarda ese paso como nivel base y sigue con zona 2.
  *
  * Tramo por tramo con su velocidad grande y el color de su esfuerzo, la
  * cuenta regresiva contra la HORA de término (iOS congela los timers en el
@@ -66,9 +85,29 @@ export function CorredorCardio({
   useKeepAwake();
 
   const unidad = unidadDe(detalle);
-  const protocolo = protocoloDe(detalle);
+  const programa = programaDe(detalle);
+  const protocolo = programa ? null : protocoloDe(detalle);
   const pasos = useMemo(() => pasosDeCardio(detalle, minutos, unidad), [detalle, minutos, unidad]);
-  const tramos = useMemo(() => (protocolo ? tramosDeSesion(protocolo) : null), [protocolo]);
+  /** El esfuerzo de cada paso, si el cardio va tramo por tramo (programa P1 o protocolo N1). */
+  const esfuerzos = useMemo<EsfuerzoDeFila[] | null>(
+    () =>
+      programa
+        ? programa.tramos.map(esfuerzoDeTramo)
+        : protocolo
+          ? tramosDeSesion(protocolo).map((tramo) => tramo.esfuerzo)
+          : null,
+    [programa, protocolo],
+  );
+  const tramos = esfuerzos;
+
+  // Calibración: el nivel base que marcó. Solo cambia los NOMBRES (no las
+  // duraciones): los pasos del timer siguen siendo los mismos.
+  const [marcado, setMarcado] = useState<{ maquina: MaquinaConBase; valor: NivelBase } | null>(null);
+  const [avisoBase, setAvisoBase] = useState<string | null>(null);
+  const nombres = useMemo(
+    () => (programa && marcado ? pasosDePrograma(programa, unidad, marcado) : pasos),
+    [programa, marcado, pasos, unidad],
+  );
 
   const [estado, setEstado] = useState<EstadoCorredor | null>(null);
   const [ahora, setAhora] = useState(() => Date.now());
@@ -142,11 +181,14 @@ export function CorredorCardio({
 
   // Al reloj: el tramo actual en corto, al empezar cada tramo y al avisar.
   useEffect(() => {
-    if (!conReloj || !protocolo || !estado || estado.terminado) return;
-    enviarSesionAlReloj(
-      textoParaReloj({ protocolo, paso: estado.paso, restanteSeg: restanteDelPasoSeg(estado, Date.now()), unidad }),
-    );
-  }, [conReloj, protocolo, unidad, estado?.paso, estado?.avisadoEn, estado?.terminado]);
+    if (!conReloj || !estado || estado.terminado) return;
+    const restanteSeg = restanteDelPasoSeg(estado, Date.now());
+    if (programa) {
+      enviarSesionAlReloj(textoParaRelojPrograma({ programa, paso: estado.paso, restanteSeg, unidad }));
+    } else if (protocolo) {
+      enviarSesionAlReloj(textoParaReloj({ protocolo, paso: estado.paso, restanteSeg, unidad }));
+    }
+  }, [conReloj, programa, protocolo, unidad, estado?.paso, estado?.avisadoEn, estado?.terminado]);
 
   // El cursor se guarda en cada movimiento (paso, pausa); al terminar se olvida.
   useEffect(() => {
@@ -200,6 +242,35 @@ export function CorredorCardio({
     setEstado(saltarPasoCorredor(estado, pasos, ya));
   }
 
+  /**
+   * "Aquí voy moderado": el paso de calibración en curso es su nivel base en
+   * esta máquina. Se guarda en las preferencias (relee el perfil antes: el
+   * PATCH manda la lista completa) y el corredor sigue con la zona 2.
+   */
+  function aquiVoyModerado() {
+    if (!estado || !programa?.calibracion) return;
+    const valor = valorDeCalibracion(programa, estado.paso);
+    const destino = indiceTrasCalibracion(programa);
+    if (valor === null || destino === null) return;
+    const maquina = programa.calibracion.maquina;
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setMarcado({ maquina, valor });
+    const ya = Date.now();
+    setAhora(ya);
+    setEstado(irAPasoCorredor(estado, pasos, destino, ya));
+    void (async () => {
+      try {
+        const me = await getMe();
+        const otras = me.profile?.otherDisciplines ?? [];
+        if (!otras.some((carga) => carga.discipline === "CARDIO")) return;
+        await patchEntrenamiento({ otherDisciplines: conNivelBase(otras, maquina, valor) });
+        setAvisoBase(`Nivel base guardado: ${textoNivelBase(maquina, valor)}`);
+      } catch {
+        setAvisoBase(`Anótalo: ${textoNivelBase(maquina, valor)}. No se pudo guardar sin señal.`);
+      }
+    })();
+  }
+
   /** "Terminar aquí": registra lo corrido hasta ahora. */
   function terminarAqui() {
     if (!estado || estado.terminado) return;
@@ -215,11 +286,16 @@ export function CorredorCardio({
     );
   }
 
-  const actual = pasos[estado.paso];
-  const siguiente = pasos[estado.paso + 1];
+  const actual = nombres[estado.paso];
+  const siguiente = nombres[estado.paso + 1];
   const restante = restanteDelPasoSeg(estado, ahora);
   const enPausa = estado.hasta === null && !estado.terminado;
-  const colorTramo = tramos ? colorDeEsfuerzo(tramos[estado.paso]?.esfuerzo ?? "Fácil", colors) : colors.champan;
+  const colorTramo = tramos ? colorDeEsfuerzo(tramos[estado.paso] ?? "Fácil", colors) : colors.champan;
+  const tramoPrograma = programa?.tramos[estado.paso];
+  // Grande, lo que se pone en la máquina; debajo, el esfuerzo con su color.
+  const controlGrande = tramoPrograma && !estado.terminado ? controlDelTramo(tramoPrograma, unidad, marcado) : null;
+  const pulso = conReloj && tramoPrograma && !estado.terminado ? textoLpm(tramoPrograma.fcLpm) : null;
+  const calibrando = tramoPrograma?.fase === "calibracion" && !estado.terminado;
   const avisando = tramos !== null && estado.avisadoEn === estado.paso && siguiente !== undefined;
 
   return (
@@ -229,9 +305,26 @@ export function CorredorCardio({
 
       <View style={styles.caja}>
         <Timer size={20} color={colors.champan} strokeWidth={2} />
-        <Text style={[styles.tramo, { color: colorTramo }]} accessibilityRole="header">
-          {estado.terminado ? "Listo" : (actual?.nombre ?? "")}
-        </Text>
+        {controlGrande ? (
+          <>
+            <Text style={styles.control} accessibilityRole="header">
+              {controlGrande}
+            </Text>
+            <Text style={[styles.esfuerzo, { color: colorTramo }]}>
+              {tramoPrograma ? nombreDeEsfuerzo(tramoPrograma) : ""}
+            </Text>
+          </>
+        ) : (
+          <Text style={[styles.tramo, { color: colorTramo }]} accessibilityRole="header">
+            {estado.terminado ? "Listo" : (actual?.nombre ?? "")}
+          </Text>
+        )}
+        {pulso && (
+          <View style={styles.pulso}>
+            <HeartPulse size={16} color={colors.paloRosa} strokeWidth={2} />
+            <Text style={styles.pulsoTexto}>{pulso}</Text>
+          </View>
+        )}
         <Text style={styles.cuenta}>{formatoReloj(restante)}</Text>
         {estado.terminado ? (
           <Text style={styles.texto}>{guardando ? "Guardando…" : "Cardio terminado"}</Text>
@@ -249,6 +342,14 @@ export function CorredorCardio({
         <Text style={styles.progreso}>
           {tramos ? "Tramo" : "Paso"} {Math.min(estado.paso + 1, pasos.length)} de {pasos.length}
         </Text>
+
+        {calibrando && (
+          <Pressable onPress={aquiVoyModerado} style={styles.moderado} accessibilityRole="button">
+            <Check size={20} color={colors.pergamino} strokeWidth={2.5} />
+            <Text style={styles.moderadoTexto}>Aquí voy moderado</Text>
+          </Pressable>
+        )}
+        {avisoBase && <Text style={styles.texto}>{avisoBase}</Text>}
 
         {!estado.terminado && (
           <View style={styles.botones}>
@@ -305,6 +406,25 @@ const makeStyles = (colors: Palette) =>
       paddingHorizontal: spacing.lg,
     },
     tramo: { fontFamily: fonts.sansBold, ...typeScale.title, textAlign: "center" },
+    control: { fontFamily: fonts.sansBold, ...typeScale.title, color: colors.marfil, textAlign: "center" },
+    esfuerzo: { fontFamily: fonts.sansSemiBold, ...typeScale.heading, textAlign: "center" },
+    pulso: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
+    pulsoTexto: { fontFamily: fonts.sansMedium, ...typeScale.body, color: colors.paloRosa },
+    moderado: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: spacing.sm,
+      minHeight: 48,
+      marginTop: spacing.md,
+      borderRadius: radius.full,
+      borderWidth: 1,
+      borderColor: colors.guindaLight,
+      backgroundColor: colors.guinda,
+      paddingHorizontal: spacing.xl,
+      paddingVertical: spacing.sm,
+    },
+    moderadoTexto: { fontFamily: fonts.sansBold, ...typeScale.body, color: colors.pergamino },
     cuenta: { fontFamily: fonts.sansBold, ...typeScale.hero, color: colors.champan },
     texto: { fontFamily: fonts.sans, ...typeScale.body, color: colors.paloRosa, textAlign: "center" },
     aviso: { fontFamily: fonts.sansSemiBold, ...typeScale.body, color: colors.champan, textAlign: "center" },

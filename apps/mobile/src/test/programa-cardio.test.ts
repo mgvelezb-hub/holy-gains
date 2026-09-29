@@ -186,3 +186,16 @@ describe("preferencias (Ajustes y hoja)", () => {
     ).toBe("Cardio · 3/semana · después de pesas · Zona 2 remo 30 min");
   });
 });
+
+describe("Aquí voy moderado: el corredor salta a la zona 2", () => {
+  it("irAPasoCorredor avanza corriendo y no retrocede", async () => {
+    const { iniciarCorredor, irAPasoCorredor, pausarCorredor } = await import("@/lib/cardio");
+    const pasos = pasosDePrograma(REMO_CALIBRA, "kmh");
+    const inicio = iniciarCorredor("2026-09-28", pasos, 0);
+    const salto = irAPasoCorredor({ ...inicio, paso: 2 }, pasos, 5, 150_000);
+    expect(salto).toMatchObject({ paso: 5, hasta: 150_000 + 13 * 60_000, avisadoEn: null });
+    expect(irAPasoCorredor(salto, pasos, 3, 160_000)).toBe(salto);
+    const enPausa = pausarCorredor(inicio, 30_000);
+    expect(irAPasoCorredor(enPausa, pasos, 5, 40_000)).toMatchObject({ paso: 5, pausadoMs: 10_000, hasta: 40_000 + 13 * 60_000 });
+  });
+});

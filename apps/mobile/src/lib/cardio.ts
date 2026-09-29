@@ -250,6 +250,23 @@ export function saltarPasoCorredor(estado: CorredorCardio, pasos: readonly Warmu
 }
 
 /**
+ * Salta hacia adelante al paso `indice`, corriendo (P1: "Aquí voy moderado"
+ * deja la calibración y sigue con la zona 2). Hacia atrás o fuera del plan no
+ * hace nada.
+ */
+export function irAPasoCorredor(
+  estado: CorredorCardio,
+  pasos: readonly WarmupStep[],
+  indice: number,
+  ahora: number,
+): CorredorCardio {
+  const destino = pasos[indice];
+  if (estado.terminado || !destino || indice <= estado.paso) return estado;
+  const corriendo = reanudarCorredor(estado, ahora);
+  return { ...corriendo, paso: indice, hasta: ahora + destino.segundos * 1000, avisadoEn: null };
+}
+
+/**
  * Pone el corredor al día con el reloj de pared: si al volver de otra app ya
  * pasaron uno o varios tramos, avanza por ellos (cada uno empieza donde
  * terminó el anterior, no "ahora") y, tras el último, termina.
