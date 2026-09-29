@@ -21,7 +21,6 @@ import {
   type Discipline,
   type DisciplineLoad,
   type MeResponse,
-  type PreferenciasCardio,
   type CustomSplit,
   type DayKind,
   type MuscleGroup,
@@ -40,13 +39,16 @@ import {
   lineaDelDia,
   ordenarBloquesDelDia,
 } from "@/lib/entrenamiento";
+import type { PreferenciasCardioP1 } from "@/lib/api-cardio";
+import { CARDIO_POR_DEFECTO, OPCIONES_NIVEL, renglonDeCardio } from "@/lib/cardio";
 import {
-  CARDIO_POR_DEFECTO,
-  OPCIONES_EQUIPO,
-  OPCIONES_NIVEL,
-  OPCIONES_TIPO,
-  renglonDeCardio,
-} from "@/lib/cardio";
+  INFO_MODALIDAD,
+  modalidadElegida,
+  NOMBRE_MAQUINA,
+  OPCIONES_MAQUINA,
+  OPCIONES_MODALIDAD,
+  renglonNivelBase,
+} from "@/lib/programa-cardio";
 import { DIAS_SEMANA, PROPOSITOS, TIEMPOS_DIA, type Proposito, type WeekDay } from "@/lib/replantear";
 import { fonts, radius, spacing, type as typeScale, withAlpha, type Palette } from "@/lib/theme";
 
@@ -232,7 +234,7 @@ export function disciplinaNombre(discipline: Discipline): string {
  * romper la regla del archivo.
  */
 export type ModoDisciplina = "DESPUES" | "DIA_PROPIO";
-export type CargaConModo = DisciplineLoad & { modo?: ModoDisciplina; cardio?: PreferenciasCardio };
+export type CargaConModo = DisciplineLoad & { modo?: ModoDisciplina; cardio?: PreferenciasCardioP1 };
 
 /**
  * "2/semana · después de pesas" — el renglón de una disciplina secundaria.
@@ -891,19 +893,20 @@ export function EditorDisciplina({
 }
 
 /**
- * Cómo hace su cardio (H2): máquina, HIIT o continuo, nivel y minutos. Cada
- * toque guarda — sin botón de "guardar" que olvidar — y todo cabe en chips
- * de una línea; el porqué vive en el InfoTip.
+ * Cómo hace su cardio (H2 → P1): máquina, modalidad, nivel, minutos y su
+ * nivel base en esa máquina. Cada toque guarda — sin botón de "guardar" que
+ * olvidar — y todo cabe en chips de una línea; el porqué vive en los InfoTip.
  */
 function EditorCardio({
   prefs,
   onChange,
 }: {
-  prefs: Required<PreferenciasCardio>;
-  onChange: (cambios: PreferenciasCardio) => void;
+  prefs: Required<Pick<PreferenciasCardioP1, "equipo" | "tipo" | "nivel" | "minutos">> & PreferenciasCardioP1;
+  onChange: (cambios: PreferenciasCardioP1) => void;
 }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const modalidad = modalidadElegida(prefs.tipo);
 
   function filaDeChips<T extends string>(
     opciones: Array<{ valor: T; nombre: string }>,
@@ -919,6 +922,8 @@ function EditorCardio({
               key={opcion.valor}
               onPress={() => elegir(opcion.valor)}
               style={[styles.chip, activo && styles.chipOn]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: activo }}
             >
               <Text style={[styles.chipText, activo && styles.chipTextOn]}>{opcion.nombre}</Text>
             </Pressable>
@@ -931,18 +936,52 @@ function EditorCardio({
   return (
     <>
       <View style={styles.subHeader}>
-        <Text style={styles.subLabel}>Cómo haces tu cardio</Text>
-        <InfoTip titulo="HIIT o continuo">
+        <Text style={styles.subLabel}>Máquina</Text>
+        <InfoTip titulo="Cada máquina, sus controles">
           <TextoInfo>
-            Para perder grasa rinden igual; el HIIT lo logra en menos minutos, por eso es el default
-            al terminar pesas. El nivel decide el de la máquina (básico 6–8, medio 9–12, avanzado
-            13+) y sube uno cada semana, con descarga la cuarta.
+            La tabla de cada sesión dice qué poner en ESA máquina: km/h en la caminadora, resistencia y
+            zancadas en la elíptica, ritmo /500 m y paladas en el remo, resistencia y RPM en la bici,
+            watts en la de aire. Si un día está ocupada, la cambias en la hoja del cardio.
           </TextoInfo>
         </InfoTip>
       </View>
-      {filaDeChips(OPCIONES_EQUIPO, prefs.equipo, (equipo) => onChange({ equipo }))}
-      {filaDeChips(OPCIONES_TIPO, prefs.tipo, (tipo) => onChange({ tipo }))}
+      {filaDeChips(OPCIONES_MAQUINA, prefs.equipo === "LIBRE" ? "CAMINADORA" : prefs.equipo, (equipo) => onChange({ equipo }))}
+
+      <View style={styles.subHeader}>
+        <Text style={styles.subLabel}>Modalidad</Text>
+        <InfoTip titulo="Qué es cada modalidad">
+          {OPCIONES_MODALIDAD.map((opcion) => (
+            <TextoInfo key={opcion.valor}>
+              {`${opcion.nombre}: ${INFO_MODALIDAD[opcion.valor].porque} Para: ${INFO_MODALIDAD[opcion.valor].paraQuien}`}
+            </TextoInfo>
+          ))}
+        </InfoTip>
+      </View>
+      {filaDeChips(OPCIONES_MODALIDAD, modalidad, (tipo) => onChange({ tipo }))}
+
+      <View style={styles.subHeader}>
+        <Text style={styles.subLabel}>Nivel</Text>
+        <InfoTip titulo="Nivel y progresión">
+          <TextoInfo>
+            El nivel decide dónde arranca el HIIT (básico 0, medio 2, avanzado 4) y sube uno por cada semana
+            en que registres al menos el 80 % de tu cardio; la cuarta semana descarga.
+          </TextoInfo>
+        </InfoTip>
+      </View>
       {filaDeChips(OPCIONES_NIVEL, prefs.nivel, (nivel) => onChange({ nivel }))}
+
+      <View style={styles.subHeader}>
+        <Text style={styles.subLabel}>Tu nivel base en {NOMBRE_MAQUINA[prefs.equipo].toLowerCase()}</Text>
+        <InfoTip titulo="Nivel base">
+          <TextoInfo>
+            Es lo que para ti es "moderado" en esa máquina: puedes hablar, pero solo en frases cortas. De
+            ahí salen todos los esfuerzos de la tabla. Si no lo tienes, la primera sesión lo calibra: subes
+            un paso cada minuto y tocas «Aquí voy moderado».
+          </TextoInfo>
+        </InfoTip>
+      </View>
+      <Text style={styles.valorBase}>{renglonNivelBase(prefs.equipo, prefs.nivelBase)}</Text>
+
       <NumberStepper
         label="Minutos por sesión"
         value={prefs.minutos}
@@ -959,6 +998,7 @@ const makeStyles = (colors: Palette) =>
     sectionHeader: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
     subHeader: { flexDirection: "row", alignItems: "center", gap: spacing.xs, marginTop: spacing.md },
     subLabel: { fontFamily: fonts.sansMedium, ...typeScale.bodySm, color: colors.paloRosa },
+    valorBase: { fontFamily: fonts.sansSemiBold, ...typeScale.body, color: colors.marfil, marginTop: spacing.xs },
     lista: { gap: spacing.sm, marginTop: spacing.md },
     fila: {
       borderRadius: radius.xl,

@@ -3,16 +3,16 @@ import type {
   ActivityPayload,
   DetalleCardio,
   DisciplineLoad,
-  EquipoCardio,
   NivelCardio,
   PreferenciasCardio,
-  TipoCardio,
   OtherSessionView,
   SessionView,
   UnidadVelocidad,
   WarmupStep,
 } from "@/lib/api";
+import { programaDe, type EquipoCardioP1, type PreferenciasCardioP1 } from "@/lib/api-cardio";
 import { pasosDeProtocolo, protocoloDe, tituloProtocolo, unidadDe } from "@/lib/hiit";
+import { INFO_MODALIDAD, modalidadElegida, pasosDePrograma } from "@/lib/programa-cardio";
 
 /**
  * El cardio de después de pesas en la sesión en vivo (H2) — lógica pura.
@@ -24,11 +24,14 @@ import { pasosDeProtocolo, protocoloDe, tituloProtocolo, unidadDe } from "@/lib/
  * servidor las enlaza (`buscaGemela` en la web).
  */
 
-const EQUIPO: Record<EquipoCardio, string> = {
+const EQUIPO: Record<EquipoCardioP1, string> = {
   CAMINADORA: "caminadora",
-  ESCALERA: "escalera",
+  ESCALERA: "escaladora",
   BICI: "bici",
   ELIPTICA: "elíptica",
+  REMO: "remo",
+  BICI_AIRE: "bici de aire",
+  SKI_ERG: "SkiErg",
   LIBRE: "libre",
 };
 
@@ -38,6 +41,9 @@ function nivel(detalle: DetalleCardio, valor: number): string {
 
 /** "Cardio · 20 min · caminadora HIIT nivel 8". */
 export function tituloTarjetaCardio(detalle: DetalleCardio, minutos: number): string {
+  // P1: toda máquina y modalidad trae su programa con título ("Zona 2 · 30' · Remo").
+  const programa = programaDe(detalle);
+  if (programa) return `Cardio · ${minutos} min · ${programa.titulo}`;
   // N1: la caminadora HIIT se dice por su protocolo, no por "nivel de máquina".
   const protocolo = protocoloDe(detalle);
   if (protocolo) {
@@ -52,6 +58,9 @@ export function tituloTarjetaCardio(detalle: DetalleCardio, minutos: number): st
 
 /** Los pasos que corre el timer: calentamiento, el bloque principal, enfriamiento. */
 export function pasosDeCardio(detalle: DetalleCardio, minutos: number, unidad?: UnidadVelocidad): WarmupStep[] {
+  // P1: un paso por tramo del programa ("Resist. 10 · 140 SPM · Moderado Alto").
+  const programa = programaDe(detalle);
+  if (programa) return pasosDePrograma(programa, unidad ?? unidadDe(detalle));
   // N1: con protocolo, cada tramo es un paso ("10–12 km/h · Moderado Alto").
   const protocolo = protocoloDe(detalle);
   if (protocolo) return pasosDeProtocolo(protocolo, unidad ?? unidadDe(detalle));
@@ -78,6 +87,8 @@ export function pasosDeCardio(detalle: DetalleCardio, minutos: number, unidad?: 
 
 /** Lo que queda en las notas de la sesión: tipo, máquina y nivel. */
 export function notasDeCardio(detalle: DetalleCardio): string {
+  const programa = programaDe(detalle);
+  if (programa) return programa.titulo;
   const protocolo = protocoloDe(detalle);
   if (protocolo) return `${tituloProtocolo(protocolo)} · caminadora`;
   const tipo = detalle.tipo === "HIIT" ? "HIIT" : "Continuo";
@@ -116,36 +127,22 @@ export const CARDIO_POR_DEFECTO: Required<PreferenciasCardio> = {
   minutos: 20,
 };
 
-export const OPCIONES_EQUIPO: Array<{ valor: EquipoCardio; nombre: string }> = [
-  { valor: "CAMINADORA", nombre: "Caminadora" },
-  { valor: "ESCALERA", nombre: "Escalera" },
-  { valor: "BICI", nombre: "Bici" },
-  { valor: "ELIPTICA", nombre: "Elíptica" },
-  { valor: "LIBRE", nombre: "Libre" },
-];
-
-export const OPCIONES_TIPO: Array<{ valor: TipoCardio; nombre: string }> = [
-  { valor: "HIIT", nombre: "HIIT" },
-  { valor: "CONTINUO", nombre: "Continuo" },
-];
-
 export const OPCIONES_NIVEL: Array<{ valor: NivelCardio; nombre: string }> = [
   { valor: "BASICO", nombre: "Básico" },
   { valor: "MEDIO", nombre: "Medio" },
   { valor: "AVANZADO", nombre: "Avanzado" },
 ];
 
-/** "Cardio · 5/semana · después de pesas · HIIT caminadora 20 min". */
+/** "Cardio · 5/semana · después de pesas · HIIT caminadora 20 min", "… · Zona 2 remo 30 min". */
 export function renglonDeCardio(
-  carga: DisciplineLoad & { modo?: "DESPUES" | "DIA_PROPIO"; cardio?: PreferenciasCardio },
+  carga: DisciplineLoad & { modo?: "DESPUES" | "DIA_PROPIO"; cardio?: PreferenciasCardio | PreferenciasCardioP1 },
 ): string {
-  const prefs = { ...CARDIO_POR_DEFECTO, ...carga.cardio };
-  const tipo = prefs.tipo === "HIIT" ? "HIIT" : "continuo";
+  const prefs = { ...CARDIO_POR_DEFECTO, ...(carga.cardio as PreferenciasCardioP1 | undefined) };
+  const tipo = INFO_MODALIDAD[modalidadElegida(prefs.tipo)].nombre;
   const como = prefs.equipo === "LIBRE" ? tipo : `${tipo} ${EQUIPO[prefs.equipo]}`;
   const modo = carga.modo === "DESPUES" ? "después de pesas" : "día propio";
   return `Cardio · ${carga.sessionsPerWeek}/semana · ${modo} · ${como} ${prefs.minutos} min`;
 }
-
 
 /* ------------------------------------------------------------------------ */
 /* N2 — el cardio como sesión propia: se puede empezar cuando sea.           */
