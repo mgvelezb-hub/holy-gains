@@ -81,6 +81,12 @@ export type PlanNutricion = {
   recordatorios: RecordatorioPlan[];
   avisos: AvisoPlan[];
   materialized: boolean;
+  /**
+   * "Tu menú se actualizó con las reglas nuevas" si el servidor rehízo los
+   * menús por reglas nuevas del motor; se enseña una vez (`aviso-menu.ts`).
+   * Opcional: un servidor anterior no lo manda.
+   */
+  aviso?: string | null;
 };
 
 /** `GET /api/v1/nutricion/plan`. */
