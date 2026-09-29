@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { parseElecciones } from "engine";
 
 import { apiUser, unauthorized } from "@/lib/api/auth";
-import { sinMarcaDeLeche, tipoLecheDe } from "@/lib/coachy/leche";
+import { baseLicuadoDe, sinMarcaDeLeche, tipoLecheDe } from "@/lib/coachy/leche";
 import { parsePantry } from "@/lib/coachy/mapping";
 import { preferenciaDePreparaciones } from "@/lib/coachy/preparaciones";
 import { decimalToNumber } from "@/lib/format";
@@ -59,6 +59,8 @@ export async function GET(request: Request): Promise<NextResponse> {
           excludedFoods: sinMarcaDeLeche(profile.excludedFoods),
           // La leche de licuados y cremas (`lib/coachy/leche.ts`).
           tipoLeche: tipoLecheDe(profile.excludedFoods),
+          // Con qué se licua: leche (la de arriba) o agua.
+          baseLicuado: baseLicuadoDe(profile.excludedFoods),
           // Licuados, sopas y cremas: se leen de los excluidos (ver
           // `lib/coachy/preparaciones.ts`); Ajustes pinta los interruptores.
           preparaciones: preferenciaDePreparaciones(profile.excludedFoods),

@@ -67,3 +67,48 @@ describe("toEngineProfile traduce la marca de leche", () => {
     expect(perfil.tipoLeche).toBe("descremada");
   });
 });
+
+import { baseLicuadoDe, conBaseLicuado } from "@/lib/coachy/leche";
+
+describe("base de licuados guardada en los excluidos", () => {
+  it("sin marca, leche", () => {
+    expect(baseLicuadoDe(["atún", "leche:entera"])).toBe("leche");
+  });
+
+  it("la marca base:agua dice agua, sin importar mayúsculas", () => {
+    expect(baseLicuadoDe([" Base:Agua "])).toBe("agua");
+  });
+
+  it("cambiar la base no toca la leche ni lo demás; leche no deja marca", () => {
+    const agua = conBaseLicuado(["atún", "leche:entera"], "agua");
+    expect(agua).toEqual(["atún", "leche:entera", "base:agua"]);
+    expect(conBaseLicuado(agua, "leche")).toEqual(["atún", "leche:entera"]);
+  });
+
+  it("cambiar la leche conserva la base", () => {
+    expect(conTipoLeche(["base:agua", "leche:entera"], "deslactosada")).toEqual(["base:agua", "leche:deslactosada"]);
+  });
+
+  it("al motor y a la pantalla no les llega la marca: 'base:agua' contiene 'agua'", () => {
+    expect(sinMarcaDeLeche(["atún", "base:agua", "leche:entera"])).toEqual(["atún"]);
+  });
+});
+
+describe("toEngineProfile traduce la base de licuados", () => {
+  const base = {
+    sex: "FEMALE", birthDate: null, ageYears: 34, heightCm: 160, weightKg: 62, leanMassKg: null,
+    liftingDays: 6, cardioMinWk: 120, work: "ACTIVO", mealsPerDay: 5, trainingTime: "MANANA", budget: "MEDIO",
+    favoriteFoods: [], pantry: [], allergies: [], conditions: [], maxPrepMin: 20, dietStyle: "ESTANDAR",
+    supplements: [], fastingStartHour: null, fastingEndHour: null,
+  };
+
+  it("base:agua entra como baseLicuado y no excluye el agua", () => {
+    const perfil = toEngineProfile({ ...base, excludedFoods: ["base:agua"] } as unknown as Profile);
+    expect(perfil.baseLicuado).toBe("agua");
+    expect(perfil.excludedFoods).toEqual([]);
+  });
+
+  it("sin marca, leche", () => {
+    expect(toEngineProfile({ ...base, excludedFoods: [] } as unknown as Profile).baseLicuado).toBe("leche");
+  });
+});

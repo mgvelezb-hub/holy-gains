@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
-import { TIPOS_LECHE } from "engine";
+import { BASES_LICUADO, TIPOS_LECHE } from "engine";
 import { z } from "zod";
 
 import { apiUser, unauthorized } from "@/lib/api/auth";
-import { conTipoLeche } from "@/lib/coachy/leche";
+import { baseLicuadoDe, conBaseLicuado, conTipoLeche, tipoLecheDe } from "@/lib/coachy/leche";
 import { decisionVigente, materializeMealPlans } from "@/lib/coachy/menu";
 import { prisma } from "@/lib/prisma";
 
 /**
- * `PATCH /api/v1/me/leche` — la leche de licuados y cremas, y la semana
- * rearmada con ella.
+ * `PATCH /api/v1/me/leche` — la leche de licuados y cremas, o la base de los
+ * licuados (leche o agua), y la semana rearmada con ella.
  *
  * Cambiar de descremada a entera cambia kcal y grasa de cada licuado: el
  * menú que ya está publicado quedaría mintiendo. Por eso se rearma igual que
@@ -18,12 +18,19 @@ import { prisma } from "@/lib/prisma";
  * el menú está congelado y solo se toca con `?rearmar=1`. Los días ya
  * registrados viven en `meal_logs`, que esto no toca.
  *
- * Se guarda como marca `leche:<tipo>` en los excluidos (`lib/coachy/leche.ts`).
+ * Se guarda como marca `leche:<tipo>` (y `base:agua`) en los excluidos
+ * (`lib/coachy/leche.ts`). Licuar con agua quita los macros de la taza de
+ * leche: el menú se rearma por lo mismo que con la leche.
  */
 
 export const dynamic = "force-dynamic";
 
-const schema = z.object({ tipoLeche: z.enum(TIPOS_LECHE) });
+const schema = z
+  .object({
+    tipoLeche: z.enum(TIPOS_LECHE).optional(),
+    baseLicuado: z.enum(BASES_LICUADO).optional(),
+  })
+  .refine((datos) => datos.tipoLeche !== undefined || datos.baseLicuado !== undefined);
 
 /** Lunes de la semana de esa fecha, a medianoche. */
 function lunesDe(date: Date): Date {
@@ -49,18 +56,20 @@ export async function PATCH(request: Request): Promise<NextResponse> {
 
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "leche inválida" }, { status: 422 });
+    return NextResponse.json({ error: "leche o base inválida" }, { status: 422 });
   }
-  const { tipoLeche } = parsed.data;
+  const guardados = user.profile.excludedFoods;
+  const tipoLeche = parsed.data.tipoLeche ?? tipoLecheDe(guardados);
+  const baseLicuado = parsed.data.baseLicuado ?? baseLicuadoDe(guardados);
 
   const profile = await prisma.profile.update({
     where: { userId: user.id },
-    data: { excludedFoods: conTipoLeche(user.profile.excludedFoods, tipoLeche) },
+    data: { excludedFoods: conBaseLicuado(conTipoLeche(guardados, tipoLeche), baseLicuado) },
   });
 
   // La misma decisión que pinta Nutrición (`decisionVigente`).
   const decision = await decisionVigente(user.id);
-  if (!decision) return NextResponse.json({ tipoLeche, rearmado: false, congelado: false });
+  if (!decision) return NextResponse.json({ tipoLeche, baseLicuado, rearmado: false, congelado: false });
 
   const registrados = await prisma.mealLog.count({
     where: { userId: user.id, date: { gte: lunesDe(new Date()) } },
@@ -68,7 +77,7 @@ export async function PATCH(request: Request): Promise<NextResponse> {
   const congelada = registrados > 0;
   const rearmar = new URL(request.url).searchParams.get("rearmar") === "1";
   if (congelada && !rearmar) {
-    return NextResponse.json({ tipoLeche, rearmado: false, congelado: true });
+    return NextResponse.json({ tipoLeche, baseLicuado, rearmado: false, congelado: true });
   }
 
   const latest = await prisma.checkIn.findFirst({
@@ -90,5 +99,5 @@ export async function PATCH(request: Request): Promise<NextResponse> {
     );
   }
 
-  return NextResponse.json({ tipoLeche, rearmado: true, congelado: congelada });
+  return NextResponse.json({ tipoLeche, baseLicuado, rearmado: true, congelado: congelada });
 }

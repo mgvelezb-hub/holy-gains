@@ -2,7 +2,7 @@ import type { CheckIn, Profile } from "@prisma/client";
 import { DEFAULT_CONFIG, SUPPLEMENTS, loadConfig } from "engine";
 
 import { decimalToNumber } from "@/lib/format";
-import { sinMarcaDeLeche, tipoLecheDe } from "@/lib/coachy/leche";
+import { baseLicuadoDe, sinMarcaDeLeche, tipoLecheDe } from "@/lib/coachy/leche";
 import {
   preferenciaDePreparaciones,
   sinMarcasDePreparacion,
@@ -165,6 +165,8 @@ export function toEngineProfile(profile: Profile, latestWeightKg?: number | null
     // La leche de licuados y cremas, marcada `leche:<tipo>` en los excluidos
     // (`lib/coachy/leche.ts`). Sin marca, descremada.
     tipoLeche: tipoLecheDe(profile.excludedFoods),
+    // Con qué se licua: `base:agua` en los excluidos. Sin marca, leche.
+    baseLicuado: baseLicuadoDe(profile.excludedFoods),
     allergies: profile.allergies,
     // Tope de tiempo de cocina. El motor lo trata como preferencia: si deja un
     // rol sin candidatos, prefiere darte de comer a respetar el tope.

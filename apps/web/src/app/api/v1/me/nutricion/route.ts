@@ -2,7 +2,13 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { apiUser, unauthorized } from "@/lib/api/auth";
-import { conTipoLeche, sinMarcaDeLeche, tipoLecheDe } from "@/lib/coachy/leche";
+import {
+  baseLicuadoDe,
+  conBaseLicuado,
+  conTipoLeche,
+  sinMarcaDeLeche,
+  tipoLecheDe,
+} from "@/lib/coachy/leche";
 import { conPreferenciaDePreparaciones } from "@/lib/coachy/preparaciones";
 import { prisma } from "@/lib/prisma";
 import { conNucleo } from "@/lib/suplementos/entrada";
@@ -111,12 +117,16 @@ export async function PATCH(request: Request): Promise<NextResponse> {
     preparaciones === undefined
       ? excludedFoods
       : conPreferenciaDePreparaciones(excludedFoods ?? user.profile.excludedFoods, preparaciones);
-  // La marca de leche no viaja a la pantalla (GET /me la quita): la lista que
-  // regresa sin ella conserva la leche guardada. Se cambia en PATCH /me/leche.
+  // Las marcas de leche y de base no viajan a la pantalla (GET /me las
+  // quita): la lista que regresa sin ellas conserva las guardadas. Se cambian
+  // en PATCH /me/leche.
   const excluidos =
     conPreparaciones === undefined
       ? undefined
-      : conTipoLeche(conPreparaciones, tipoLecheDe(user.profile.excludedFoods));
+      : conBaseLicuado(
+          conTipoLeche(conPreparaciones, tipoLecheDe(user.profile.excludedFoods)),
+          baseLicuadoDe(user.profile.excludedFoods),
+        );
 
   const profile = await prisma.profile.update({
     where: { userId: user.id },

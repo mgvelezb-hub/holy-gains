@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { FOODS, maxGrams, normalize } from "engine";
+import { FOODS, maxGrams, nombreDePlatillo, normalize } from "engine";
 import type { Food } from "engine";
 
 /**
@@ -107,6 +107,9 @@ export function applySwap(
     name: option.name,
     grams: option.grams,
     free: item.free === true,
+    // El ingrediente de un platillo sigue en el platillo: la frambuesa que
+    // entra al licuado es del licuado, no un renglón suelto.
+    ...(item.preparacion !== undefined ? { preparacion: item.preparacion } : {}),
   };
   // ¿El alimento elegido ya está en esta comida? Entonces no es un renglón
   // nuevo: es más de lo mismo. Se suma a ese renglón —respetando el tope de
@@ -148,7 +151,11 @@ export function applySwap(
     index === equivIndex ? newEquivalence : entry,
   );
 
-  const newMeal: JsonRecord = { ...meal, items: newItems, equivalences: newEquivalences };
+  const newMeal: JsonRecord = renombraPlatillo(
+    { ...meal, items: newItems, equivalences: newEquivalences },
+    catalogo,
+    { antes: item, despues: newItem },
+  );
   const newMeals = meals.map((entry) => (entry === meal ? newMeal : entry));
 
   // `equivalencesJson` es la copia aplanada con `slot` — mismo intercambio,
@@ -169,6 +176,58 @@ export function applySwap(
     mealsJson: newMeals as unknown as Prisma.JsonValue,
     equivalencesJson: newFlat as unknown as Prisma.JsonValue,
   };
+}
+
+/**
+ * El licuado se llama como su fruta: cambiar el mango por frutos rojos hace
+ * del "Licuado de mango con avena" un "Licuado de frutos rojos con avena". El
+ * nombre sale del motor (`nombreDePlatillo`) y se copia a la comida y a cada
+ * ingrediente; en el renglón agrupado, la fruta vieja se cambia por la nueva.
+ * Un platillo sin plantilla de fruta no cambia.
+ */
+function renombraPlatillo(
+  meal: JsonRecord,
+  catalogo: Food[],
+  cambio: { antes: JsonRecord; despues: JsonRecord },
+): JsonRecord {
+  const platillo = meal.preparacion as JsonRecord | undefined;
+  if (typeof platillo !== "object" || platillo === null || typeof platillo.id !== "string") return meal;
+  const items = asRecordArray(meal.items);
+  const fruta = items.find(
+    (entry) => entry.preparacion !== undefined && alimentoDelCatalogo(entry, catalogo)?.role === "fruta",
+  );
+  const nombre = fruta ? nombreDePlatillo(platillo.id, String(fruta.foodId ?? ""), catalogo) : undefined;
+  if (!nombre || nombre === platillo.nombre) return meal;
+
+  const anterior = String(platillo.nombre ?? "");
+  const display = typeof platillo.display === "string" ? platillo.display : undefined;
+  // El renglón que sale: el del motor si lo trae; si no, el que escribió un
+  // cambio anterior ("260 g de frutos rojos congelados").
+  const renglonDe = (entry: JsonRecord): string =>
+    `${Number(entry.grams ?? 0)} g de ${String(entry.name ?? "").toLowerCase()}`;
+  const renglonViejo =
+    typeof cambio.antes.display === "string" ? sinGramos(cambio.antes.display) : renglonDe(cambio.antes);
+  const renglonNuevo = renglonDe(cambio.despues);
+  let conFrutaNueva: string | undefined;
+  if (display !== undefined) {
+    const renglones = display.startsWith(anterior) ? display.slice(anterior.length) : "";
+    conFrutaNueva = `${nombre}${renglones.replace(renglonViejo, renglonNuevo)}`;
+  }
+
+  return {
+    ...meal,
+    preparacion: { ...platillo, nombre, ...(conFrutaNueva !== undefined ? { display: conFrutaNueva } : {}) },
+    items: items.map((entry) => {
+      const ref = entry.preparacion as JsonRecord | undefined;
+      return ref && typeof ref === "object" && ref.id === platillo.id
+        ? { ...entry, preparacion: { ...ref, nombre } }
+        : entry;
+    }),
+  };
+}
+
+function sinGramos(display: string): string {
+  return display.replace(/\s*\(\d+ g\)$/, "");
 }
 
 /** El mismo alimento: por id si los dos lo traen, si no por nombre. */

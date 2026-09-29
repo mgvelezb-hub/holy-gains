@@ -4,7 +4,7 @@ import { z } from "zod";
 import { apiUser, unauthorized } from "@/lib/api/auth";
 import type { Profile } from "@prisma/client";
 
-import { conTipoLeche, tipoLecheDe } from "@/lib/coachy/leche";
+import { baseLicuadoDe, conBaseLicuado, conTipoLeche, tipoLecheDe } from "@/lib/coachy/leche";
 import { vistaPreviaDelPlan } from "@/lib/coachy/plan-nutricion";
 import { prisma } from "@/lib/prisma";
 import { conNucleo } from "@/lib/suplementos/entrada";
@@ -177,8 +177,11 @@ function cambiosDelPerfil(
     maxPrepMin: datos.maxPrepMin,
     // Replantear solo edita el núcleo; lo aceptado fuera de él se conserva.
     supplements: conNucleo(perfil.supplements, datos.supplements),
-    // La leche elegida no es una respuesta del cuestionario: se conserva.
-    excludedFoods: conTipoLeche(normaliza(datos.excludedFoods), tipoLecheDe(perfil.excludedFoods)),
+    // La leche y la base de licuados no son respuestas del cuestionario: se conservan.
+    excludedFoods: conBaseLicuado(
+      conTipoLeche(normaliza(datos.excludedFoods), tipoLecheDe(perfil.excludedFoods)),
+      baseLicuadoDe(perfil.excludedFoods),
+    ),
     favoriteFoods: normaliza(datos.favoriteFoods),
   };
 }

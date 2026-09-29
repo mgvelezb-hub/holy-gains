@@ -18,7 +18,7 @@ import {
   type TomaDelDia,
 } from "engine";
 
-import { tipoLecheDe } from "@/lib/coachy/leche";
+import { baseLicuadoDe, tipoLecheDe } from "@/lib/coachy/leche";
 import { engineConfigForActivity, parsePantry } from "@/lib/coachy/mapping";
 import { currentMealPlan, decisionVigente, listaDeSuperDe, seedFromDate } from "@/lib/coachy/menu";
 import { toMenuView, type GroceryItemView, type MenuView } from "@/lib/coachy/menu-view";
@@ -101,6 +101,8 @@ export interface PlanDeNutricion {
     presupuesto: Profile["budget"];
     maxPrepMin: number | null;
     leche: string;
+    /** Con qué se licua: "leche" (la de arriba) o "agua". */
+    baseLicuado: string;
     preparaciones: { licuados: boolean; sopas: boolean; cremas: boolean };
   };
   menus: MenuView[];
@@ -181,6 +183,7 @@ function preferenciasDe(profile: Profile): PlanDeNutricion["preferencias"] {
     presupuesto: profile.budget,
     maxPrepMin: profile.maxPrepMin,
     leche: tipoLecheDe(profile.excludedFoods),
+    baseLicuado: baseLicuadoDe(profile.excludedFoods),
     preparaciones: preferenciaDePreparaciones(profile.excludedFoods),
   };
 }

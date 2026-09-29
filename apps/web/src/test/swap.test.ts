@@ -270,3 +270,53 @@ describe("applySwap", () => {
     });
   });
 });
+
+describe("cambiar la fruta de un licuado", () => {
+  const prep = { id: "licuado_proteina_fruta_avena", nombre: "Licuado de mango con avena", tipo: "licuado" };
+  function mealsJsonDeLicuado() {
+    return [
+      {
+        slot: "PRE",
+        label: "Pre-entreno",
+        timeHint: "07:00",
+        preparacion: { ...prep, display: "Licuado de mango con avena — 1 taza de leche descremada · 1¼ tazas de mango · 40 g de avena" },
+        items: [
+          { foodId: "leche_descremada", name: "Leche descremada", grams: 240, free: false, preparacion: prep },
+          { foodId: "mango", name: "Mango", grams: 200, free: false, preparacion: prep, display: "1¼ tazas de mango (200 g)" },
+          { foodId: "avena", name: "Avena en hojuelas (cruda)", grams: 40, free: false, preparacion: prep },
+        ],
+        equivalences: [
+          { forName: "Mango", options: [{ foodId: "frutos_rojos", name: "Frutos rojos congelados", grams: 260 }] },
+        ],
+      },
+    ];
+  }
+
+  it("el licuado cambia de nombre y la fruta nueva sigue dentro del platillo", () => {
+    const { mealsJson } = applySwap(mealsJsonDeLicuado(), [], {
+      slot: "PRE",
+      forName: "Mango",
+      toName: "Frutos rojos congelados",
+    });
+    const meal = (mealsJson as Array<Record<string, any>>)[0]!;
+    expect(meal.preparacion.nombre).toBe("Licuado de frutos rojos con avena");
+    expect(meal.preparacion.display).toContain("Licuado de frutos rojos con avena — ");
+    expect(meal.preparacion.display).not.toContain("mango");
+    const nueva = meal.items.find((i: Record<string, any>) => i.foodId === "frutos_rojos");
+    expect(nueva.preparacion).toEqual({ ...prep, nombre: "Licuado de frutos rojos con avena" });
+    for (const item of meal.items) expect(item.preparacion.nombre).toBe("Licuado de frutos rojos con avena");
+  });
+
+  it("volver a la fruta original regresa el nombre", () => {
+    const ida = applySwap(mealsJsonDeLicuado(), [], { slot: "PRE", forName: "Mango", toName: "Frutos rojos congelados" });
+    const vuelta = applySwap(ida.mealsJson, ida.equivalencesJson, {
+      slot: "PRE",
+      forName: "Frutos rojos congelados",
+      toName: "Mango",
+    });
+    const platillo = (vuelta.mealsJson as Array<Record<string, any>>)[0]!.preparacion;
+    expect(platillo.nombre).toBe("Licuado de mango con avena");
+    expect(platillo.display).toContain("200 g de mango");
+    expect(platillo.display).not.toContain("frutos rojos");
+  });
+});
