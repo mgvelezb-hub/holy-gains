@@ -6,8 +6,10 @@ import type {
   NivelCardio,
   PreferenciasCardio,
   TipoCardio,
+  UnidadVelocidad,
   WarmupStep,
 } from "@/lib/api";
+import { pasosDeProtocolo, protocoloDe, tituloProtocolo, unidadDe } from "@/lib/hiit";
 
 /**
  * El cardio de después de pesas en la sesión en vivo (H2) — lógica pura.
@@ -33,6 +35,12 @@ function nivel(detalle: DetalleCardio, valor: number): string {
 
 /** "Cardio · 20 min · caminadora HIIT nivel 8". */
 export function tituloTarjetaCardio(detalle: DetalleCardio, minutos: number): string {
+  // N1: la caminadora HIIT se dice por su protocolo, no por "nivel de máquina".
+  const protocolo = protocoloDe(detalle);
+  if (protocolo) {
+    const caminata = protocolo.caminataMin > 0 ? ` + ${protocolo.caminataMin} min caminando` : "";
+    return `Cardio · ${minutos} min · ${tituloProtocolo(protocolo)}${caminata}`;
+  }
   const tipo = detalle.tipo === "HIIT" ? "HIIT" : "continuo";
   const como =
     detalle.equipo === "LIBRE" ? tipo : `${EQUIPO[detalle.equipo]} ${tipo} nivel ${detalle.nivelMaquina}`;
@@ -40,7 +48,11 @@ export function tituloTarjetaCardio(detalle: DetalleCardio, minutos: number): st
 }
 
 /** Los pasos que corre el timer: calentamiento, el bloque principal, enfriamiento. */
-export function pasosDeCardio(detalle: DetalleCardio, minutos: number): WarmupStep[] {
+export function pasosDeCardio(detalle: DetalleCardio, minutos: number, unidad?: UnidadVelocidad): WarmupStep[] {
+  // N1: con protocolo, cada tramo es un paso ("10–12 km/h · Moderado Alto").
+  const protocolo = protocoloDe(detalle);
+  if (protocolo) return pasosDeProtocolo(protocolo, unidad ?? unidadDe(detalle));
+
   const suave = detalle.intervalos?.nivelSuave ?? Math.max(1, detalle.nivelMaquina - 2);
   const pasos: WarmupStep[] = [
     { nombre: `Calentamiento${nivel(detalle, suave)}`, segundos: detalle.calentamientoSeg },
@@ -63,6 +75,8 @@ export function pasosDeCardio(detalle: DetalleCardio, minutos: number): WarmupSt
 
 /** Lo que queda en las notas de la sesión: tipo, máquina y nivel. */
 export function notasDeCardio(detalle: DetalleCardio): string {
+  const protocolo = protocoloDe(detalle);
+  if (protocolo) return `${tituloProtocolo(protocolo)} · caminadora`;
   const tipo = detalle.tipo === "HIIT" ? "HIIT" : "Continuo";
   return detalle.equipo === "LIBRE"
     ? tipo

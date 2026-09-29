@@ -9,6 +9,7 @@ import { Collapsible } from "@/components/Collapsible";
 import { EngraneAjustes } from "@/components/EngraneAjustes";
 import { InfoTip, TextoInfo } from "@/components/InfoTip";
 import { Parrafo } from "@/components/Parrafo";
+import { ProtocoloHiit } from "@/components/ProtocoloHiit";
 import { ScoreCard } from "@/components/ScoreCard";
 import { ExerciseCapture } from "@/components/ExerciseCapture";
 import { EmptyState, ErrorState, LoadingState } from "@/components/States";
@@ -22,11 +23,14 @@ import {
   type OtherSessionView,
   type SessionSyncInput,
   type SessionView,
+  type UnidadVelocidad,
   type WeekView,
   type WorkoutSetInput,
   trimSession,
 } from "@/lib/api";
 import { iconoDe } from "@/lib/disciplinas";
+import { protocoloDe, unidadDe } from "@/lib/hiit";
+import { guardarUnidadVelocidad } from "@/lib/unidad-velocidad";
 import {
   RECORTES,
   diaDelPlan,
@@ -747,6 +751,16 @@ function OtraDisciplina({
   const [abierto, setAbierto] = useState(false);
   const nombre = DISCIPLINE_LABELS[session.discipline];
   const Icono = iconoDe(session.discipline);
+  const protocolo = protocoloDe(session.sesion?.cardio);
+  const [unidad, setUnidad] = useState<UnidadVelocidad>(() => unidadDe(session.sesion?.cardio));
+
+  /** Cambia la unidad en pantalla de inmediato y la guarda en las preferencias de cardio. */
+  function cambiarUnidad(siguiente: UnidadVelocidad) {
+    setUnidad(siguiente);
+    guardarUnidadVelocidad(siguiente).catch(() => {
+      // Sin señal: se ve en la unidad elegida y la próxima vez se vuelve a intentar.
+    });
+  }
 
   return (
     <>
@@ -781,7 +795,18 @@ function OtraDisciplina({
               <Text style={styles.hojaTitulo}>{nombre}</Text>
               <Text style={styles.swimNote}>{session.note}</Text>
 
-              {session.sesion ? (
+              {protocolo ? (
+                // N1: la caminadora HIIT se lee como la tabla de Mau, por
+                // velocidad real; el chip km/h ↔ mph guarda la preferencia.
+                <View style={styles.swimBlocks}>
+                  <ProtocoloHiit protocolo={protocolo} unidad={unidad} onUnidad={cambiarUnidad} />
+                  {session.sesion!.notes.map((note) => (
+                    <Text key={note} style={styles.swimNote}>
+                      {note}
+                    </Text>
+                  ))}
+                </View>
+              ) : session.sesion ? (
                 <View style={styles.swimBlocks}>
                   {session.sesion.blocks.map((block) => (
                     <View key={block.title} style={styles.swimBlock}>

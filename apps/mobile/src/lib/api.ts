@@ -2520,3 +2520,47 @@ export function postCambiarPlatillo(input: {
     body: input,
   });
 }
+
+/* ------------------------------------------------------------------------ */
+/* N1 — HIIT de caminadora por velocidad real                                */
+/* ------------------------------------------------------------------------ */
+
+/** En qué unidad se leen las velocidades de la caminadora. Default km/h. */
+export type UnidadVelocidad = "kmh" | "mph";
+
+export type EsfuerzoHiit = "Fácil" | "Moderado" | "Moderado Alto" | "Fuerte" | "Máximo";
+
+/** Igual que `TramoHiit` en apps/web/src/lib/training/disciplinas/hiit-caminadora.ts. */
+export type TramoHiit = {
+  desdeMin: number;
+  hastaMin: number;
+  /** Rango en km/h, `[mín, máx]`. */
+  kmh: [number, number];
+  esfuerzo: EsfuerzoHiit;
+  /** No se veía en la captura de la que salió: la vista de detalle lo marca con "?". */
+  inferido?: boolean;
+};
+
+/** Igual que `ProtocoloPrescrito` en la web: el protocolo ya adaptado al bloque. */
+export type ProtocoloHiit = {
+  duracion: 10 | 15 | 25;
+  /** 0 a 5. */
+  nivel: number;
+  tramos: TramoHiit[];
+  /** 10' armado desde el 15' del mismo nivel (no hay 10' por debajo del nivel 4). */
+  recortado: boolean;
+  /** Minutos de caminata suave 5–6 km/h tras el protocolo. */
+  caminataMin: number;
+};
+
+/**
+ * Lo que N1 le agrega a `DetalleCardio` (solo caminadora HIIT). Va aparte
+ * porque `DetalleCardio` es de H2; `protocoloDe` en `lib/hiit.ts` lo lee.
+ */
+export type DetalleCardioConProtocolo = DetalleCardio & {
+  protocolo?: ProtocoloHiit;
+  unidad?: UnidadVelocidad;
+};
+
+/** `PreferenciasCardio` con la unidad de velocidad de N1. */
+export type PreferenciasCardioN1 = PreferenciasCardio & { unidadVelocidad?: UnidadVelocidad };
