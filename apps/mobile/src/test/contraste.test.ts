@@ -79,3 +79,28 @@ describe("contraste de la paleta", () => {
     });
   }
 });
+
+/**
+ * N1 — el globito de `InfoTip` y la tabla del HIIT. El globito se pinta sobre
+ * `superficie` (opaca: en oscuro la tarjeta era 5 % de blanco y las letras se
+ * enciman con lo de atrás) y los colores de esfuerzo son texto sobre esa
+ * misma superficie.
+ */
+describe("N1 · superficie opaca y colores de esfuerzo", () => {
+  const ESFUERZOS = ["esfuerzoFacil", "esfuerzoModerado", "esfuerzoModeradoAlto", "esfuerzoFuerte", "esfuerzoMaximo"] as const;
+  for (const [nombre, paleta] of PALETAS) {
+    it(`${nombre}: la superficie es opaca y el texto del globito pasa AA`, () => {
+      expect(paleta.superficie).toMatch(/^#[0-9A-F]{6}$/i);
+      for (const rol of ["marfil", "champan"] as const) {
+        expect(contraste(paleta[rol], paleta.superficie)).toBeGreaterThanOrEqual(4.5);
+      }
+    });
+
+    it(`${nombre}: cada esfuerzo se lee sobre la superficie y se distingue del fondo`, () => {
+      for (const rol of ESFUERZOS) {
+        const ratio = contraste(paleta[rol], paleta.superficie);
+        expect(ratio, `${nombre} · ${rol} da ${ratio.toFixed(2)}`).toBeGreaterThanOrEqual(4.5);
+      }
+    });
+  }
+});

@@ -53,6 +53,24 @@ export type Palette = {
   error: string;
   cardBg: string;
   cardBorder: string;
+  /**
+   * Rol: superficie OPACA de lo que flota encima de todo (el globito de
+   * `InfoTip`). Es `cardBg` ya compuesto sobre el fondo: en oscuro `cardBg`
+   * es 5 % de blanco y, flotando sobre la pantalla, las letras se enciman con
+   * lo de atrás (N1).
+   */
+  superficie: string;
+  /**
+   * Esfuerzo de un tramo de HIIT (N1), la escala de los protocolos de
+   * caminadora: Fácil azul, Moderado verde, Moderado Alto ámbar, Fuerte
+   * naranja, Máximo rojo (el mismo `error` del tema). Todos pasan AA como
+   * texto sobre `superficie` y sobre la tarjeta (`contraste.test.ts`).
+   */
+  esfuerzoFacil: string;
+  esfuerzoModerado: string;
+  esfuerzoModeradoAlto: string;
+  esfuerzoFuerte: string;
+  esfuerzoMaximo: string;
 };
 
 /** Oscuro — el tema original de la app (obsidiana + guinda + marfil + champán). Default. */
@@ -78,6 +96,12 @@ export const paletteDark: Palette = {
   error: "#E0765C",
   cardBg: "rgba(255,255,255,0.05)",
   cardBorder: "rgba(255,255,255,0.08)",
+  superficie: "#251B1E",
+  esfuerzoFacil: "#7DB4EA",
+  esfuerzoModerado: "#7CCB9B",
+  esfuerzoModeradoAlto: "#E6BC5C",
+  esfuerzoFuerte: "#F09A5A",
+  esfuerzoMaximo: "#E0765C",
 } as const;
 
 /**
@@ -113,6 +137,12 @@ export const paletteLight: Palette = {
   error: "#D41101",
   cardBg: "#FAF6F1",
   cardBorder: "#DECEC1",
+  superficie: "#FAF6F1",
+  esfuerzoFacil: "#1F5DA6",
+  esfuerzoModerado: "#1C7543",
+  esfuerzoModeradoAlto: "#855C00",
+  esfuerzoFuerte: "#AD4A0C",
+  esfuerzoMaximo: "#D41101",
 } as const;
 
 /**
@@ -146,6 +176,12 @@ export const paletteChampan: Palette = {
   error: "#E0765C",
   cardBg: "#141417",
   cardBorder: "rgba(255,255,255,0.10)",
+  superficie: "#141417",
+  esfuerzoFacil: "#7DB4EA",
+  esfuerzoModerado: "#7CCB9B",
+  esfuerzoModeradoAlto: "#E6BC5C",
+  esfuerzoFuerte: "#F09A5A",
+  esfuerzoMaximo: "#E0765C",
 } as const;
 
 /** Retrocompatible: el tema oscuro tal cual estaba antes del sistema de temas. */

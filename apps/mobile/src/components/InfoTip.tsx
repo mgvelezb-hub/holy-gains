@@ -1,6 +1,6 @@
 import { HelpCircle } from "lucide-react-native";
 import { useMemo, useState, type ReactNode } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { Parrafo } from "@/components/Parrafo";
 import { useTheme } from "@/context/theme";
@@ -23,6 +23,15 @@ import { fonts, radius, shadow, spacing, type as typeScale, type Palette } from 
  * su propio bloque dentro de una tarjeta ya abierta. `InfoTip` no ocupa
  * ninguna fila propia ni siquiera cerrado — vive dentro del renglón del
  * título — y es para lo corto: una frase, un aviso, el porqué de un cambio.
+ *
+ * LEGIBLE (N1): el globito era `cardBg`, que en el tema oscuro es 5 % de
+ * blanco — flotando sobre la pantalla, las letras se encimaban con lo de
+ * atrás. Ahora va sobre `superficie` (opaca en los tres temas; el contraste
+ * AA del texto sobre ella lo cuida `contraste.test.ts`), con borde, sombra de
+ * elevación y `zIndex` alto, ancho tope y alto tope con scroll: nunca se sale
+ * de la pantalla. Vive en un `Modal`, así que ningún contenedor con
+ * `overflow: "hidden"` lo puede cortar (se revisaron los usos: ninguno está
+ * dentro de uno).
  */
 export function InfoTip({ titulo, children }: { titulo?: string; children: ReactNode }) {
   const { colors } = useTheme();
@@ -49,9 +58,11 @@ export function InfoTip({ titulo, children }: { titulo?: string; children: React
         <Pressable style={styles.fondo} onPress={() => setAbierto(false)}>
           {/* Pressable interno con onPress vacío: absorbe el toque para que
               tocar el texto del globito no lo cierre igual que tocar afuera. */}
-          <Pressable style={styles.globo} onPress={() => {}}>
-            {titulo && <Text style={styles.titulo}>{titulo}</Text>}
-            <View style={styles.cuerpo}>{children}</View>
+          <Pressable style={styles.globo} onPress={() => {}} accessibilityViewIsModal>
+            <ScrollView contentContainerStyle={styles.contenido} bounces={false}>
+              {titulo && <Text style={styles.titulo}>{titulo}</Text>}
+              <View style={styles.cuerpo}>{children}</View>
+            </ScrollView>
           </Pressable>
         </Pressable>
       </Modal>
@@ -76,15 +87,22 @@ const makeStyles = (colors: Palette) =>
       padding: spacing.xl,
     },
     globo: {
-      maxWidth: 340,
+      maxWidth: 360,
       width: "100%",
-      backgroundColor: colors.cardBg,
+      maxHeight: "80%",
+      // Opaca: nada de lo de atrás se asoma entre las letras.
+      backgroundColor: colors.superficie,
       borderRadius: radius.xl,
       borderWidth: 1,
       borderColor: colors.cardBorder,
-      padding: spacing.lg,
+      overflow: "hidden",
+      zIndex: 1000,
+      ...shadow.hero,
+    },
+    contenido: {
+      paddingHorizontal: spacing.xl,
+      paddingVertical: spacing.lg,
       gap: spacing.sm,
-      ...shadow.card,
     },
     titulo: {
       fontFamily: fonts.sansSemiBold,
