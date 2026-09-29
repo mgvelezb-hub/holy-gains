@@ -31,7 +31,10 @@ function menusDe(profile: Profile): Menu[] {
   const kcal = kcalForDeficit(profile, pickDeficit('CUT', DEFAULT_CONFIG), DEFAULT_CONFIG);
   const macros = macrosFor('CUT', profile, kcal, DEFAULT_CONFIG);
   const slots = distribute(macros, profile, 'CUT');
-  return [101, 102, 103, 104, 105, 106, 107].flatMap(
+  // Dos semanas: con las reglas culinarias (J2) el caldo ya no cabe en una
+  // comida de mucho carbohidrato, y hacen falta mas dias para ver sopas con
+  // opciones.
+  return Array.from({ length: 14 }, (_, i) => 101 + i).flatMap(
     (seed) => generateMenu(slots, profile, DEFAULT_CONFIG, seed, { phase: 'CUT' }).menus,
   );
 }

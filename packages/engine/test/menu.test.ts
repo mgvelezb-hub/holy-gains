@@ -191,7 +191,12 @@ describe('generador de menus (spec §6)', () => {
         const items = plan.menus.flatMap((m) => m.meals.flatMap((meal) => meal.items));
         expect(items.length, `${budget} seed ${seed} sin comidas`).toBeGreaterThan(0);
         for (const item of items) {
-          expect(findFood(item.foodId)!.costRel, `${budget} seed ${seed}`).toBeLessThanOrEqual(tope);
+          const food = findFood(item.foodId)!;
+          // Excepcion documentada (J2): antes de repetir la proteina del dia,
+          // entra la proteina del escalon de arriba —el muslo de pollo en vez
+          // de la segunda lata—. Solo proteina y solo un escalon.
+          const tope2 = food.role.startsWith('proteina') ? tope + 1 : tope;
+          expect(food.costRel, `${budget} seed ${seed} ${food.id}`).toBeLessThanOrEqual(tope2);
         }
       }
     }

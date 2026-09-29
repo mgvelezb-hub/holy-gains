@@ -43,6 +43,7 @@
     "prepMin": 20,
     "tags": [
       "meal_prep",
+      "mexicano",
       "no_desayuno",
       "no_vegetariano"
     ],
@@ -100,6 +101,7 @@
     "prepMin": 2,
     "tags": [
       "favorito",
+      "lata",
       "mexicano",
       "no_desayuno",
       "no_vegetariano",
@@ -108,12 +110,12 @@
     ],
     "servingG": 130,
     "unit": "g",
-    "maxG": 200,
+    "maxG": 150,
     "serving": {
       "unit": "g",
       "gramsPerUnit": 1,
       "minUnits": 60,
-      "maxUnits": 200,
+      "maxUnits": 150,
       "step": 10
     }
   },
@@ -356,6 +358,7 @@
     "costRel": 2,
     "prepMin": 1,
     "tags": [
+      "mexicano",
       "no_vegetariano",
       "rapido",
       "sin_cocinar"
@@ -636,6 +639,7 @@
     "costRel": 1,
     "prepMin": 2,
     "tags": [
+      "lata",
       "mexicano",
       "no_desayuno",
       "no_vegetariano",
@@ -809,6 +813,8 @@
     "costRel": 1,
     "prepMin": 2,
     "tags": [
+      "lata",
+      "mexicano",
       "no_desayuno",
       "no_vegetariano",
       "rapido",
@@ -868,6 +874,7 @@
     "prepMin": 1,
     "tags": [
       "cereal_desayuno",
+      "mexicano",
       "rapido",
       "sin_cocinar",
       "vegetariano"
@@ -896,6 +903,7 @@
     "costRel": 2,
     "prepMin": 1,
     "tags": [
+      "mexicano",
       "rapido",
       "vegetariano"
     ],
@@ -983,6 +991,7 @@
       "cereal_cocido",
       "cereal_comida",
       "favorito",
+      "fecula",
       "meal_prep",
       "mexicano",
       "vegetariano"
@@ -1012,6 +1021,7 @@
     "prepMin": 25,
     "tags": [
       "favorito",
+      "fecula",
       "ligero",
       "meal_prep",
       "mexicano",
@@ -1071,6 +1081,7 @@
     "costRel": 1,
     "prepMin": 25,
     "tags": [
+      "fecula",
       "ligero",
       "meal_prep",
       "mexicano",
@@ -1165,6 +1176,7 @@
       "cereal_cocido",
       "cereal_comida",
       "favorito",
+      "fecula",
       "meal_prep",
       "mexicano",
       "vegetariano"
@@ -1347,7 +1359,9 @@
     "tags": [
       "cereal_cocido",
       "cereal_comida",
+      "fecula",
       "meal_prep",
+      "mexicano",
       "vegetariano"
     ],
     "servingG": 150,
@@ -1404,6 +1418,7 @@
     "prepMin": 15,
     "tags": [
       "cereal_comida",
+      "fecula",
       "meal_prep",
       "mexicano",
       "vegetariano"
@@ -1467,6 +1482,7 @@
       "cereal_cocido",
       "cereal_desayuno",
       "meal_prep",
+      "mexicano",
       "rapido",
       "vegetariano"
     ],
@@ -1526,6 +1542,7 @@
     "prepMin": 1,
     "tags": [
       "grasa_anadida",
+      "mexicano",
       "rapido",
       "vegetariano"
     ],
@@ -1614,6 +1631,7 @@
     "prepMin": 1,
     "tags": [
       "fruto_seco",
+      "mexicano",
       "rapido",
       "sin_cocinar",
       "vegetariano"
@@ -1673,6 +1691,7 @@
     "prepMin": 1,
     "tags": [
       "grasa_anadida",
+      "mexicano",
       "rapido",
       "vegetariano"
     ],
@@ -1761,6 +1780,7 @@
     "tags": [
       "fruto_seco",
       "grasa_anadida",
+      "mexicano",
       "rapido",
       "vegetariano"
     ],
@@ -1819,6 +1839,7 @@
     "prepMin": 1,
     "tags": [
       "grasa_anadida",
+      "mexicano",
       "rapido",
       "solo_desayuno",
       "vegetariano"
@@ -2708,6 +2729,7 @@
     "costRel": 2,
     "prepMin": 1,
     "tags": [
+      "mexicano",
       "rapido",
       "sin_cocinar",
       "vegetariano"
@@ -2765,6 +2787,7 @@
     "costRel": 2,
     "prepMin": 1,
     "tags": [
+      "mexicano",
       "rapido",
       "sin_cocinar",
       "vegetariano"

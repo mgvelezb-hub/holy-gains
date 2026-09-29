@@ -100,6 +100,12 @@ export interface Profile {
   /** Minutos disponibles por sesion de cocina; el generador prefiere recetas mas rapidas si es bajo. */
   maxPrepMin?: number;
   /**
+   * Cocina en lote (el domingo la olla de la semana). Solo entonces un
+   * platillo `meal_prep` cuenta sus minutos como recalentar; sin esto, el
+   * caldo tlalpeno de 45 min no cabe en quien cocina 20.
+   */
+  cocinaEnLote?: boolean;
+  /**
    * Estilo de dieta (Fase 8). `estandar` es el metodo del coach; los demas
    * cambian una cosa cada uno y nada mas:
    *

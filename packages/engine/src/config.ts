@@ -249,6 +249,28 @@ export const DEFAULT_CONFIG: EngineConfig = {
       // La crema de cacahuate ya es la grasa del plato: con aguacate o aceite
       // encima son tres grasas disfrazadas de dos.
       ['crema_cacahuate', 'grasa'],
+      // Auditoria culinaria (J2). Una fruta por comida: el platano del
+      // post-entreno tambien es fruta aunque el catalogo lo cuente como
+      // carbohidrato.
+      ['fruta', 'platano_post'],
+      // Arroz, papa, camote, pasta y elote se excluyen entre si: son la misma
+      // fecula del plato dos veces.
+      ['fecula', 'fecula'],
+      // La leguminosa se acompaña de tortilla o arroz, no de tuberculo.
+      ['leguminosa', 'tuberculo'],
+      // La avena va en leche o con fruta, nunca con aceite ni aguacate.
+      ['avena', 'aguacate'],
+      ['avena', 'aceite_oliva'],
+      ['avena', 'aceite_aguacate'],
+      ['avena_cocida', 'aguacate'],
+      ['avena_cocida', 'aceite_oliva'],
+      ['avena_cocida', 'aceite_aguacate'],
+      // El cereal de desayuno va con lacteo, huevo o fruta: nunca con carne,
+      // pescado ni verdura salada (22 casos de arroz inflado con atun).
+      ['cereal_desayuno', 'vegetal_libre'],
+      ...(['atun_agua', 'atun_aceite', 'sardina_agua', 'tilapia', 'bacalao', 'pescado_blanco', 'salmon', 'camaron', 'res_magra', 'pechuga_pollo', 'muslo_pollo', 'pechuga_pavo'].map(
+        (id) => ['cereal_desayuno', id] as [string, string],
+      )),
     ],
     afines: [
       ['frijol_negro', 'tortilla_maiz'],

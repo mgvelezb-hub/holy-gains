@@ -85,6 +85,12 @@ function quantize(grams: number, food: Food, config: EngineConfig, piso = minGra
   return Math.min(Math.max(redondeado, minimo), max);
 }
 
+/** Redondea HACIA ABAJO al paso del alimento: recortar nunca se pasa del tope. */
+function quantizeAbajo(grams: number, food: Food, config: EngineConfig): number {
+  const paso = roundingFor(food, config);
+  return Math.max(Math.floor(grams / paso + 1e-9) * paso, 0);
+}
+
 export interface MenuOptions {
   phase?: Phase;
   /** Menos ingredientes y mas repeticion (regla de adherencia). */
@@ -132,6 +138,23 @@ interface EligibleOptions {
    * crema): la grasa que se elija tiene que ser otra cosa, no otro aceite.
    */
   sinGrasaAnadida?: boolean;
+  /** La colacion de la noche: la proteina es un lacteo (yogur, queso, leche). */
+  soloLacteo?: boolean;
+  /**
+   * Grasa maxima que la proteina puede traer en la porcion que la comida le
+   * pide (`minProteinG`). El pre-entreno va con grasa baja: huevo entero o
+   * panela antes de entrenar son 10-15 g de grasa que se digieren lento.
+   */
+  grasaMaxG?: number;
+}
+
+/** La verdura libre del desayuno: la que se cocina con el huevo. */
+const VERDURA_DE_DESAYUNO = new Set(['espinaca', 'nopal', 'champinon', 'calabacita']);
+
+/** Yogur, queso o leche: la proteina de la colacion de la noche. */
+function esLacteo(food: Food): boolean {
+  const familia = familiaDe(food);
+  return familia === 'yogur' || familia === 'queso' || food.tags.includes('leche');
 }
 
 /** true si el alimento responde a ese termino de la tabla de afinidad. */
@@ -183,11 +206,51 @@ export function prepMinDelDia(food: Food): number {
 /** Tag del agua que sirve de base al licuado cuando no va leche. */
 const BASE_AGUA = 'base_agua';
 
-/** true si esa familia ya salio en otra comida del dia. */
-function repiteFamilia(food: Food, familias: ReadonlySet<string>): boolean {
-  const familia = familiaDe(food);
-  return familia !== undefined && familias.has(familia);
+/**
+ * Lo unico que va AL LADO de un licuado: pan, tortilla o fruta entera. La
+ * proteina que falte se sube dentro del vaso; nada de atun, verdura ni aceite
+ * sueltos junto al licuado (auditoria J2: 9 casos).
+ */
+const LADO_DEL_LICUADO = new Set(['pan_integral', 'pan_centeno', 'tortilla_maiz']);
+
+function conLicuado(comida: Slot[]): boolean {
+  return comida.some((s) => s.preparacion?.tipo === 'licuado');
 }
+
+function vaJuntoAlLicuado(food: Food): boolean {
+  return food.role === 'fruta' || food.id === 'platano_post' || LADO_DEL_LICUADO.has(food.id);
+}
+
+/**
+ * Los grupos del dia a los que pertenece un alimento: su familia (el yogur,
+ * el arroz) y, si viene en lata, `lata`. La lata es un grupo aparte porque la
+ * regla es otra: atun y sardina son dos familias, pero dos comidas del dia en
+ * lata son la misma despensa de emergencia dos veces.
+ */
+function gruposDe(food: Food): string[] {
+  const familia = familiaDe(food);
+  const grupos: string[] = familia ? [familia] : [];
+  if (food.tags.includes('lata')) grupos.push('lata');
+  // Lo de costo medio o alto, una vez al dia: el aguacate en la comida Y en
+  // la cena son 10.5 aguacates a la semana (auditoria J2, regla 15).
+  if (food.costRel >= 2) grupos.push(`${MARCA_ALIMENTO}${food.id}`);
+  return grupos;
+}
+
+/** Prefijo del grupo "este mismo alimento" (los de costo medio o alto). */
+const MARCA_ALIMENTO = 'alimento:';
+
+/** true si esa familia (o su lata) ya salio en otra comida del dia. */
+function repiteFamilia(food: Food, familias: ReadonlySet<string>): boolean {
+  if (gruposDe(food).some((g) => familias.has(g))) return true;
+  // Si el dia ya trae sopa de leguminosa, ninguna otra comida lleva leguminosa.
+  return food.tags.includes('leguminosa') && familias.has(SOPA_DE_LEGUMINOSA);
+}
+
+/** Marcas del dia que no son familias: hay leguminosa, hay sopa de leguminosa. */
+const LEGUMINOSA = 'leguminosa';
+const SOPA_DE_LEGUMINOSA = 'sopa_leguminosa';
+const MARCAS_DEL_DIA = new Set([LEGUMINOSA, SOPA_DE_LEGUMINOSA]);
 
 /**
  * Los candidatos que no repiten proteina principal ni cereal del dia. Si
@@ -203,8 +266,11 @@ function familiasDe(slots: Slot[]): Set<string> {
   const salida = new Set<string>();
   for (const s of slots) {
     if (s.grams <= 0) continue;
-    const familia = familiaDe(s.food);
-    if (familia) salida.add(familia);
+    for (const grupo of gruposDe(s.food)) salida.add(grupo);
+    if (s.food.tags.includes('leguminosa')) {
+      salida.add(LEGUMINOSA);
+      if (s.preparacion && s.preparacion.tipo !== 'licuado') salida.add(SOPA_DE_LEGUMINOSA);
+    }
   }
   return salida;
 }
@@ -245,6 +311,26 @@ function eligible(
     if (food.costRel > topeDeCosto && !yaLoTiene) return false;
     if (conPlantilla) {
       if (options.sinGrasaAnadida && food.tags.includes('grasa_anadida')) return false;
+      if (options.soloLacteo && food.role.startsWith('proteina') && !esLacteo(food)) return false;
+      // Keto se come con platillo: huevo, carne o pescado que se guisan, no la
+      // lata abierta junto a la alfalfa.
+      // El peri-entreno (nada que cocinar) queda fuera de esta regla.
+      if (
+        profile.diet === 'keto' &&
+        !options.quickOnly &&
+        food.role.startsWith('proteina') &&
+        food.tags.includes('sin_cocinar')
+      ) {
+        return false;
+      }
+      if (
+        options.grasaMaxG !== undefined &&
+        food.role.startsWith('proteina') &&
+        food.proteinPer100 > 0 &&
+        ((options.minProteinG ?? 20) / food.proteinPer100) * food.fatPer100 > options.grasaMaxG
+      ) {
+        return false;
+      }
       if (options.desayuno === true && food.tags.includes('no_desayuno')) return false;
       if (options.desayuno === false && food.tags.includes('solo_desayuno')) return false;
       if (
@@ -323,6 +409,47 @@ function deLaDespensa(candidates: Food[], profile: Profile): Food[] {
   return candidates.filter((f) => ids.has(f.id));
 }
 
+/**
+ * Lo "de fuera": sin tag `mexicano` ni `favorito` (tofu, quinoa, salmon,
+ * cottage). A lo mucho TOPE_DE_FUERA distintos en la semana: un menu que pide
+ * cinco cosas de tienda especializada no se compra (auditoria J2, regla 15).
+ * La leche, la verdura libre, el agua y el polvo que la persona ya tiene no
+ * cuentan.
+ */
+const TOPE_DE_FUERA = 3;
+function esDeFuera(food: Food): boolean {
+  if (food.role === 'vegetal_libre' || food.role === 'suplemento') return false;
+  if (food.tags.includes('leche') || food.tags.includes(BASE_AGUA) || food.tags.includes('suplemento')) return false;
+  return !food.tags.includes('mexicano') && !food.tags.includes('favorito');
+}
+
+/**
+ * Los de fuera que ya entraron en la semana que se esta armando. `generateMenu`
+ * es sincrono y es el unico que lo abre y lo cierra, asi que un modulo-estado
+ * basta para compartirlo entre los dos menus sin pasarlo por cada funcion.
+ */
+let deFueraDeLaSemana: Set<string> | null = null;
+
+/** Quita a los de fuera NUEVOS si la semana ya llego al tope; nunca deja vacio. */
+function conCercania(candidatos: Food[]): Food[] {
+  const usados = deFueraDeLaSemana;
+  if (!usados || usados.size < TOPE_DE_FUERA) return candidatos;
+  const cerca = candidatos.filter((f) => !esDeFuera(f) || usados.has(f.id));
+  return cerca.length > 0 ? cerca : candidatos;
+}
+
+/** true si la semana ya llego al tope y todos estos serian de fuera nuevos. */
+function soloDeFueraNuevos(candidatos: Food[]): boolean {
+  const usados = deFueraDeLaSemana;
+  if (!usados || usados.size < TOPE_DE_FUERA || candidatos.length === 0) return false;
+  return candidatos.every((f) => esDeFuera(f) && !usados.has(f.id));
+}
+
+function anotarDeFuera(slots: Slot[]): void {
+  if (!deFueraDeLaSemana) return;
+  for (const s of slots) if (s.grams > 0 && esDeFuera(s.food)) deFueraDeLaSemana.add(s.food.id);
+}
+
 function pick(
   candidates: Food[],
   profile: Profile,
@@ -332,6 +459,7 @@ function pick(
   preferidos: Set<string> = new Set(),
 ): Food | undefined {
   if (candidates.length === 0) return undefined;
+  candidates = conCercania(candidates);
   // La despensa manda ANTES que la variedad: lo que ya esta comprado se
   // elige primero dentro de su rol, y el resto del catalogo solo entra
   // cuando la despensa no cubre ese rol. `candidates` ya paso plantilla,
@@ -346,11 +474,18 @@ function pick(
   );
   const total = weights.reduce((a, b) => a + b, 0);
   let ticket = random() * total;
+  let elegido = pool[pool.length - 1];
   for (let i = 0; i < pool.length; i += 1) {
     ticket -= weights[i] ?? 0;
-    if (ticket <= 0) return pool[i];
+    if (ticket <= 0) {
+      elegido = pool[i];
+      break;
+    }
   }
-  return pool[pool.length - 1];
+  // Lo de fuera se anota en cuanto se elige: dentro de la misma comida la
+  // grasa y el refuerzo tambien cuentan contra el tope de la semana.
+  if (elegido && deFueraDeLaSemana && esDeFuera(elegido)) deFueraDeLaSemana.add(elegido.id);
+  return elegido;
 }
 
 interface Slot {
@@ -393,7 +528,14 @@ interface Slot {
   intercambiables?: string[];
   /** Cotas de porcion propias del platillo (la taza exacta de leche). */
   cotas?: { minUnits?: number; maxUnits?: number };
+  /** La comida es la cena: leguminosa en media taza y una sola grasa. */
+  cena?: boolean;
+  /** Dieta keto: una sola grasa suelta; la otra es de coccion. */
+  keto?: boolean;
 }
+
+/** Las grasas con que se cocina: el aceite del sarten, la mantequilla del huevo. */
+const GRASAS_DE_COCCION = new Set(['aceite_oliva', 'aceite_aguacate', 'mantequilla']);
 
 /**
  * Porcion minima de ese alimento EN ESA COMIDA: su minimo digno, o el que haga
@@ -542,14 +684,38 @@ function error(slots: Slot[], target: { p: number; c: number; f: number }): numb
  * gramo, y la promesa del plan es la proteina.
  */
 const HOLGURA_PROTEINA = 0.04;
-const CASTIGO_PROTEINA = 100;
+const HOLGURA_KCAL = 0.04;
+const CASTIGO_PROTEINA = 120;
+/** Las kcal pesan mas: con cinco comidas de 20 g de piso, la proteina no
+ * siempre cabe, y un dia 15 % corto de energia es peor que 8 g de proteina de mas. */
+const CASTIGO_KCAL = 600;
+
+/**
+ * Ultima vuelta de la reparacion: cuando el dia quedo fuera de la banda de
+ * proteina, la proteina deja de negociarse contra el carbohidrato y pasa a
+ * ser casi una restriccion (la promesa del plan es la proteina +-5 g).
+ */
+let promesaDeProteina = false;
 
 function errorDelDia(slots: Slot[], target: { p: number; c: number; f: number }): number {
   const base = error(slots, target);
   if (target.p <= 0) return base;
   const desvio = Math.abs(sum(slots, 'p') - target.p) / target.p;
+  if (promesaDeProteina) {
+    const fuera = Math.max(0, desvio - 0.04);
+    const kcalMeta = target.p * 4 + target.c * 4 + target.f * 9;
+    const kcal = sum(slots, 'p') * 4 + sum(slots, 'c') * 4 + sum(slots, 'f') * 9;
+    const fueraKcal = kcalMeta > 0 ? Math.max(0, Math.abs(kcal - kcalMeta) / kcalMeta - 0.04) : 0;
+    return base + fuera * fuera * 5000 + fueraKcal * fueraKcal * 5000;
+  }
   const exceso = Math.max(0, desvio - HOLGURA_PROTEINA);
-  return base + exceso * exceso * CASTIGO_PROTEINA;
+  // Y la misma holgura para las kcal: sin ella, bajar la proteina se hacia
+  // quitando cereales —que tambien traen proteina— y el dia se quedaba 15 %
+  // corto de energia.
+  const kcalMeta = target.p * 4 + target.c * 4 + target.f * 9;
+  const kcal = sum(slots, 'p') * 4 + sum(slots, 'c') * 4 + sum(slots, 'f') * 9;
+  const excesoKcal = kcalMeta > 0 ? Math.max(0, Math.abs(kcal - kcalMeta) / kcalMeta - HOLGURA_KCAL) : 0;
+  return base + exceso * exceso * CASTIGO_PROTEINA + excesoKcal * excesoKcal * CASTIGO_KCAL;
 }
 
 /** Plural de la unidad casera, como se dice en la cocina. */
@@ -897,13 +1063,21 @@ function horaDe(timeHint: string): number {
   return Number(timeHint.split(':')[0] ?? 12);
 }
 
+/** Hora "HH:MM" a minutos desde medianoche. */
+function minutosDe(timeHint: string): number {
+  const [h, m] = timeHint.split(':').map(Number);
+  return (h ?? 12) * 60 + (m ?? 0);
+}
+
 /**
- * Un PRE puede ser el desayuno (7:00, entreno en la mañana) o una colacion de
- * las cinco de la tarde. Lo que decide es la hora, no el id del slot.
+ * Lo que se come antes de las 11:00 es desayuno, se llame como se llame el
+ * slot. Antes solo contaban DESAYUNO y el PRE de antes de las 10, y el
+ * "Almuerzo (post-entreno)" de las 9:30 de Mau salia con atun o tilapia 13 de
+ * 14 dias. Lo que decide es la hora, no el id del slot.
  */
 function esDesayuno(slot: MealSlot): boolean {
   if (slot.id === 'DESAYUNO') return true;
-  return slot.id === 'PRE' && horaDe(slot.timeHint) <= 10;
+  return minutosDe(slot.timeHint) <= 11 * 60;
 }
 
 function plantillaDe(slot: MealSlot, config: EngineConfig): Plantilla {
@@ -937,7 +1111,9 @@ function plantillaDe(slot: MealSlot, config: EngineConfig): Plantilla {
       carbRoles: ['carbo_post'],
       subtipos: [],
       maxAlimentos: ligera,
-      fruta: true,
+      // La fruta del post-entreno es el platano (carbo_post): una fruta fija
+      // aparte serian dos frutas en la misma comida (auditoria J2, regla 5).
+      fruta: false,
       proteinaMinG: config.mealProteinMinG,
     };
   }
@@ -1060,8 +1236,79 @@ function carbosDe(comida: Slot[]): Slot[] {
 }
 
 /** true si la comida se pasa de algun tope de composicion. */
+/** La media porcion de un alimento: la mitad de su tope, nunca menos que su minimo. */
+function mediaPorcion(food: Food): number {
+  return Math.max(minGrams(food), maxGrams(food) / 2);
+}
+
+/** Leguminosa que cuenta como carbohidrato del plato (frijol, lenteja, garbanzo, haba). */
+function esLeguminosaDelPlato(s: Slot): boolean {
+  return s.food.tags.includes('leguminosa') && DENSE_CARB_ROLES.includes(s.role ?? s.food.role);
+}
+
+/**
+ * La sopa que ya es el plato fuerte de carbohidrato: la de leguminosa o la de
+ * pasta. Junto a ella no va otro cereal (lenteja con arroz y tortilla es la
+ * comida dos veces).
+ */
+function sopaPesada(comida: Slot[]): boolean {
+  return comida.some(
+    (s) =>
+      s.preparacion !== undefined &&
+      s.preparacion.tipo !== 'licuado' &&
+      (esLeguminosaDelPlato(s) || s.food.id === 'pasta_integral'),
+  );
+}
+
+function sopaLigera(comida: Slot[]): boolean {
+  return (
+    comida.some((s) => s.preparacion !== undefined && s.preparacion.tipo !== 'licuado') &&
+    !sopaPesada(comida)
+  );
+}
+
+/** Media taza: el tope de leguminosa en la cena. */
+function mediaTaza(food: Food): number {
+  const s = food.serving;
+  return s && s.unit === 'taza' ? s.gramsPerUnit / 2 : mediaPorcion(food);
+}
+
+/** Las reglas del plato que no son topes de familia (auditoria J2). */
+function violaPlato(comida: Slot[]): boolean {
+  const sueltosCarbo = comida.filter(
+    (s) => s.preparacion === undefined && DENSE_CARB_ROLES.includes(s.role ?? s.food.role),
+  );
+  if (sopaPesada(comida) && sueltosCarbo.length > 0) return true;
+  if (sopaLigera(comida) && sueltosCarbo.some((s) => s.grams > mediaPorcion(s.food) + 1e-6)) return true;
+  if (comida.some((s) => s.cena) && comida.some(esLeguminosaDelPlato)) {
+    if (comida.some((s) => esLeguminosaDelPlato(s) && s.grams > mediaTaza(s.food) + 1e-6)) return true;
+    if (grasasDe(comida).length > 1) return true;
+  }
+  // Keto: el plato lleva una grasa suelta (aguacate, nueces) y, si hace falta
+  // otra, es la de coccion. Dos grasas sueltas son un antojo, no un platillo.
+  if (comida.some((s) => s.keto)) {
+    const sueltas = grasasDe(comida).filter((s) => !GRASAS_DE_COCCION.has(s.food.id));
+    if (sueltas.length > 1) return true;
+  }
+  return false;
+}
+
+/** La avena va cocida en leche o con fruta: sola con queso y chia no se come. */
+function avenaSinCompania(comida: Slot[]): boolean {
+  const avena = comida.some((s) => familiaDe(s.food) === 'avena');
+  if (!avena) return false;
+  return !comida.some((s) => s.food.role === 'fruta' || esLeche(s.food));
+}
+
+/** Las grasas anadidas de la comida (aceite, mantequilla, semillas). */
+function anadidasQueCuentan(comida: Slot[]): Slot[] {
+  return comida.filter((s) => s.food.tags.includes('grasa_anadida'));
+}
+
 function violaComposicion(comida: Slot[], config: EngineConfig): boolean {
-  const grasas = comida.filter((s) => s.food.tags.includes('grasa_anadida'));
+  if (violaPlato(comida)) return true;
+  if (avenaSinCompania(comida)) return true;
+  const grasas = anadidasQueCuentan(comida);
   if (grasas.length > config.composicion.maxGrasasAnadidasPorComida) return true;
   if (grasasDe(comida).length > config.composicion.maxGrasasPorComida) return true;
   if (ingredientesDe(comida).length > limiteDe(comida, config)) return true;
@@ -1087,6 +1334,37 @@ function violaComposicion(comida: Slot[], config: EngineConfig): boolean {
  * El primero de cada familia nunca se toca: es el que define el platillo.
  */
 function aplicarComposicion(comida: Slot[], config: EngineConfig): void {
+  // La sopa de leguminosa o de pasta ya es el carbohidrato: sale el cereal de
+  // al lado. Junto a un caldo, el cereal va en media porcion.
+  if (sopaPesada(comida)) {
+    for (const lado of comida.filter(
+      (s) => s.preparacion === undefined && DENSE_CARB_ROLES.includes(s.role ?? s.food.role),
+    )) {
+      comida.splice(comida.indexOf(lado), 1);
+    }
+  } else if (sopaLigera(comida)) {
+    for (const lado of comida) {
+      if (lado.preparacion !== undefined || !DENSE_CARB_ROLES.includes(lado.role ?? lado.food.role)) continue;
+      const media = mediaPorcion(lado.food);
+      if (lado.grams > media) lado.grams = Math.min(lado.grams, quantizeAbajo(media, lado.food, config));
+    }
+  }
+  if (comida.some((s) => s.keto)) {
+    const sueltas = grasasDe(comida).filter((s) => !GRASAS_DE_COCCION.has(s.food.id) && !s.requerido);
+    for (const sobrante of sueltas.slice(1)) comida.splice(comida.indexOf(sobrante), 1);
+  }
+  // La cena con leguminosa: media taza y una sola grasa.
+  if (comida.some((s) => s.cena) && comida.some(esLeguminosaDelPlato)) {
+    for (const leg of comida.filter(esLeguminosaDelPlato)) {
+      const tope = mediaTaza(leg.food);
+      if (leg.grams > tope) leg.grams = Math.max(quantizeAbajo(tope, leg.food, config), 0);
+    }
+    for (const sobrante of grasasDe(comida).slice(1)) {
+      if (sobrante.requerido) continue;
+      comida.splice(comida.indexOf(sobrante), 1);
+    }
+  }
+
   // Repetidos de subtipo y carbohidratos de mas: se queda el primero, que es
   // el que definio el plato, y salen los que llegaron a acompañarlo.
   for (const subtipo of config.composicion.subtiposDeCarbo) {
@@ -1099,7 +1377,7 @@ function aplicarComposicion(comida: Slot[], config: EngineConfig): void {
     comida.splice(comida.indexOf(sobrante), 1);
   }
 
-  const anadidas = comida.filter((s) => s.food.tags.includes('grasa_anadida'));
+  const anadidas = anadidasQueCuentan(comida);
   for (const sobrante of anadidas.slice(config.composicion.maxGrasasAnadidasPorComida)) {
     const donde = comida.indexOf(sobrante);
     if (donde >= 0) comida.splice(donde, 1);
@@ -1287,6 +1565,7 @@ function ajustarPorciones(
         // El refuerzo es opcional: nunca repite la proteina ni el cereal del
         // dia, ni los de esta misma comida.
         .filter((f) => !repiteFamilia(f, familiasDelDia) && !repiteFamilia(f, familiasDe(slots)))
+        .filter((f) => !conLicuado(slots) || vaJuntoAlLicuado(f))
         .filter(
         // El segundo alimento tiene que CABER en el hueco: si su porcion
         // minima ya se pasa de lo que falta, meterlo cambia un plato corto por
@@ -1300,20 +1579,29 @@ function ajustarPorciones(
       const caben = candidatos.filter(
         (f) => !violaComposicion([...slots, { food: f, grams: minGrams(f), fixed: false }], config),
       );
+      // El refuerzo de carbohidrato prefiere lo que no trae proteina de
+      // pilon: con cuatro comidas de 20 g de piso, la media taza de haba que
+      // cierra el carbohidrato es la que saca la proteina del dia de rango.
+      const ligerosEnProteina =
+        faltante === 'c' ? caben.filter((f) => f.proteinPer100 <= f.carbPer100 * 0.15) : caben;
+      const cabenMejor = ligerosEnProteina.length > 0 ? ligerosEnProteina : caben;
       const alcance = (f: Food): number => (maxGrams(f) * f[clave]) / 100;
-      const cubren = caben.filter((f) => alcance(f) >= falta * 0.8);
+      const cubren = cabenMejor.filter((f) => alcance(f) >= falta * 0.8);
       // Si ninguno alcanza a cerrar el hueco, se sortea entre los que mas
       // cubren: meter 5 g de ajonjoli cuando faltan 25 g de grasa gasta el
       // refuerzo sin arreglar la comida.
-      const mejor = caben.length > 0 ? Math.max(...caben.map(alcance)) : 0;
+      const mejor = cabenMejor.length > 0 ? Math.max(...cabenMejor.map(alcance)) : 0;
       const finalistas =
-        cubren.length > 0 ? cubren : caben.filter((f) => alcance(f) >= mejor * 0.6);
+        cubren.length > 0 ? cubren : cabenMejor.filter((f) => alcance(f) >= mejor * 0.6);
+      // El refuerzo es opcional: si la semana ya trae sus tres cosas de
+      // fuera, no mete una cuarta (tofu, edamame) solo para cerrar un macro.
+      const cercanos = finalistas.filter((f) => !soloDeFueraNuevos([f]));
       const segundo = pick(
-        finalistas,
+        cercanos,
         profile,
         random,
         avoid,
-        preferidosDe(finalistas, slots, config),
+        preferidosDe(cercanos, slots, config),
       );
       if (segundo) {
         reforzados[faltante] += 1;
@@ -1386,9 +1674,13 @@ function preparacionesPara(slot: MealSlot, profile: Profile): Preparacion[] {
     // Keto cambia la formula: solo entra lo que no depende de fruta ni cereal.
     if (profile.diet === 'keto' && !prep.tags.includes('keto_ok')) return false;
     if (prep.costRel > topeDeCosto) return false;
-    const minutos = prep.tags.includes('meal_prep')
-      ? Math.min(prep.prepMin, MINUTOS_CALENTAR)
-      : prep.prepMin;
+    // El platillo de olla solo cuenta como recalentar si la persona cocina en
+    // lote; si no, se cocina ese dia y cuenta entero (Irma, 20 min, recibia
+    // caldo tlalpeno de 45 en 9 de 14 menus).
+    const minutos =
+      prep.tags.includes('meal_prep') && profile.cocinaEnLote === true
+        ? Math.min(prep.prepMin, MINUTOS_CALENTAR)
+        : prep.prepMin;
     if (profile.maxPrepMin !== undefined && minutos > profile.maxPrepMin) return false;
     return true;
   });
@@ -1588,7 +1880,10 @@ function resolverPreparacion(
       )
       // La proteina principal y el cereal no se repiten en el dia: si el
       // desayuno ya fue yogur con avena, el licuado de fresa con avena no va.
-      .filter((f) => !repiteFamilia(f, familiasDelDia));
+      .filter((f) => !repiteFamilia(f, familiasDelDia))
+      // Una sopa de leguminosa en un dia que ya trae leguminosa en otra
+      // comida serian dos: el frijol de la cena y la sopa de lentejas.
+      .filter((f) => !(f.tags.includes('leguminosa') && familiasDelDia.has(LEGUMINOSA)));
     // La proteina del licuado sale del polvo cuando la persona lo tiene: el
     // yogur solo entra si no hay polvo (y si no salio ya en otra comida).
     const polvos = pasan.filter((f) => f.tags.includes('suplemento'));
@@ -1638,6 +1933,18 @@ function resolverPreparacion(
 
   // Un platillo de un solo alimento no es platillo, es ese alimento.
   if (slots.length < 2) return undefined;
+  // La sopa tiene que alcanzar el carbohidrato de la comida: la de pasta o
+  // leguminosa no admite cereal al lado, y el caldo solo media porcion. Una
+  // comida de 120 g de carbohidrato no se sirve con sopa de pasta.
+  if (prep.tipo !== 'licuado' && vaCarbohidrato) {
+    const delPlatillo = slots.reduce(
+      (acc, s) =>
+        acc + (DENSE_CARB_ROLES.includes(s.food.role) ? (maxGrams(s.food) * s.food.carbPer100) / 100 : 0),
+      0,
+    );
+    const alLado = sopaPesada(slots) ? 0 : 40;
+    if (slot.carbG > (delPlatillo + alLado) * 1.1) return undefined;
+  }
   // Sin polvo, la proteina del licuado es yogur CON leche: yogur licuado con
   // agua no es un licuado que alguien prepare. Si la leche no cabe, no va.
   if (prep.tipo === 'licuado') {
@@ -1827,10 +2134,53 @@ function buildMeal(
     // repetir, y eso queda declarado en el menu.
     const deFrescos = filtrar(sinRepetir(base, familiasDelDia));
     let candidatos: Food[];
-    if (deFrescos.conPiso.length > 0) {
+    // Antes de repetir la proteina, un escalon de precio: el presupuesto bajo
+    // tiene cuatro familias (huevo, queso, atun, sardina) y tres comidas que
+    // las piden; el muslo de pollo cuesta poco mas y evita la segunda lata
+    // del dia. Del escalon de arriba, solo lo mas barato que no repita.
+    let masCaro: Food[] = [];
+    let conGrasa: Food[] = [];
+    const unEscalonArriba = (): Food[] => {
+      const subido = profile.budget === 'bajo' ? 'medio' : profile.budget === 'medio' ? 'alto' : undefined;
+      if (!subido) return [];
+      const deArriba = filtrar(
+        sinRepetir(
+          eligible(pool, { ...profile, budget: subido }, config, role, {
+            ...filters,
+            ...extra,
+            acompanan: slots.map((s) => s.food),
+          }),
+          familiasDelDia,
+        ),
+      ).conPiso;
+      const barato = Math.min(...deArriba.map((f) => f.costRel));
+      return deArriba.filter((f) => f.costRel === barato);
+    };
+    if (deFrescos.conPiso.length > 0 && (extra.estricto !== true || !soloDeFueraNuevos(deFrescos.conPiso))) {
       candidatos = deFrescos.conPiso;
     } else if (extra.estricto === true) {
       return undefined;
+    } else if (role.startsWith('proteina') && (masCaro = unEscalonArriba()).length > 0) {
+      candidatos = masCaro;
+    } else if (
+      extra.grasaMaxG !== undefined &&
+      (conGrasa = filtrar(
+        sinRepetir(
+          (['proteina_magra', 'proteina_grasa'] as FoodRole[]).flatMap((rol) =>
+            eligible(pool, profile, config, rol, {
+              ...filters,
+              ...extra,
+              grasaMaxG: undefined,
+              acompanan: slots.map((s) => s.food),
+            }),
+          ),
+          familiasDelDia,
+        ),
+      ).conPiso).length > 0
+    ) {
+      // Antes que repetir la proteina, que traiga algo de grasa: el huevo
+      // entero en el post-entreno es mejor que las claras dos veces al dia.
+      candidatos = conGrasa;
     } else {
       const deTodos = filtrar(base);
       candidatos =
@@ -1861,7 +2211,14 @@ function buildMeal(
         acompanan: slots.map((s) => s.food),
       }),
     );
-    const unicos = base.filter((f, i) => base.findIndex((o) => o.id === f.id) === i);
+    const todosUnicos = base.filter((f, i) => base.findIndex((o) => o.id === f.id) === i);
+    // En la cena la leguminosa pesa: se prefiere tortilla o tuberculo, y la
+    // leguminosa se deja para la comida.
+    const ligeros = esCena ? todosUnicos.filter((f) => !f.tags.includes('leguminosa')) : todosUnicos;
+    const conCompania = ligeros.filter(
+      (f) => familiaDe(f) !== 'avena' || plantilla.fruta || slots.some((s) => s.food.role === 'fruta' || esLeche(s.food)),
+    );
+    const unicos = conCompania.length > 0 ? conCompania : ligeros.length > 0 ? ligeros : todosUnicos;
     const frescos = sinRepetir(unicos, familiasDelDia);
     const candidatos = feasible(frescos.length > 0 ? frescos : unicos, key, targetG, 10);
     return pick(candidatos, profile, random, avoid, preferidosDe(candidatos, slots, config));
@@ -1876,7 +2233,19 @@ function buildMeal(
    * entero y ademas se ve absurdo en el plato.
    */
   const CARBO_MINIMO_DEL_SLOT = 15;
-  const vaCarbohidrato = slot.allowDenseCarb && slot.carbG >= CARBO_MINIMO_DEL_SLOT;
+  // Despues de las 21:00 no va cereal denso: la colacion de la noche es un
+  // lacteo con fruta o semillas (auditoria J2: 14 de 14 en la vegetariana).
+  const noche = minutosDe(slot.timeHint) >= 21 * 60;
+  // La cena (o el post-entreno que es cena): leguminosa ligera y de
+  // preferencia en la comida.
+  const esCena = slot.id === 'CENA' || /^cena/i.test(slot.label);
+  // La comida vegetariana siempre lleva su cereal (tofu o leguminosa CON
+  // cereal): aunque el slot pida poco carbohidrato, una tortilla cabe.
+  const vegetarianaFuerte = profile.diet === 'vegetariana' && slot.id === 'COMIDA';
+  const vaCarbohidrato =
+    slot.allowDenseCarb &&
+    (slot.carbG >= CARBO_MINIMO_DEL_SLOT || (vegetarianaFuerte && slot.carbG > 0)) &&
+    !noche;
 
   // El platillo va primero: es el que define la comida, y lo que venga
   // despues —la proteina de la comida corrida junto a la sopa— lo acompaña.
@@ -1894,9 +2263,18 @@ function buildMeal(
   };
 
   // La crema y la sopa ya son la verdura del plato.
-  if (slot.freeVegetables && config.freeVegetableGramsPerMeal > 0 && !cubre.verdura) {
+  const esLicuado = conLicuado(slots);
+  const desayuno = esDesayuno(slot);
+  const ponerVerdura = (): void => {
+    if (!slot.freeVegetables || config.freeVegetableGramsPerMeal <= 0 || cubre.verdura || esLicuado) return;
+    // En el desayuno la verdura va cocida con el huevo o el queso —espinaca,
+    // nopal, champinon, calabacita—, nunca 200 g de alfalfa; y no va si el
+    // plato ya es cereal de desayuno (avena con nopal no se sirve).
+    if (desayuno && slots.some((s) => s.food.tags.includes('cereal_desayuno'))) return;
     const veg = pick(
-      eligible(pool, profile, config, 'vegetal_libre', { freeVegetable: true }),
+      eligible(pool, profile, config, 'vegetal_libre', { freeVegetable: true }).filter(
+        (f) => !desayuno || VERDURA_DE_DESAYUNO.has(f.id),
+      ),
       profile,
       random,
       avoid,
@@ -1910,10 +2288,11 @@ function buildMeal(
       });
       avoid.add(veg.id);
     }
-  }
+  };
+  if (!desayuno) ponerVerdura();
 
-
-  if (plantilla.fruta && vaCarbohidrato && !options.simplify && !cubre.fruta) {
+  const frutaDeNoche = noche && slot.allowDenseCarb && slot.carbG >= 10;
+  if ((plantilla.fruta || frutaDeNoche) && (vaCarbohidrato || frutaDeNoche) && !options.simplify && !cubre.fruta) {
     const fruit = elegir('fruta');
     if (fruit) {
       // La fruta del pre-entreno va fija, pero fija en una porcion de verdad:
@@ -1941,11 +2320,36 @@ function buildMeal(
   // llega a los 20 g dentro de su porcion no es la proteina del plato, es un
   // ingrediente. Sin este filtro salian cenas de nopal con arroz y linaza.
   const proteinaMinima = plantilla.proteinaMinG;
-  const piso = { minProteinG: proteinaMinima };
+  // Antes de entrenar, proteina magra: el pre-entreno trae a lo mucho 10 g
+  // de grasa en total.
+  const piso = {
+    minProteinG: proteinaMinima,
+    ...(noche ? { soloLacteo: true } : {}),
+    ...(slot.id === 'PRE' || slot.fatG <= 5 ? { grasaMaxG: 5 } : {}),
+  };
   const otroRol: FoodRole = proteinRole === 'proteina_magra' ? 'proteina_grasa' : 'proteina_magra';
+  // Vegetariana: la comida fuerte es tofu con cereal (o leguminosa con
+  // cereal), no yogur con arroz. El tofu va primero si cabe.
+  const comidaVegetariana = profile.diet === 'vegetariana' && slot.id === 'COMIDA';
+  const tofu = comidaVegetariana && !cubre.proteina
+    ? pick(
+        sinRepetir(
+          eligible(pool, profile, config, 'proteina_grasa', {
+            ...filters,
+            acompanan: slots.map((s) => s.food),
+            estricto: true,
+          }).filter((f) => f.id === 'tofu_firme'),
+          familiasDelDia,
+        ),
+        profile,
+        random,
+        avoid,
+      )
+    : undefined;
   const protein = cubre.proteina
     ? undefined
-    : // Los dos roles de proteina CON la plantilla del slot antes de aflojarla:
+    : tofu ??
+    // Los dos roles de proteina CON la plantilla del slot antes de aflojarla:
     // si no hay proteina de desayuno magra, se busca entre las grasas —queso,
     // huevo— y solo entonces se desayuna lo que haya.
     elegir(proteinRole, 'proteinPer100', slot.proteinG, { ...piso, estricto: true }) ??
@@ -1966,21 +2370,56 @@ function buildMeal(
   if (vaCarbohidrato && !cubre.carbo) {
     const carbRole = slotCarbRole(slot.id);
     const carbTarget = slot.carbG - (slot.id === 'PRE' ? 20 : 0);
-    const carb =
-      elegirDeRoles(plantilla.carbRoles, 'carbPer100', carbTarget, plantilla.subtipos) ??
-      undefined;
+    const carb = esLicuado
+      ? pick(
+          plantilla.carbRoles
+            .flatMap((role) => eligible(pool, profile, config, role, { ...filters, acompanan: slots.map((s) => s.food) }))
+            .filter((f) => LADO_DEL_LICUADO.has(f.id))
+            .filter((f) => !slots.some((s) => incompatibles(f, s.food, config)))
+            .filter((f) => !repiteFamilia(f, familiasDelDia)),
+          profile,
+          random,
+          avoid,
+        )
+      : elegirDeRoles(
+          plantilla.carbRoles,
+          'carbPer100',
+          carbTarget,
+          // La comida vegetariana lleva cereal de comida: la leguminosa entra
+          // como segundo carbohidrato, no en lugar del cereal.
+          comidaVegetariana ? ['cereal_comida'] : plantilla.subtipos,
+        );
     if (carb) {
       slots.push({
         food: carb,
         grams: 100,
         fixed: false,
         role: DENSE_CARB_ROLES.includes(carb.role) ? carb.role : carbRole,
+        // El cereal de la comida vegetariana no se poda ni se cambia por
+        // tuberculo: es la mitad de su proteina completa.
+        ...(comidaVegetariana ? { requerido: true } : {}),
       });
       avoid.add(carb.id);
+      // La avena va en leche o con fruta: si la comida no trae ninguna, entra
+      // la fruta (la colacion de avena con queso y chia no se come asi).
+      if (familiaDe(carb) === 'avena' && !slots.some((s) => s.food.role === 'fruta' || esLeche(s.food))) {
+        const fruta = elegir('fruta');
+        if (fruta) {
+          slots.push({
+            food: fruta,
+            grams: quantize(fruta.servingG ?? 100, fruta, config),
+            fixed: true,
+            role: 'fruta',
+          });
+          avoid.add(fruta.id);
+        }
+      }
     }
   }
 
-  if (wantsFat && !cubre.grasa) {
+  if (desayuno) ponerVerdura();
+
+  if (wantsFat && !cubre.grasa && !esLicuado) {
     const yaTraeAnadida = slots.some((s) => s.food.tags.includes('grasa_anadida'));
     const fat = elegir('grasa', 'fatPer100', slot.fatG, yaTraeAnadida ? { sinGrasaAnadida: true } : {});
     if (fat) {
@@ -1998,14 +2437,72 @@ function buildMeal(
     c: cap(slot.carbG, residual.c),
     f: cap(slot.fatG, residual.f),
   };
-  for (const s of slots) s.maxEnComida = plantilla.maxAlimentos;
+  for (const s of slots) {
+    s.maxEnComida = plantilla.maxAlimentos;
+    if (esCena) s.cena = true;
+    if (profile.diet === 'keto') s.keto = true;
+  }
   ajustarPorciones(
     slots, effective, profile, config, pool, filters, random, avoid, plantilla, familiasDelDia,
   );
-  for (const s of slots) s.maxEnComida = plantilla.maxAlimentos;
+  // La comida vegetariana no es tofu con una tortilla: trae al menos tres
+  // alimentos contados. Si le falta, entra media taza de leguminosa (frijol
+  // con arroz, lenteja con tortilla) y el solver reparte.
+  if (vegetarianaFuerte && ingredientesDe(slots).filter((s) => !s.fixed).length < 3) {
+    const leguminosa = pick(
+      eligible(pool, profile, config, 'carbo_complejo', { ...filters, acompanan: slots.map((s) => s.food) })
+        .filter((f) => f.tags.includes('leguminosa'))
+        .filter((f) => !slots.some((s) => incompatibles(f, s.food, config)))
+        .filter((f) => !repiteFamilia(f, familiasDelDia) && !slots.some((s) => s.food.id === f.id))
+        .filter((f) => !violaComposicion([...slots, { food: f, grams: minGrams(f), fixed: false }], config)),
+      profile,
+      random,
+      avoid,
+    );
+    if (leguminosa) {
+      slots.push({
+        food: leguminosa,
+        grams: minGrams(leguminosa),
+        fixed: false,
+        role: leguminosa.role,
+        requerido: true,
+        maxEnComida: plantilla.maxAlimentos,
+      });
+      avoid.add(leguminosa.id);
+      solveGrams(slots, effective, config);
+    } else {
+      // Con sopa de pasta no cabe otra leguminosa: el tercero es la grasa
+      // del plato (aguacate, nueces), en su porcion minima.
+      const grasa = pick(
+        eligible(pool, profile, config, 'grasa', { ...filters, acompanan: slots.map((s) => s.food) })
+          .filter((f) => !slots.some((s) => incompatibles(f, s.food, config)))
+          .filter((f) => !violaComposicion([...slots, { food: f, grams: minGrams(f), fixed: false }], config)),
+        profile,
+        random,
+        avoid,
+      );
+      if (grasa) {
+        slots.push({
+          food: grasa,
+          grams: minGrams(grasa) || 15,
+          fixed: false,
+          role: 'grasa',
+          requerido: true,
+          maxEnComida: plantilla.maxAlimentos,
+        });
+        solveGrams(slots, effective, config);
+      }
+    }
+  }
+  for (const s of slots) {
+    s.maxEnComida = plantilla.maxAlimentos;
+    if (esCena) s.cena = true;
+    if (profile.diet === 'keto') s.keto = true;
+  }
 
   const kept = slots.filter((s) => s.grams > 0);
   for (const familia of familiasDe(kept)) familiasDelDia.add(familia);
+  anotarDeFuera(kept);
   const items = kept.map((s) => toItem(s, s.fixed && s.food.role === 'vegetal_libre'));
 
   const totals = items.reduce<MacroTargets>(
@@ -2086,6 +2583,8 @@ function repairDay(
     pool: Food[];
     filtersPorComida: EligibleOptions[];
     plantillas: Plantilla[];
+    /** Grupos vetados para todo el dia (el atun que ya salio en el otro menu). */
+    vetadas?: ReadonlySet<string>;
   },
 ): void {
   for (const comida of comidas) aplicarComposicion(comida, config);
@@ -2110,6 +2609,41 @@ function repairDay(
   for (let vuelta = 0; vuelta < 2 && contexto && fueraDeTolerancia(comidas.flat(), target); vuelta += 1) {
     sustituirAlimentos(comidas, target, config, contexto);
     moverGramos(comidas, target, config);
+  }
+
+  // Si aun asi la proteina quedo fuera de su banda, una vuelta mas donde la
+  // banda de proteina y la de kcal mandan sobre el reparto fino: se poda la
+  // leguminosa que sobra, se sustituye y se mueven gramos con esa regla.
+  const p = sum(comidas.flat(), 'p');
+  if (contexto && target.p > 0 && Math.abs(p - target.p) / target.p > 0.042) {
+    const antes = comidas.map((comida) => comida.map((s) => ({ s, food: s.food, grams: s.grams, role: s.role })));
+    const kcalDe = (all: Slot[]): number => sum(all, 'p') * 4 + sum(all, 'c') * 4 + sum(all, 'f') * 9;
+    const kcalMeta = target.p * 4 + target.c * 4 + target.f * 9;
+    const desvioKcalAntes = Math.abs(kcalDe(comidas.flat()) - kcalMeta) / kcalMeta;
+    promesaDeProteina = true;
+    try {
+      podarSobrantes(comidas, target);
+      moverGramos(comidas, target, config);
+      sustituirAlimentos(comidas, target, config, contexto);
+      moverGramos(comidas, target, config);
+    } finally {
+      promesaDeProteina = false;
+    }
+    // Si para meter la proteina en banda las kcal se salen de la suya, no se
+    // gano nada: se regresa a como estaba.
+    const desvioKcal = Math.abs(kcalDe(comidas.flat()) - kcalMeta) / kcalMeta;
+    if (desvioKcal > Math.max(0.045, desvioKcalAntes)) {
+      antes.forEach((guardada, i) => {
+        const comida = comidas[i]!;
+        comida.length = 0;
+        for (const { s, food, grams, role } of guardada) {
+          s.food = food;
+          s.grams = grams;
+          s.role = role;
+          comida.push(s);
+        }
+      });
+    }
   }
 
 
@@ -2141,6 +2675,8 @@ function sustituirAlimentos(
     pool: Food[];
     filtersPorComida: EligibleOptions[];
     plantillas: Plantilla[];
+    /** Grupos vetados para todo el dia (el atun que ya salio en el otro menu). */
+    vetadas?: ReadonlySet<string>;
   },
   /**
    * `macros`: cambia un alimento solo si acerca el dia al target.
@@ -2160,7 +2696,9 @@ function sustituirAlimentos(
     const filters = contexto.filtersPorComida[i] ?? {};
     for (const slot of comida) {
       if (!slot.role) continue;
-      if (modo === 'repetidos' && !repiteFamilia(slot.food, familiasDe(comidas.filter((_, j) => j !== i).flat()))) {
+      const fueraDelDia = familiasDe(comidas.filter((_, j) => j !== i).flat());
+      for (const vetada of contexto.vetadas ?? []) fueraDelDia.add(vetada);
+      if (modo === 'repetidos' && !repiteFamilia(slot.food, fueraDelDia)) {
         continue;
       }
       // El vegetal libre tambien se sustituye, aunque sus gramos esten fijos:
@@ -2180,6 +2718,7 @@ function sustituirAlimentos(
       const propia = familiaDe(slot.food);
       const familiasFuera = familiasDe(comidas.filter((_, j) => j !== i).flat());
       if (propia && modo === 'macros') familiasFuera.delete(propia);
+      for (const vetada of contexto.vetadas ?? []) familiasFuera.add(vetada);
       // La proteina magra y la grasa son la misma familia para sustituir: en
       // keto la diferencia entre la tilapia y el salmon es justo la grasa que
       // le falta al dia, y obligarse a quedarse en el mismo rol deja fuera la
@@ -2217,6 +2756,19 @@ function sustituirAlimentos(
           }),
         )
         .filter((f) => !yaEstan.has(f.id) && !repiteFamilia(f, familiasFuera))
+        // La afinidad es dura al reparar: `eligible` la afloja si deja el rol
+        // vacio, y asi entraba avena junto al nopal del desayuno.
+        .filter((f) => !acompanan.some((otro) => incompatibles(f, otro, config)))
+        .filter((f) => f.id === slot.food.id || !esDeFuera(f) || !deFueraDeLaSemana || deFueraDeLaSemana.has(f.id) || deFueraDeLaSemana.size < TOPE_DE_FUERA)
+        .filter((f) => slot.preparacion !== undefined || !conLicuado(comida) || vaJuntoAlLicuado(f))
+        .filter((f) => !esVegetalLibre || !filters.desayuno || slot.preparacion !== undefined || VERDURA_DE_DESAYUNO.has(f.id))
+        .filter(
+          (f) =>
+            !slot.requerido ||
+            slot.preparacion !== undefined ||
+            !slot.food.tags.includes('cereal_comida') ||
+            f.tags.includes('cereal_comida'),
+        )
         // El ingrediente de un platillo solo se cambia por otro del platillo:
         // el licuado no se arregla metiendole atun.
         .filter((f) => slot.permitidos === undefined || slot.permitidos.includes(f.id))
@@ -2248,6 +2800,7 @@ function sustituirAlimentos(
 
       slot.food = mejor.food;
       slot.grams = mejor.grams;
+      if (deFueraDeLaSemana && esDeFuera(mejor.food)) deFueraDeLaSemana.add(mejor.food.id);
       // El rol sigue al alimento: si la tilapia se cambio por salmon, ese slot
       // ya es proteina grasa, y de ahi salen su explicacion y sus
       // equivalencias.
@@ -2353,6 +2906,11 @@ function buildMenu(
   pool: Food[],
   options: MenuOptions,
   target: MacroTargets,
+  /**
+   * Grupos que este menu no usa en todo el dia: el atun ya salio en el otro
+   * menu de la semana (3.5 dias), y comerlo tambien en este serian 7.
+   */
+  vetadas: ReadonlySet<string> = new Set(),
 ): Menu {
   const random = rng(seed);
   // Un sorteo aparte para los platillos, derivado de la misma semilla.
@@ -2360,7 +2918,7 @@ function buildMenu(
   const avoid = new Set<string>();
   const residual: Residual = { p: 0, c: 0, f: 0 };
   const platillosDelDia = new Set<'licuado' | 'plato'>();
-  const familiasDelDia = new Set<string>();
+  const familiasDelDia = new Set<string>(vetadas);
   const built = slots.map((slot) =>
     buildMeal(
       slot, profile, config, random, avoid, pool, options, residual, prepRandom, platillosDelDia,
@@ -2378,8 +2936,11 @@ function buildMenu(
         quickOnly: slot.id === 'PRE' || slot.id === 'POST',
         noSupplements: !(slot.id === 'PRE' || slot.id === 'POST'),
         desayuno: esDesayuno(slot),
+        ...(slot.id === 'PRE' || slot.fatG <= 5 ? { grasaMaxG: 5 } : {}),
+        ...(minutosDe(slot.timeHint) >= 21 * 60 ? { soloLacteo: true } : {}),
       })),
       plantillas: slots.map((slot) => plantillaDe(slot, config)),
+      vetadas,
     },
   );
   // Los gramos se cierran a entero ANTES de pintar: media cucharadita son 2.5
@@ -2391,10 +2952,16 @@ function buildMenu(
     verificarPlatillo(b.slots);
   }
   const meals = built.map((b) => b.meal);
-  const fueraDe = (i: number): Set<string> =>
-    familiasDe(built.filter((_, j) => j !== i).flatMap((b) => b.slots));
+  const fueraDe = (i: number): Set<string> => {
+    const fuera = familiasDe(built.filter((_, j) => j !== i).flatMap((b) => b.slots));
+    for (const vetada of vetadas) fuera.add(vetada);
+    return fuera;
+  };
   built.forEach((b, i) => refreshMeal(b.meal, b.slots, pool, profile, config, fueraDe(i)));
-  const repeticiones = repeticionesDe(built.map((b) => ({ slot: b.meal.slot, slots: b.slots })));
+  const repeticiones = repeticionesDe(
+    built.map((b) => ({ slot: b.meal.slot, slots: b.slots })),
+    vetadas,
+  );
   const totals = meals.reduce<MacroTargets>(
     (acc, meal) => ({
       kcal: acc.kcal + meal.totals.kcal,
@@ -2429,15 +2996,19 @@ function buildMenu(
  */
 function repeticionesDe(
   comidas: Array<{ slot: MealSlot['id']; slots: Slot[] }>,
+  /** Lo vetado cuenta como si ya hubiera salido: usarlo una vez ya es repetir. */
+  vetadas: ReadonlySet<string> = new Set(),
 ): NonNullable<Menu['repeticiones']> {
   const porFamilia = new Map<string, MealSlot['id'][]>();
+  for (const vetada of vetadas) porFamilia.set(vetada, []);
   for (const comida of comidas) {
     for (const familia of familiasDe(comida.slots)) {
+      if (MARCAS_DEL_DIA.has(familia) || familia.startsWith(MARCA_ALIMENTO)) continue;
       porFamilia.set(familia, [...(porFamilia.get(familia) ?? []), comida.slot]);
     }
   }
   return [...porFamilia.entries()]
-    .filter(([, slots]) => slots.length > 1)
+    .filter(([familia, slots]) => slots.length > 1 || (vetadas.has(familia) && slots.length > 0))
     .map(([familia, slots]) => ({ familia, slots }));
 }
 
@@ -2557,20 +3128,46 @@ export function generateMenu(
   // enterarse; la lista de super compra ese unico menu los dias completos, no
   // la mitad de cada uno.
   const fijo = profile.diet === 'menu_fijo';
+  deFueraDeLaSemana = new Set();
+  try {
+    return armarSemana();
+  } finally {
+    deFueraDeLaSemana = null;
+  }
+
+  function armarSemana(): MenuPlan {
   const menu1 = buildMenu(1, slots, profile, config, seed, pool, options, target);
   if (fijo) menu1.label = 'Menu de la semana';
+  // El atun es la lata de la semana: si el menu 1 ya lo trae (3.5 dias), el 2
+  // no lo repite; con los dos serian 7 dias de atun.
+  const atunEnMenu1 = menu1.meals.some((m) =>
+    m.items.some((i) => familiaDe({ id: i.foodId, name: i.name, role: i.why.role }) === 'atun'),
+  );
   const menu2 = fijo
     ? { ...menu1, id: 2 as const }
-    : buildMenu(2, slots, profile, config, seed * 7919 + 13, pool, options, target);
+    : buildMenu(
+        2, slots, profile, config, seed * 7919 + 13, pool, options, target,
+        atunEnMenu1 ? new Set(['atun']) : new Set(),
+      );
   const daysPerMenu = options.daysPerMenu ?? 3.5;
 
   const notas: string[] = [
     'Los vegetales verdes son libres: puedes comer mas de los que indica el menu.',
     'Las equivalencias son intercambios del mismo rol; usa los gramos indicados.',
   ];
+  const electrolitos = 'Protocolo de electrolitos: salar bien las comidas o agua mineral con sal y limon.';
   if (options.phase === 'CUT_AGRESIVO') {
     notas.push('Comida y cena van sin carbohidrato denso.');
-    notas.push('Protocolo de electrolitos: salar bien las comidas o agua mineral con sal y limon.');
+    notas.push(electrolitos);
+  }
+  // Keto vacia el glucogeno y con el el agua y el sodio: el protocolo va
+  // siempre, no solo en el corte agresivo.
+  if (profile.diet === 'keto' && !notas.includes(electrolitos)) notas.push(electrolitos);
+  if (profile.diet === 'vegetariana') {
+    notas.push(
+      'Vegetariana: combina leguminosa con cereal (frijol con tortilla, lenteja con arroz) para una proteina completa.',
+    );
+    notas.push('Vitamina B12: sin carne ni pescado hace falta vigilarla; revisala en Suplementos.');
   }
   if (profile.conditions?.glucosaAlta) {
     notas.push('Carbohidratos densos limitados a indice glucemico bajo.');
@@ -2591,6 +3188,7 @@ export function generateMenu(
       : shoppingList([menu1, menu2], pool, daysPerMenu, profile.pantry),
     notas,
   };
+  }
 }
 
 // ---------------------------------------------------------------------------

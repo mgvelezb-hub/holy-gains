@@ -243,7 +243,10 @@ describe.each(CASOS)('$nombre', (caso) => {
         // TODAS las familias que el presupuesto de esa persona alcanza (el
         // principiante de presupuesto bajo tiene cuatro proteinas para tres
         // comidas, y el desayuno lleva dos).
-        for (const { familia } of menu.repeticiones ?? []) {
+        for (const { familia, slots } of menu.repeticiones ?? []) {
+          // La lata, y el atun vetado por la semana (sale una vez en el menu 2),
+          // los cuenta el golden culinario (r03).
+          if (familia === 'lata' || (familia === 'atun' && slots.length < 2)) continue;
           const tope = caso.profile.budget === 'bajo' ? 1 : caso.profile.budget === 'medio' ? 2 : 3;
           const esProteina = FOODS.some((f) => familiaDe(f) === familia && f.role.startsWith('proteina'));
           const alcanzables = new Set(
