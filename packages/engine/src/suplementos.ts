@@ -253,6 +253,8 @@ export interface TomaDelDia {
   dosis: string;
   /** La comida a la que se amarra; `null` si el ancla no es comida (dormir, entreno). */
   slot: MealSlotId | null;
+  /** El ancla de la ficha: con ella se sugiere la hora de las que no van con comida. */
+  ancla: AnclaSuplemento;
   /** Cuando, dicho: "con la comida". */
   cuando: string;
   /** Ya se tomo hoy (el check escribe `SupplementLog`); no es "acepto tomarlo". */
@@ -344,6 +346,7 @@ export function tomasDeHoy(input: {
           corto: p.corto,
           dosis: p.dosis,
           slot,
+          ancla: p.ancla,
           cuando: p.momento,
           hecho: hechas.has(p.supplement),
           ...(horaDe.has(p.supplement) ? { hechaA: horaDe.get(p.supplement)! } : {}),

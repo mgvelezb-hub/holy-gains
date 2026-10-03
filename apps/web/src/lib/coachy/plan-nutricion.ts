@@ -43,6 +43,7 @@ import { decimalToNumber, shiftISODate, toISODate } from "@/lib/format";
 import { activityWindow } from "@/lib/health/db";
 import { prisma } from "@/lib/prisma";
 import { sugerenciasPara, tomasPara } from "@/lib/suplementos/db";
+import { conHoraSugerida, momentoDeHoy } from "@/lib/suplementos/hora-sugerida";
 
 /**
  * El plan de nutrición, una sola verdad (K1).
@@ -236,7 +237,19 @@ export async function planDeNutricion(
     tomasPara(userId, profile, hoy, slotsHoy.length > 0 ? slotsHoy : undefined),
     sugerenciasPara(userId, profile, { hoy }).catch(() => ({ freno: null, sugerencias: [], notas: [] })),
   ]);
-  const { tomas, pausadas } = tomasDelPlan(pauta.tomas, sugerencias.freno);
+  const horasHoy = horariosPorDia[dia];
+  const delPlan = tomasDelPlan(pauta.tomas, sugerencias.freno);
+  const pausadas = delPlan.pausadas;
+  // Cada toma con su hora sugerida, desde los horarios de comida y el momento
+  // de entrenar de hoy: la hoja de Suplementos la dice y el "Prepárate" la
+  // usa para saber qué recordar con cada comida. Es sugerencia, no regla.
+  const tomas = conHoraSugerida(delPlan.tomas, {
+    horasComida: Object.fromEntries(
+      (menuHoy?.meals ?? []).map((meal) => [meal.slot, horasHoy[meal.slot] ?? meal.timeHint]),
+    ),
+    entreno: momentoDeHoy(profile.trainingSchedule, profile.trainingTime, dia),
+    minutosSesion: profile.sessionMinutes,
+  });
   const resumen = resumenTomas(tomas);
 
   const decision = actual?.decision ?? null;
@@ -260,8 +273,6 @@ export async function planDeNutricion(
     sugiereD3: sugerencias.sugerencias.some((s) => s.supplement === "VITAMINA_D3"),
     despensa,
   });
-
-  const horasHoy = horariosPorDia[dia];
 
   return {
     decision: decision
