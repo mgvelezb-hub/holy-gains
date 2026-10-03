@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { apiUser, unauthorized } from "@/lib/api/auth";
 import { COMPOSE_MODEL, anthropicClient, hasAnthropicKey } from "@/lib/coachy/anthropic";
+import { decisionVigente } from "@/lib/coachy/menu";
 import { NUTRITION_DISCLAIMER, triageQuestion } from "@/lib/nutricion/triage";
 import { prisma } from "@/lib/prisma";
 
@@ -99,11 +100,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   // El contexto es el plan vigente, no la conversación: la respuesta tiene que
   // hablar de SUS números, no de nutrición en general.
-  const decision = await prisma.decision.findFirst({
-    where: { userId: user.id, status: "APROBADA" },
-    orderBy: { createdAt: "desc" },
-    select: { phase: true, kcal: true, proteinG: true, carbsG: true, fatG: true },
-  });
+  const decision = await decisionVigente(user.id);
 
   const contexto = decision
     ? `Plan vigente: fase ${decision.phase}, ${decision.kcal} kcal, ` +

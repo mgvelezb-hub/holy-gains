@@ -11,6 +11,7 @@ import {
   opcionesDePlatilloGuardado,
 } from "@/lib/coachy/cambio-platillo";
 import { toEngineProfile } from "@/lib/coachy/mapping";
+import { decisionVigente } from "@/lib/coachy/menu";
 import { toMenuView } from "@/lib/coachy/menu-view";
 import { prisma } from "@/lib/prisma";
 
@@ -24,18 +25,14 @@ import { prisma } from "@/lib/prisma";
  *   los ingredientes del platillo se reemplazan; lo que acompaña se queda y
  *   ajusta sus gramos para conservar los macros de la comida.
  *
- * Mismo menú que `POST /nutricion/swap` (la decisión aprobada vigente), y
+ * Mismo menú que `POST /nutricion/swap` (`decisionVigente`, la que pinta el menú), y
  * como ahí, la lista de súper no se rehace por un cambio puntual.
  */
 
 export const dynamic = "force-dynamic";
 
 async function menuDe(userId: string, menuNumber: number) {
-  const decision = await prisma.decision.findFirst({
-    where: { userId, status: "APROBADA" },
-    orderBy: { checkIn: { date: "desc" } },
-    select: { id: true },
-  });
+  const decision = await decisionVigente(userId);
   if (!decision) return null;
   return prisma.mealPlan.findUnique({
     where: { decisionId_menuNumber: { decisionId: decision.id, menuNumber } },

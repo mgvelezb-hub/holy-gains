@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { apiUser, unauthorized } from "@/lib/api/auth";
 import { alimentosPropiosDe } from "@/lib/coachy/alimentos-propios-db";
+import { decisionVigente } from "@/lib/coachy/menu";
 import { toMenuView } from "@/lib/coachy/menu-view";
 import { SwapError, applySwap } from "@/lib/coachy/swap";
 import { prisma } from "@/lib/prisma";
@@ -62,11 +63,10 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const { menuNumber, slot, forName, toName } = parsed.data;
 
-  const decision = await prisma.decision.findFirst({
-    where: { userId: user.id, status: "APROBADA" },
-    orderBy: { checkIn: { date: "desc" } },
-    select: { id: true },
-  });
+  // La misma decisión que pinta el menú (`currentMealPlan`): si fueran
+  // distintas, el cambio caería en el menú de otra semana y el alimento
+  // elegido "no estaría en la comida".
+  const decision = await decisionVigente(user.id);
 
   if (!decision) {
     return NextResponse.json(
