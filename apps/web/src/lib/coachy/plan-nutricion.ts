@@ -250,7 +250,16 @@ export async function planDeNutricion(
     entreno: momentoDeHoy(profile.trainingSchedule, profile.trainingTime, dia),
     minutosSesion: profile.sessionMinutes,
   });
-  const resumen = resumenTomas(tomas);
+  // La línea de Hoy dice la hora sugerida de la siguiente: "1 de 3 ·
+  // siguiente: creatina ~13:00".
+  const resumenBase = resumenTomas(tomas);
+  const siguienteToma = tomas.find((toma) => !toma.hecho);
+  const resumen = siguienteToma?.horaSugerida
+    ? {
+        ...resumenBase,
+        linea: `${resumenBase.hechas} de ${resumenBase.total} · siguiente: ${siguienteToma.corto} ~${siguienteToma.horaSugerida}`,
+      }
+    : resumenBase;
 
   const decision = actual?.decision ?? null;
   const porque =
