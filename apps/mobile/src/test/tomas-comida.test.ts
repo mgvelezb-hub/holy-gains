@@ -50,9 +50,7 @@ describe("las tomas dentro de la comida", () => {
 
   it("marcada dice a qué hora se tomó, sin tachar", () => {
     const hecha = toma({ hecho: true, hechaA: new Date(2026, 8, 29, 14, 5).toISOString() });
-    // La hora del toque no se pinta: el horario vive en Ajustes y el
-    // renglón solo dice si ya se tomó (Irma, 3-oct).
-    expect(renglonToma(hecha)).toBe("Creatina 5 g · tomada");
+    expect(renglonToma(hecha)).toBe("Creatina 5 g · tomada 14:05");
     expect(estadoToma(hecha)).toBe("tomada");
   });
 

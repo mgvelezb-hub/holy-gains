@@ -14,7 +14,7 @@ import { fonts, radius, spacing, type as typeScale, withAlpha, type Palette } fr
 
 /**
  * Tomas de hoy: una línea por toma, en el orden del día, y un toque la marca
- * como tomada; otro toque la desmarca.
+ * como tomada (con su hora); otro toque la desmarca.
  *
  * No hay nada más aquí a propósito: el porqué y la evidencia viven en
  * Ajustes → Suplementos. Esta hoja es para el momento de tomarla.
