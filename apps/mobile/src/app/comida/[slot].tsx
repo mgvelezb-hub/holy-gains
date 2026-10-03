@@ -8,7 +8,6 @@ import { Hoja } from "@/components/Hoja";
 import { Card } from "@/components/Card";
 import { Chip } from "@/components/Chip";
 import { EmptyState, ErrorState, LoadingState } from "@/components/States";
-import { TomasDeLaComida, useTomasDeHoy } from "@/components/TomasDelDia";
 import { useTheme } from "@/context/theme";
 import {
   ApiError,
@@ -23,7 +22,6 @@ import {
 import { getPlanNutricion } from "@/lib/api-nutricion";
 import { comidaDeHoy } from "@/lib/comidas-hoy";
 import { todayISO } from "@/lib/streak";
-import { tomasDeComida } from "@/lib/tomas-comida";
 import { fonts, radius, spacing, type as typeScale, type Palette } from "@/lib/theme";
 
 /** Las horas que ofrece "Comí a las…": mismo rango que el selector de horarios. */
@@ -64,8 +62,6 @@ export default function ComidaSlotScreen() {
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [eligiendoHora, setEligiendoHora] = useState(false);
-  // Los suplementos de esta comida, como renglones del menú con su check.
-  const { tomas, cargar: cargarTomas, alternar: alternarToma } = useTomasDeHoy();
 
   const load = useCallback(async () => {
     if (!slot) return;
@@ -86,8 +82,7 @@ export default function ComidaSlotScreen() {
   useFocusEffect(
     useCallback(() => {
       void load();
-      void cargarTomas();
-    }, [load, cargarTomas]),
+    }, [load]),
   );
 
   async function guardar(input: { taken: boolean; takenAt?: string; skipped?: MotivoSalto }) {
@@ -172,11 +167,6 @@ export default function ComidaSlotScreen() {
                     · {item.name} {item.free ? "(libre)" : item.portion ? `— ${item.portion}` : `— ${item.grams} g`}
                   </Text>
                 ))}
-                <TomasDeLaComida
-                  tomas={tomasDeComida(tomas, meal.slot)}
-                  onToggle={(supplement) => void alternarToma(supplement)}
-                  primeraDelDia={tomas[0]?.supplement}
-                />
               </Card>
             )}
 

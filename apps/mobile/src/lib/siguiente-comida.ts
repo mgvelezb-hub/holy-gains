@@ -1,4 +1,5 @@
 import type { MenuItem, MenuMeal, TomaDelDia } from "@/lib/api";
+import { tomasDeCadaComida } from "@/lib/tomas-comida";
 import type { ItemMenuAviso } from "@/lib/recordatorio";
 
 /**
@@ -97,9 +98,19 @@ export function renglonesDeComida(meal: MenuMeal): RenglonComida[] {
   ];
 }
 
-/** Las tomas amarradas a ese slot: "Ashwagandha" + "300 mg". */
-export function tomasDelSlot(tomas: readonly TomaDelDia[] | undefined, slot: string): TomaDeComida[] {
-  return (tomas ?? []).filter((t) => t.slot === slot).map((t) => ({ nombre: capital(t.corto), dosis: t.dosis }));
+/**
+ * Lo que aún falta tomar al llegar a esa comida: "Ashwagandha" + "300 mg".
+ * La misma regla que el "Prepárate" (`tomasDeCadaComida`): lo marcado ya no
+ * se recuerda y lo atrasado sigue saliendo en la comida que viene.
+ */
+export function tomasDelSlot(plan: PlanParaSiguienteComida, slot: string): TomaDeComida[] {
+  const comidas = plan.hoy?.comidas ?? [];
+  const porComida = tomasDeCadaComida(plan.tomas ?? [], comidas, { soloPendientes: true });
+  // Sin horas de hoy (API viejo), las amarradas a ese slot que falten.
+  const deLaComida = comidas.length > 0
+    ? (porComida[slot] ?? [])
+    : (plan.tomas ?? []).filter((t) => t.slot === slot && !t.hecho);
+  return deLaComida.map((t) => ({ nombre: capital(t.corto), dosis: t.dosis }));
 }
 
 function menuDeHoy(plan: PlanParaSiguienteComida): { meals: MenuMeal[] } | null {
@@ -117,7 +128,7 @@ export function comidaCompleta(plan: PlanParaSiguienteComida, slot: string): Sig
     nombre: deHoy?.label ?? meal.label,
     hora: deHoy?.hora ?? meal.timeHint,
     items: renglonesDeComida(meal),
-    tomas: tomasDelSlot(plan.tomas, slot),
+    tomas: tomasDelSlot(plan, slot),
   };
 }
 

@@ -1,28 +1,12 @@
 import type { TomaDelDia } from "@/lib/api";
 
 /**
- * Las tomas de suplementos dentro de la planeación del día — lógica PURA.
+ * Las tomas de suplementos del día — lógica PURA.
  *
- * Mau agregó sus suplementos y no veía en su día cuándo tomar cada uno: las
- * tomas vivían solo en la línea de Hoy y en su hoja aparte, y ni el menú ni
- * "Mis comidas hoy" las pintaban. Aquí se reparten: las amarradas a una
- * comida van dentro de ella, como un renglón más ("Creatina 5 g"); las que
- * no van con comida (dormir, entrenar) salen aparte con su momento.
+ * Desde el 3-oct las tomas no viven en el menú (el menú es para verlo y
+ * acomodarlo): se marcan en Hoy → Suplementos, con su hora sugerida, y se
+ * recuerdan junto al "Prepárate" de la comida que toca mientras no se marquen.
  */
-
-/** Las tomas de esa comida, en el orden que ya trae el día. */
-export function tomasDeComida(tomas: readonly TomaDelDia[], slot: string): TomaDelDia[] {
-  return tomas.filter((t) => t.slot === slot);
-}
-
-/** Las que no van con una comida: la melatonina, la cafeína pre-entreno. */
-export function tomasSueltas(tomas: readonly TomaDelDia[]): TomaDelDia[] {
-  return tomas.filter((t) => t.slot === null);
-}
-
-function capital(texto: string): string {
-  return texto.charAt(0).toUpperCase() + texto.slice(1);
-}
 
 /**
  * El check es "ya lo tomé hoy" (escribe `SupplementLog`), no "acepto
@@ -30,13 +14,8 @@ function capital(texto: string): string {
  * —marcar era aceptar, y lo tachado le hacía ruido—, así que el renglón dice
  * qué hacer y, marcado, a qué hora se tomó, sin tachar nada.
  */
-export const AYUDA_TOMAS = "Marca cada suplemento cuando lo tomes; así sabemos si lo llevas diario";
-
-export type EstadoToma = "pendiente" | "tomada";
-
-export function estadoToma(t: TomaDelDia): EstadoToma {
-  return t.hecho ? "tomada" : "pendiente";
-}
+export const AYUDA_TOMAS =
+  "La hora es una sugerencia según tus comidas y tu entreno, no una regla. Toca cada suplemento cuando lo tomes, o el reloj para decir a qué hora fue; así sabemos si lo llevas diario";
 
 /** "14:05", en la hora del teléfono. */
 function horaCorta(iso: string): string | null {
@@ -45,20 +24,10 @@ function horaCorta(iso: string): string | null {
   return `${String(fecha.getHours()).padStart(2, "0")}:${String(fecha.getMinutes()).padStart(2, "0")}`;
 }
 
-/** "Creatina 5 g · tócalo al tomarlo" o "Creatina 5 g · tomada 14:05". */
-export function renglonToma(t: TomaDelDia): string {
-  const nombre = `${capital(t.corto)} ${t.dosis}`;
-  if (!t.hecho) return `${nombre} · tócalo al tomarlo`;
+/** La toma ya marcada: "Tomada 14:05" (o "Tomada" si no se sabe la hora). */
+export function lineaTomada(t: TomaDelDia): string {
   const hora = t.hechaA ? horaCorta(t.hechaA) : null;
-  return hora ? `${nombre} · tomada ${hora}` : `${nombre} · tomada`;
-}
-
-/** Lo que dice la tarjeta de una línea: "+ creatina", "+ 2 tomas", con ✓ si ya. */
-export function sufijoTomas(tomas: readonly TomaDelDia[]): string {
-  if (tomas.length === 0) return "";
-  const listo = tomas.every((t) => t.hecho) ? " ✓" : "";
-  if (tomas.length === 1) return `+ ${tomas[0]!.corto}${listo}`;
-  return `+ ${tomas.length} tomas${listo}`;
+  return hora ? `Tomada ${hora}` : "Tomada";
 }
 
 /** La lista con esa toma marcada (con la hora) o desmarcada; no toca la original. */
@@ -75,4 +44,71 @@ export function alternaToma(
     }
     return { ...t, hecho: true, hechaA: ahora.toISOString() };
   });
+}
+
+/** `"14:30"` → minutos desde medianoche; `null` si no es hora. */
+function minutosDe(hora: string | null | undefined): number | null {
+  if (!hora) return null;
+  const match = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(hora.trim());
+  return match ? Number(match[1]) * 60 + Number(match[2]) : null;
+}
+
+/**
+ * Qué suplementos recordar con cada comida, como "+ creatina + omega-3" en
+ * el "Prepárate" o en el widget. Recordatorio amable, no regla: la hora real
+ * la marca la persona en Hoy → Suplementos.
+ *
+ * Cada toma "toca" en la primera comida cuya hora alcanza su hora sugerida
+ * (la de después de la última comida —dormir— va con la última; la libre,
+ * con la primera). Sin hora sugerida (servidor viejo) cuenta la comida a la
+ * que se amarra, y si no tiene, no se recuerda.
+ *
+ * - `soloPendientes` (hoy): se recuerda toda toma sin marcar que ya tocó,
+ *   también las atrasadas de comidas anteriores; en cuanto se marca, deja
+ *   de salir en los avisos que siguen.
+ * - Sin él (los demás días, sin saber qué se marcará): cada toma sale una
+ *   sola vez, en la comida que le toca.
+ */
+export function tomasDeCadaComida(
+  tomas: readonly TomaDelDia[],
+  comidas: ReadonlyArray<{ slot: string; hora: string }>,
+  opciones: { soloPendientes: boolean },
+): Record<string, TomaDelDia[]> {
+  const orden = comidas
+    .map((comida) => ({ slot: comida.slot, minutos: minutosDe(comida.hora) }))
+    .filter((comida): comida is { slot: string; minutos: number } => comida.minutos !== null)
+    .sort((a, b) => a.minutos - b.minutos);
+  const salida: Record<string, TomaDelDia[]> = Object.fromEntries(orden.map((comida) => [comida.slot, []]));
+  if (orden.length === 0) return salida;
+
+  for (const toma of tomas) {
+    if (opciones.soloPendientes && toma.hecho) continue;
+    let toca: number;
+    if (toma.horaSugerida === null) {
+      toca = 0;
+    } else {
+      const sugerida =
+        minutosDe(toma.horaSugerida) ?? minutosDe(comidas.find((c) => c.slot === toma.slot)?.hora);
+      if (sugerida === null) continue;
+      toca = orden.findIndex((comida) => comida.minutos >= sugerida);
+      if (toca === -1) toca = orden.length - 1;
+    }
+    const hasta = opciones.soloPendientes ? orden.length : toca + 1;
+    for (let i = toca; i < hasta; i += 1) salida[orden[i]!.slot]!.push(toma);
+  }
+  return salida;
+}
+
+/** Lo mismo, dicho en corto para el aviso: `{ COMIDA: ["creatina", "omega-3"] }`. */
+export function tomasPorComida(
+  tomas: readonly TomaDelDia[],
+  comidas: ReadonlyArray<{ slot: string; hora: string }>,
+  opciones: { soloPendientes: boolean },
+): Record<string, string[]> {
+  return Object.fromEntries(
+    Object.entries(tomasDeCadaComida(tomas, comidas, opciones)).map(([slot, deLaComida]) => [
+      slot,
+      deLaComida.map((toma) => toma.corto),
+    ]),
+  );
 }

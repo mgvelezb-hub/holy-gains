@@ -2313,6 +2313,12 @@ export type TomaDelDia = {
   hecho: boolean;
   /** ISO de cuándo se marcó hoy; ausente si no se ha tomado (o en servidores viejos). */
   hechaA?: string;
+  /** El ancla de la ficha (`PRE_ENTRENO`, `DORMIR`…); ausente en servidores viejos. */
+  ancla?: string;
+  /** `"HH:MM"` sugerida para hoy, desde comidas y entreno; `null` si es libre. */
+  horaSugerida?: string | null;
+  /** "Sugerido ~18:00 · antes de entrenar". Sugerencia, nunca regla. */
+  sugerencia?: string;
 };
 
 export type SugerenciaSuplemento = {
@@ -2381,8 +2387,13 @@ export function postLogSuplemento(
   date: string,
   supplement: string,
   taken: boolean,
-): Promise<{ registro: { date: string; supplement: string; taken: boolean } }> {
-  return apiFetch("/api/v1/suplementos/log", { method: "POST", body: { date, supplement, taken } });
+  /** ISO de cuándo se la tomó, si la persona eligió la hora; sin él, ahora. */
+  takenAt?: string,
+): Promise<{ registro: { date: string; supplement: string; taken: boolean; takenAt?: string } }> {
+  return apiFetch("/api/v1/suplementos/log", {
+    method: "POST",
+    body: { date, supplement, taken, ...(takenAt ? { takenAt } : {}) },
+  });
 }
 
 /** La decisión con las sugerencias de suplementos de su check-in. */

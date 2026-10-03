@@ -84,6 +84,14 @@ describe("siguienteComida", () => {
     expect(renglonDeToma(cena!.tomas[0]!)).toBe("+ Ashwagandha 300 mg");
   });
 
+  it("lo ya tomado no se recuerda; lo atrasado sigue a la comida que viene", () => {
+    const creatina = { ...ashwagandha, supplement: "CREATINA", corto: "creatina", dosis: "5 g", slot: null, horaSugerida: "07:00" };
+    const conTomas = { ...PLAN, tomas: [creatina, { ...ashwagandha, hecho: true }] };
+    expect(siguienteComida(conTomas, a(15))!.tomas).toEqual([{ nombre: "Creatina", dosis: "5 g" }]);
+    const yaTomada = { ...PLAN, tomas: [{ ...creatina, hecho: true }] };
+    expect(siguienteComida(yaTomada, a(15))!.tomas).toEqual([]);
+  });
+
   it("lee el menú de HOY (menuDeHoy), no el menú 1", () => {
     expect(siguienteComida(PLAN, a(15))?.items).toHaveLength(4);
   });

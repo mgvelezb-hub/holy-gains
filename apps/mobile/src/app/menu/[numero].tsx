@@ -16,7 +16,6 @@ import { Card } from "@/components/Card";
 import { InfoTip, TextoInfo } from "@/components/InfoTip";
 import { Parrafo } from "@/components/Parrafo";
 import { EmptyState, ErrorState, LoadingState } from "@/components/States";
-import { TomasDeLaComida, useTomasDeHoy } from "@/components/TomasDelDia";
 import { useTheme } from "@/context/theme";
 import {
   ApiError,
@@ -28,11 +27,9 @@ import {
   type MenuItem,
   type MenuMeal,
   type OpcionPlatillo,
-  type TomaDelDia,
 } from "@/lib/api";
 import { seccionesDeEquivalencia, textoDeOpcion, type OpcionDeEquivalencia } from "@/lib/equivalencias";
 import { agruparComida, avisoDeCambioEnPlatillo } from "@/lib/preparaciones";
-import { tomasDeComida } from "@/lib/tomas-comida";
 import { fonts, radius, spacing, type as typeScale, type Palette } from "@/lib/theme";
 
 /**
@@ -85,9 +82,6 @@ export default function MenuScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const menuNumber = Number(numero);
-  // Las tomas de suplementos van dentro de la comida a la que se amarran:
-  // el menú es donde se planea el día, y ahí tiene que decir cuándo tomarlas.
-  const { tomas, cargar: cargarTomas, alternar: alternarToma } = useTomasDeHoy();
 
   const load = useCallback(async () => {
     try {
@@ -102,13 +96,12 @@ export default function MenuScreen() {
   useFocusEffect(
     useCallback(() => {
       void load();
-      void cargarTomas();
-    }, [load, cargarTomas]),
+    }, [load]),
   );
 
   async function onRefresh() {
     setRefreshing(true);
-    await Promise.all([load(), cargarTomas()]);
+    await load();
     setRefreshing(false);
   }
 
@@ -142,9 +135,6 @@ export default function MenuScreen() {
                 meal={meal}
                 menuNumber={menu.menuNumber}
                 onSwapped={load}
-                tomas={tomasDeComida(tomas, meal.slot)}
-                primeraToma={tomas[0]?.supplement}
-                onToggleToma={(supplement) => void alternarToma(supplement)}
               />
             </Card>
           ))
@@ -171,18 +161,10 @@ function ComidaDelMenu({
   meal,
   menuNumber,
   onSwapped,
-  tomas,
-  primeraToma,
-  onToggleToma,
 }: {
   meal: MenuMeal;
   menuNumber: number;
   onSwapped: () => Promise<void>;
-  /** Las tomas de hoy amarradas a esta comida. */
-  tomas: TomaDelDia[];
-  /** La primera toma del día: la que lleva el InfoTip del check. */
-  primeraToma?: string;
-  onToggleToma: (supplement: string) => void;
 }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -425,7 +407,6 @@ function ComidaDelMenu({
         </>
       ) : null}
       {grupo.sueltos.map((item) => renglon(item))}
-      <TomasDeLaComida tomas={tomas} onToggle={onToggleToma} primeraDelDia={primeraToma} />
       {aviso && <Text style={styles.equivalenciaAviso}>{aviso}</Text>}
       {platilloAbierto && errorCambio && <Text style={styles.equivalenciaError}>{errorCambio}</Text>}
     </View>

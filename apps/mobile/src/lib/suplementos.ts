@@ -39,25 +39,6 @@ export function lineaToma(t: TomaDelDia): string {
   return `${t.dosis} · ${t.cuando}`;
 }
 
-/**
- * Lo que se suma al aviso de cada comida: `{ COMIDA: ["omega-3"] }`.
- *
- * Por defecto solo lo que aún no se marcó (avisar de lo ya tomado es ruido);
- * los avisos semanales piden todo, porque se programan para todos los días.
- */
-export function extrasPorSlot(
-  tomas: TomaDelDia[],
-  opciones: { soloPendientes?: boolean } = {},
-): Record<string, string[]> {
-  const soloPendientes = opciones.soloPendientes ?? true;
-  const porSlot: Record<string, string[]> = {};
-  for (const toma of tomas) {
-    if (!toma.slot || (soloPendientes && toma.hecho)) continue;
-    (porSlot[toma.slot] ??= []).push(toma.corto);
-  }
-  return porSlot;
-}
-
 function normaliza(texto: string): string {
   return texto
     .normalize("NFD")

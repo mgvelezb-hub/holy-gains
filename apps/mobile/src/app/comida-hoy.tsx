@@ -5,7 +5,6 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "r
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { EmptyState, ErrorState, LoadingState } from "@/components/States";
-import { RenglonToma, useTomasDeHoy } from "@/components/TomasDelDia";
 import { useTheme } from "@/context/theme";
 import {
   ApiError,
@@ -16,7 +15,6 @@ import {
 import { getPlanNutricion, type PlanNutricion } from "@/lib/api-nutricion";
 import { filasDeHoy } from "@/lib/comidas-hoy";
 import { todayISO } from "@/lib/streak";
-import { sufijoTomas, tomasDeComida, tomasSueltas } from "@/lib/tomas-comida";
 import { fonts, radius, spacing, type as typeScale, type Palette } from "@/lib/theme";
 
 /** "HH:MM" de un ISO completo, en hora local. */
@@ -52,9 +50,6 @@ export default function ComidaHoyScreen() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [registros, setRegistros] = useState<Record<string, RegistroComidaCompleto>>({});
-  // Los suplementos del día: los de cada comida se anuncian en su tarjeta y
-  // se marcan en su hoja; los que no van con comida salen aquí abajo.
-  const { tomas, cargar: cargarTomas, alternar: alternarToma } = useTomasDeHoy();
 
   const load = useCallback(async () => {
     try {
@@ -78,13 +73,12 @@ export default function ComidaHoyScreen() {
   useFocusEffect(
     useCallback(() => {
       void load();
-      void cargarTomas();
-    }, [load, cargarTomas]),
+    }, [load]),
   );
 
   async function onRefresh() {
     setRefreshing(true);
-    await Promise.all([load(), cargarTomas()]);
+    await load();
     setRefreshing(false);
   }
 
@@ -121,9 +115,6 @@ export default function ComidaHoyScreen() {
               >
                 <Text style={styles.filaTexto} numberOfLines={1}>
                   {meal.label} · {meal.hora} · {estadoDe(registros[meal.slot])}
-                  {sufijoTomas(tomasDeComida(tomas, meal.slot))
-                    ? ` · ${sufijoTomas(tomasDeComida(tomas, meal.slot))}`
-                    : ""}
                 </Text>
                 <ChevronRight size={16} color={colors.paloRosa} strokeWidth={2} />
               </Pressable>
@@ -131,22 +122,6 @@ export default function ComidaHoyScreen() {
           </View>
         )}
 
-        {/* Lo que no va con una comida (dormir, antes de entrenar): su
-            propio bloque, con su momento, y se marca aquí mismo. */}
-        {tomasSueltas(tomas).length > 0 && (
-          <View style={styles.sueltas}>
-            <Text style={styles.sueltasTitulo}>Fuera de las comidas</Text>
-            {tomasSueltas(tomas).map((toma) => (
-              <RenglonToma
-                key={toma.supplement}
-                toma={toma}
-                conCuando
-                conAyuda={toma.supplement === tomas[0]?.supplement}
-                onToggle={(supplement) => void alternarToma(supplement)}
-              />
-            ))}
-          </View>
-        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -184,19 +159,4 @@ const makeStyles = (colors: Palette) =>
       backgroundColor: colors.cardBg,
     },
     filaTexto: { flex: 1, fontFamily: fonts.sansMedium, ...typeScale.bodySm, color: colors.marfil },
-    sueltas: {
-      marginTop: spacing.md,
-      paddingVertical: spacing.xs,
-      paddingHorizontal: spacing.md,
-      borderRadius: radius.md,
-      borderWidth: 1,
-      borderColor: colors.cardBorder,
-      backgroundColor: colors.cardBg,
-    },
-    sueltasTitulo: {
-      fontFamily: fonts.sansMedium,
-      ...typeScale.label,
-      color: colors.champan,
-      paddingTop: spacing.xs,
-    },
   });

@@ -26,6 +26,7 @@ import { useTheme } from "@/context/theme";
 import { useScrollTop } from "@/lib/scroll-top";
 import { ApiError, putMenuPreferido, type MenuPreference } from "@/lib/api";
 import { getPlanNutricion, type AvisoPlan, type PlanNutricion } from "@/lib/api-nutricion";
+import { programarAvisosDelPlan } from "@/lib/avisos-comida";
 import {
   faseLegible,
   lineaHorarios,
@@ -35,10 +36,9 @@ import {
   lineaSuper,
   lineaSuplementos,
 } from "@/lib/plan-nutricion";
-import { programarComidas } from "@/lib/recordatorio";
 import { fonts, radius, spacing, type as typeScale, type Palette } from "@/lib/theme";
 import { actualizarComidaEnElReloj, enviarSiguienteComidaAlReloj } from "@/lib/reloj-nativo";
-import { comidaCompleta, comidasPendientesDesde, itemsParaAviso, renglonesPlanos } from "@/lib/siguiente-comida";
+import { comidasPendientesDesde, renglonesPlanos } from "@/lib/siguiente-comida";
 import { syncWidgetData } from "@/lib/widget";
 import { avisoDeMenuPorMostrar, marcaAvisoDeMenuVisto } from "@/lib/aviso-menu";
 
@@ -116,24 +116,9 @@ export default function NutricionScreen() {
         // Sincronizar el widget o el reloj nunca debe tumbar Nutrición.
       }
 
-      // Los avisos de comida llegan escritos del servidor: el "Prepárate" con
-      // su menú y sus tomas, y la hora de cada día (el sábado distinto). Los
-      // renglones salen de la misma fuente que el widget y el reloj (el
-      // platillo con sus ingredientes); si el slot no está en el menú de hoy,
-      // se quedan los del servidor.
-      void programarComidas(
-        nuevo.recordatorios.map((rec) => {
-          const completa = comidaCompleta(nuevo, rec.slot);
-          return {
-            slot: rec.slot,
-            label: rec.label,
-            extras: rec.extras,
-            menuNumber: rec.menuNumber,
-            items: completa ? itemsParaAviso(completa) : rec.items,
-            horaPorDia: rec.horaPorDia,
-          };
-        }),
-      );
+      // Los avisos de comida: el "Prepárate" con su menú y los suplementos
+      // que aún faltan hoy (`lib/avisos-comida`).
+      void programarAvisosDelPlan(nuevo);
     } catch (e) {
       if (e instanceof ApiError && e.status === 403) {
         setSinOnboarding(true);

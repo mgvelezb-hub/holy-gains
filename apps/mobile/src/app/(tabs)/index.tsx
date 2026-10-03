@@ -1,4 +1,4 @@
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import {
   CalendarCheck,
   Dumbbell,
@@ -10,7 +10,7 @@ import {
   Ruler,
   UtensilsCrossed,
 } from "lucide-react-native";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import {
@@ -51,6 +51,7 @@ import { StatRow } from "@/components/StatRow";
 import { ErrorState, LoadingState } from "@/components/States";
 import { useTheme } from "@/context/theme";
 import { useScrollTop } from "@/lib/scroll-top";
+import { refrescarAvisosDeComida } from "@/lib/avisos-comida";
 import { bestStreak, currentStreak, todayISO, trainingDays } from "@/lib/streak";
 import {
   fonts,
@@ -256,6 +257,10 @@ export default function HoyScreen() {
         // La lista completa con tomas, para la pantalla "Siguiente comida"
         // del reloj y su complicación.
         enviarSiguienteComidaAlReloj(pendientes);
+        // Los avisos de comida con los suplementos que aún faltan hoy: Hoy
+        // es la pantalla que siempre se abre, así que se reprograman aquí
+        // aunque no se entre a Nutrición.
+        void refrescarAvisosDeComida(suplementosRes?.tomas);
       } catch {
         // Sincronizar el widget o el reloj nunca debe tumbar la pantalla de Hoy.
       }
@@ -267,6 +272,25 @@ export default function HoyScreen() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Al volver de la hoja de Suplementos, solo su línea se refresca: recargar
+  // todo Hoy por un check sería parpadeo sin necesidad.
+  const primeraVez = useRef(true);
+  useFocusEffect(
+    useCallback(() => {
+      if (primeraVez.current) {
+        primeraVez.current = false;
+        return;
+      }
+      getSuplementos()
+        .then((res) =>
+          setData((actual) =>
+            actual ? { ...actual, suplementos: { total: res.resumen.total, linea: res.resumen.linea } } : actual,
+          ),
+        )
+        .catch(() => {});
+    }, []),
+  );
 
   async function onRefresh() {
     setRefreshing(true);

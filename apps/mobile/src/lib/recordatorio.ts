@@ -2,6 +2,8 @@ import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 
 import { clasificarPermiso, type AccionAviso, type PermisoAviso } from "@/lib/analisis-checkin";
+import type { TomaDelDia } from "@/lib/api";
+import { tomasPorComida } from "@/lib/tomas-comida";
 
 /**
  * El recordatorio del check-in.
@@ -297,7 +299,16 @@ export interface ComidaAviso {
  * Son avisos `WEEKLY` —no `DAILY`— justo porque `horaPorDia` puede traer una
  * hora distinta el sábado: un solo trigger diario no puede representar eso.
  */
-export async function programarComidas(comidas: ComidaAviso[]): Promise<boolean> {
+export async function programarComidas(
+  comidas: ComidaAviso[],
+  /**
+   * Las tomas de hoy con su hora sugerida. Con ellas, cada "Prepárate" lleva
+   * los suplementos que le tocan, y el de HOY solo los que aún no se marcan:
+   * marcar uno lo quita de los avisos que siguen. Sin ellas, se usan los
+   * `extras` fijos de cada comida.
+   */
+  suplementos?: { hoy: string; tomas: readonly TomaDelDia[]; ahora?: Date },
+): Promise<boolean> {
   if (Platform.OS === "web") return false;
 
   // Se cancelan todos antes de reprogramar: el menú y los horarios cambian de
@@ -315,6 +326,15 @@ export async function programarComidas(comidas: ComidaAviso[]): Promise<boolean>
 
   await registrarAccionesDeComida();
 
+  const ahora = suplementos?.ahora ?? new Date();
+  const extrasDe = (dia: string, slot: string, soloPendientes: boolean): string[] | undefined => {
+    if (!suplementos) return comidas.find((comida) => comida.slot === slot)?.extras;
+    const delDia = comidas
+      .filter((comida) => comida.horaPorDia[dia] !== undefined)
+      .map((comida) => ({ slot: comida.slot, hora: comida.horaPorDia[dia]! }));
+    return tomasPorComida(suplementos.tomas, delDia, { soloPendientes })[slot] ?? [];
+  };
+
   for (const comida of comidas) {
     for (const [dia, hora] of Object.entries(comida.horaPorDia)) {
       const weekday = diaCodigoAWeekday(dia);
@@ -322,23 +342,47 @@ export async function programarComidas(comidas: ComidaAviso[]): Promise<boolean>
 
       const prep = sumaMinutosHora(hora, -PREP_MINUTOS_ANTES);
       if (prep) {
-        await Notifications.scheduleNotificationAsync({
-          identifier: `${COMIDA_PREFIJO}${comida.slot}-${dia}-prep`,
-          content: {
-            title: `Prepárate: ${comida.label}`,
-            body: cuerpoPreparate(comida.items, comida.extras),
-            categoryIdentifier: CATEGORIA_COMIDA_PREP,
-            data: { ruta: `/menu/${comida.menuNumber}`, comidaSlot: comida.slot, comidaPlaneada: hora },
-          },
-          trigger: {
-            type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
-            weekday,
-            hour: prep.hour,
-            minute: prep.minute,
-          },
-        }).catch(() => {
-          // Un aviso que no se pudo programar no puede tumbar los demás.
+        const contenido = (extras: string[] | undefined) => ({
+          title: `Prepárate: ${comida.label}`,
+          body: cuerpoPreparate(comida.items, extras),
+          categoryIdentifier: CATEGORIA_COMIDA_PREP,
+          data: { ruta: `/menu/${comida.menuNumber}`, comidaSlot: comida.slot, comidaPlaneada: hora },
         });
+
+        if (suplementos && dia === suplementos.hoy) {
+          // Hoy no va semanal: un aviso de una vez con lo que falta por
+          // tomar, y otro igual para el mismo día de la semana que viene
+          // (por si la app no se abre antes), con la pauta completa.
+          const hoyALas = new Date(ahora);
+          hoyALas.setHours(prep.hour, prep.minute, 0, 0);
+          if (hoyALas.getTime() > ahora.getTime()) {
+            await Notifications.scheduleNotificationAsync({
+              identifier: `${COMIDA_PREFIJO}${comida.slot}-${dia}-prep-hoy`,
+              content: contenido(extrasDe(dia, comida.slot, true)),
+              trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: hoyALas },
+            }).catch(() => {});
+          }
+          const semanaQueViene = new Date(hoyALas);
+          semanaQueViene.setDate(semanaQueViene.getDate() + 7);
+          await Notifications.scheduleNotificationAsync({
+            identifier: `${COMIDA_PREFIJO}${comida.slot}-${dia}-prep-semana`,
+            content: contenido(extrasDe(dia, comida.slot, false)),
+            trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: semanaQueViene },
+          }).catch(() => {});
+        } else {
+          await Notifications.scheduleNotificationAsync({
+            identifier: `${COMIDA_PREFIJO}${comida.slot}-${dia}-prep`,
+            content: contenido(extrasDe(dia, comida.slot, false)),
+            trigger: {
+              type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+              weekday,
+              hour: prep.hour,
+              minute: prep.minute,
+            },
+          }).catch(() => {
+            // Un aviso que no se pudo programar no puede tumbar los demás.
+          });
+        }
       }
 
       const seguimiento = sumaMinutosHora(hora, SEGUIMIENTO_MINUTOS_DESPUES);

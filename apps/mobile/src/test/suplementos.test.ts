@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import type { FichaSuplemento, SugerenciaSuplemento, TomaDelDia } from "@/lib/api";
 import {
   buscaEnCatalogo,
-  extrasPorSlot,
   lineaSugerencia,
   lineaToma,
   motivoCorto,
@@ -41,21 +40,6 @@ describe("líneas de suplementos", () => {
     const s = { nombre: "Magnesio (glicinato)", motivo: "Duermes poco: 6 h en promedio." } as SugerenciaSuplemento;
     expect(lineaSugerencia(s)).toBe("Magnesio (glicinato) · Duermes poco");
     expect(lineaToma(toma({}))).toBe("1 a 2 cápsulas · con la comida");
-  });
-
-  it("los extras del aviso de comida: solo lo pendiente y con slot", () => {
-    const tomas = [
-      toma({}),
-      toma({ supplement: "MANZANILLA", corto: "té de manzanilla", slot: "CENA", categoria: "INFUSION" }),
-      toma({ supplement: "CREATINA", corto: "creatina", slot: "DESAYUNO", hecho: true }),
-      toma({ supplement: "MELATONINA", corto: "melatonina", slot: null }),
-    ];
-    expect(extrasPorSlot(tomas)).toEqual({ COMIDA: ["omega-3"], CENA: ["té de manzanilla"] });
-    expect(extrasPorSlot(tomas, { soloPendientes: false })).toEqual({
-      COMIDA: ["omega-3"],
-      CENA: ["té de manzanilla"],
-      DESAYUNO: ["creatina"],
-    });
   });
 
   it("el buscador ignora acentos y lo que ya toma", () => {
