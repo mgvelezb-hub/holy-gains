@@ -28,7 +28,10 @@ function capital(texto: string): string {
  * El check es "ya lo tomé hoy" (escribe `SupplementLog`), no "acepto
  * tomarlo": eso se decide en Ajustes → Suplementos. Irma lo leía al revés
  * —marcar era aceptar, y lo tachado le hacía ruido—, así que el renglón dice
- * qué hacer y, marcado, a qué hora se tomó, sin tachar nada.
+ * qué hacer y, marcado, solo "tomada", sin tachar nada. La hora del toque no
+ * se pinta (3-oct, Irma): parecía que fijaba el horario, que vive en Ajustes,
+ * y las comidas tampoco muestran a qué hora se comieron. `hechaA` se sigue
+ * guardando para el historial.
  */
 export const AYUDA_TOMAS = "Marca cada suplemento cuando lo tomes; así sabemos si lo llevas diario";
 
@@ -38,19 +41,10 @@ export function estadoToma(t: TomaDelDia): EstadoToma {
   return t.hecho ? "tomada" : "pendiente";
 }
 
-/** "14:05", en la hora del teléfono. */
-function horaCorta(iso: string): string | null {
-  const fecha = new Date(iso);
-  if (Number.isNaN(fecha.getTime())) return null;
-  return `${String(fecha.getHours()).padStart(2, "0")}:${String(fecha.getMinutes()).padStart(2, "0")}`;
-}
-
-/** "Creatina 5 g · tócalo al tomarlo" o "Creatina 5 g · tomada 14:05". */
+/** "Creatina 5 g · tócalo al tomarlo" o "Creatina 5 g · tomada". */
 export function renglonToma(t: TomaDelDia): string {
   const nombre = `${capital(t.corto)} ${t.dosis}`;
-  if (!t.hecho) return `${nombre} · tócalo al tomarlo`;
-  const hora = t.hechaA ? horaCorta(t.hechaA) : null;
-  return hora ? `${nombre} · tomada ${hora}` : `${nombre} · tomada`;
+  return t.hecho ? `${nombre} · tomada` : `${nombre} · tócalo al tomarlo`;
 }
 
 /** Lo que dice la tarjeta de una línea: "+ creatina", "+ 2 tomas", con ✓ si ya. */

@@ -52,7 +52,7 @@ export function useTomasDeHoy(): {
 /**
  * Un renglón de toma. El check es "ya lo tomé hoy", no "acepto tomarlo" (eso
  * vive en Ajustes → Suplementos): sin marcar dice "○ Creatina 5 g · tócalo al
- * tomarlo"; marcado, "✓ Creatina 5 g · tomada 14:05" en verde, sin tachar.
+ * tomarlo"; marcado, "✓ Creatina 5 g · tomada" en verde, sin tachar.
  * Tocar de nuevo desmarca. Con `cuando`, la toma que no va con comida dice su
  * momento ("30 min antes de dormir"); con `conAyuda` (la primera del día),
  * el InfoTip que lo explica.
