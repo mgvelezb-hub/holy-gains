@@ -882,12 +882,12 @@ function equivalencesFor(
     slot.intercambiables !== undefined || slot.permitidos !== undefined
       ? new Set(slot.intercambiables ?? slot.permitidos)
       : undefined;
-  // La fruta del licuado no se cambia por la fruta de otra comida del dia:
-  // seria la misma fruta dos veces.
+  const dentro = (f: Food): boolean => soloEntre === undefined || soloEntre.has(f.id);
+  // Lo que ya va en otra comida de hoy se ofrece igual, marcado y al final:
+  // es un aviso, no un bloqueo. La fruta del licuado cuenta la fruta del dia.
   const esFrutaDePlatillo = slot.food.role === 'fruta' && soloEntre !== undefined;
-  const dentro = (f: Food): boolean =>
-    (soloEntre === undefined || soloEntre.has(f.id)) &&
-    !(esFrutaDePlatillo && evitar.has(`${MARCA_FRUTA_DEL_DIA}${f.id}`));
+  const enOtraComida = (f: Food): boolean =>
+    repiteFamilia(f, fuera) || (esFrutaDePlatillo && evitar.has(`${MARCA_FRUTA_DEL_DIA}${f.id}`));
 
   // Los vegetales libres SI tienen equivalencias — y son las mas faciles de
   // dar: "libre" significa que la cantidad no esta contada, asi que cualquier
@@ -897,14 +897,21 @@ function equivalencesFor(
     const opciones = eligible(pool, profile, config, 'vegetal_libre', { freeVegetable: true })
       .filter((f) => f.id !== slot.food.id && dentro(f))
       .sort((a, b) => {
-        // Los favoritos del perfil primero; el resto alfabetico, para que la
-        // lista sea estable entre generaciones.
+        // Los favoritos del perfil primero, lo que ya va en otra comida al
+        // final; el resto alfabetico, para que la lista sea estable.
         const favA = matchesAny(a, profile.favoriteFoods) ? 0 : 1;
         const favB = matchesAny(b, profile.favoriteFoods) ? 0 : 1;
-        return favA - favB || a.name.localeCompare(b.name);
+        const otraA = enOtraComida(a) ? 1 : 0;
+        const otraB = enOtraComida(b) ? 1 : 0;
+        return otraA - otraB || favA - favB || a.name.localeCompare(b.name);
       })
       .slice(0, config.equivalencesPerItem)
-      .map((f) => ({ foodId: f.id, name: f.name, grams: Math.round(slot.grams) }));
+      .map((f) => ({
+        foodId: f.id,
+        name: f.name,
+        grams: Math.round(slot.grams),
+        ...(enOtraComida(f) ? { enOtraComida: true } : {}),
+      }));
 
     if (opciones.length === 0) return null;
     return { forFoodId: slot.food.id, forName: slot.food.name, options: opciones };
@@ -915,7 +922,7 @@ function equivalencesFor(
   // o tostada horneada, el arroz por tortilla).
   const grupo = slot.food.grupoSmae;
   if (grupo !== undefined && soloEntre === undefined) {
-    return equivalentesSmae(slot, grupo, pool, profile, config, fuera, comida);
+    return equivalentesSmae(slot, grupo, pool, profile, config, enOtraComida, comida);
   }
 
   const key = primaryMacroOf(slot.food.role);
@@ -927,7 +934,7 @@ function equivalencesFor(
   /** Candidatos ya con gramos redondeados y su desviacion real, de menor a mayor. */
   const candidatos = eligible(pool, profile, config, slot.food.role)
     .filter((f) => f.id !== slot.food.id && f[key] > 0)
-    .filter((f) => !repiteFamilia(f, fuera) && dentro(f))
+    .filter((f) => dentro(f))
     .map((f) => {
       const paso = roundingFor(f, config);
       const ideal = quantize((slot.grams * base) / f[key], f, config);
@@ -943,9 +950,12 @@ function equivalencesFor(
       // equivalente, es otra comida.
       const real = (grams * f[key]) / 100;
       const desviacion = objetivo <= 0 ? 0 : Math.abs(real - objetivo) / objetivo;
-      return { food: f, option: { foodId: f.id, name: f.name, grams }, desviacion };
+      const option = { foodId: f.id, name: f.name, grams, ...(enOtraComida(f) ? { enOtraComida: true } : {}) };
+      return { food: f, option, desviacion, repetida: enOtraComida(f) };
     })
-    .sort((a, b) => a.desviacion - b.desviacion);
+    // Lo que ya va en otra comida, al final: se puede elegir, pero primero
+    // lo que da variedad.
+    .sort((a, b) => Number(a.repetida) - Number(b.repetida) || a.desviacion - b.desviacion);
 
   // El recorte va DESPUES de filtrar y ordenar por desviacion real: antes se
   // tomaban los mas parecidos en densidad y solo entonces se revisaba el
@@ -964,7 +974,9 @@ function equivalencesFor(
       c.desviacion <= config.equivalenceFallbackDeviation,
   );
 
-  const elegidas = [...exactas, ...aproximadas].slice(0, config.equivalencesPerItem);
+  const elegidas = [...exactas, ...aproximadas]
+    .sort((a, b) => Number(a.repetida) - Number(b.repetida))
+    .slice(0, config.equivalencesPerItem);
   if (elegidas.length === 0) return null;
 
   return {
@@ -1019,10 +1031,11 @@ function nombreCorto(food: Food): string {
  * Solo se esconde lo que rompe una regla dura de la persona: su dieta, lo
  * excluido o alergico, su presupuesto, el freno clinico (glucosa alta) y la
  * leche que no eligio —`eligible` sin plantilla—. Lo que rompe una regla
- * culinaria de ESTA comida (arroz con papa, cereal de desayuno con atun, lo
- * que ya va en otra comida de hoy) no se ofrece, pero se dice en `noVan` con
- * su motivo. El orden: lo que ya esta en casa, luego lo mexicano, luego lo
- * demas; lo exacto antes que lo aproximado.
+ * culinaria de ESTA comida (arroz con papa, cereal de desayuno con atun) no
+ * se ofrece, pero se dice en `noVan` con su motivo. Lo que ya va en otra
+ * comida de hoy SI se ofrece, marcado `enOtraComida` y al final: era un
+ * aviso, no un bloqueo. El orden: lo que ya esta en casa, luego lo
+ * mexicano, luego lo demas; lo exacto antes que lo aproximado.
  */
 function equivalentesSmae(
   slot: Slot,
@@ -1030,7 +1043,7 @@ function equivalentesSmae(
   pool: Food[],
   profile: Profile,
   config: EngineConfig,
-  fuera: ReadonlySet<string>,
+  enOtraComida: (food: Food) => boolean,
   comida: ContextoDeComida | undefined,
 ): Equivalence | null {
   const key = macroDeGrupo(grupo);
@@ -1050,7 +1063,6 @@ function equivalentesSmae(
     if (comida?.noche && DENSE_CARB_ROLES.includes(f.role) && !DENSE_CARB_ROLES.includes(slot.food.role)) {
       return 'de noche no va cereal';
     }
-    if (repiteFamilia(f, fuera)) return 'ya va en otra comida de hoy';
     return undefined;
   };
 
@@ -1066,11 +1078,12 @@ function equivalentesSmae(
     .map((f) => {
       const grams = Math.max(roundingFor(f, config), quantize((slot.grams * base) / f[key], f, config));
       const desviacion = objetivo <= 0 ? 0 : Math.abs((grams * f[key]) / 100 - objetivo) / objetivo;
-      return { food: f, grams, desviacion, motivo: motivoDe(f) };
+      return { food: f, grams, desviacion, motivo: motivoDe(f), repetida: enOtraComida(f) };
     })
     .filter((c) => c.desviacion <= config.equivalenceFallbackDeviation);
 
-  const nivel = (c: { food: Food; desviacion: number }): number =>
+  const nivel = (c: { food: Food; desviacion: number; repetida: boolean }): number =>
+    (c.repetida ? 20 : 0) +
     (enCasa(c.food) ? 0 : 10) +
     (c.desviacion > config.equivalenceMaxDeviation ? 2 : 0) +
     (c.food.tags.includes('mexicano') ? 0 : 1) +
@@ -1096,6 +1109,7 @@ function equivalentesSmae(
       grams: c.grams,
       ...(c.desviacion > config.equivalenceMaxDeviation ? { aproximada: true } : {}),
       ...(enCasa(c.food) ? { enDespensa: true } : {}),
+      ...(c.repetida ? { enOtraComida: true } : {}),
     })),
     ...(aproximada ? { aproximada: true } : {}),
     ...(noVan.length > 0 ? { noVan } : {}),

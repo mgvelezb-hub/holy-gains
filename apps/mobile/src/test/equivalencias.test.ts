@@ -35,3 +35,17 @@ describe("la hoja de cambiar un alimento", () => {
     expect(textoDeOpcion({ name: "Tortilla de maiz", grams: 90, portion: "3 tortillas" })).toBe("3 tortillas");
   });
 });
+
+describe("lo que ya va en otra comida", () => {
+  it("se puede elegir: va al final de su sección, no a los que no van", () => {
+    const secciones = seccionesDeEquivalencia({
+      forName: "Tortilla de nopal",
+      options: [
+        { name: "Tostada horneada", grams: 20, portion: null, enOtraComida: true },
+        { name: "Tortilla de maíz", grams: 30, portion: null },
+      ],
+    });
+    expect(secciones.equivalentes.map((o) => o.name)).toEqual(["Tortilla de maíz", "Tostada horneada"]);
+    expect(secciones.noVan).toEqual([]);
+  });
+});

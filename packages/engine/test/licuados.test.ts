@@ -139,17 +139,17 @@ describe('cambiar la fruta dentro del licuado', () => {
     .filter((i) => findFood(i.foodId)!.role === 'fruta')
     .map((i) => i.foodId);
 
-  it('la equivalencia de la fruta ofrece otras frutas, ninguna de otra comida del dia', () => {
+  it('la equivalencia de la fruta ofrece otras frutas; las de otra comida del dia, marcadas', () => {
     const eq = meal.equivalences.find((e) => e.forFoodId === fruta.foodId);
     expect(eq, meal.preparacion!.display).toBeDefined();
     expect(eq!.options.length).toBeGreaterThanOrEqual(2);
     for (const o of eq!.options) {
       expect(findFood(o.foodId)!.role).toBe('fruta');
-      expect(otrasFrutas).not.toContain(o.foodId);
+      if (otrasFrutas.includes(o.foodId)) expect(o.enOtraComida, o.name).toBe(true);
     }
   });
 
-  it('el menu guardado tambien: por nombre, dentro del platillo y sin las frutas del dia', () => {
+  it('el menu guardado tambien: por nombre, dentro del platillo y con las frutas del dia marcadas', () => {
     const enElDia = menu.meals.filter((m) => m !== meal).flatMap((m) => m.items.map((i) => i.foodId));
     const eq = equivalenciasDeAlimento(fruta.name, fruta.grams, IRMA, DEFAULT_CONFIG, undefined, {
       enElDia,
@@ -158,7 +158,7 @@ describe('cambiar la fruta dentro del licuado', () => {
     expect(eq).not.toBeNull();
     for (const o of eq!.options) {
       expect(findFood(o.foodId)!.role).toBe('fruta');
-      expect(otrasFrutas).not.toContain(o.foodId);
+      if (otrasFrutas.includes(o.foodId)) expect(o.enOtraComida, o.name).toBe(true);
       expect(nombreDePlatillo(meal.preparacion!.id, o.foodId)).toContain(findFood(o.foodId)!.nombreEnPlatillo ?? '');
     }
   });

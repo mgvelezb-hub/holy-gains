@@ -87,13 +87,17 @@ describe('lo que no va se dice, no se esconde', () => {
     expect(arroz!.motivo).toBe('no va con tu papa');
   });
 
-  it('el cereal que ya va en otra comida del dia sale en gris', () => {
+  it('el cereal que ya va en otra comida del dia se ofrece igual, marcado y al final', () => {
+    // Era un aviso, no un bloqueo (3-oct, Mau): se puede elegir.
     const eq = equivalenciasDeAlimento('Tortilla de nopal', 30, IRMA, DEFAULT_CONFIG, undefined, {
       slot: CENA,
       enElDia: ['tortilla_maiz'],
     });
-    expect(ids(eq)).not.toContain('tostada_horneada');
-    expect(eq!.noVan?.find((o) => o.foodId === 'tostada_horneada')?.motivo).toBe('ya va en otra comida de hoy');
+    const tostada = eq!.options.find((o) => o.foodId === 'tostada_horneada');
+    expect(tostada?.enOtraComida).toBe(true);
+    expect(eq!.noVan?.some((o) => o.foodId === 'tostada_horneada') ?? false).toBe(false);
+    const marcas = eq!.options.map((o) => o.enOtraComida === true);
+    expect(marcas.slice(marcas.indexOf(true)).every(Boolean)).toBe(true);
   });
 
   it('la dieta y lo excluido no salen ni en gris', () => {

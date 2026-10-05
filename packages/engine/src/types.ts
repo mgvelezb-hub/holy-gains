@@ -536,11 +536,17 @@ export interface Equivalence {
     aproximada?: boolean;
     /** Ya esta en casa (despensa o alimento propio): va primero. */
     enDespensa?: boolean;
+    /**
+     * Su familia ya va en otra comida de hoy. Es un aviso, no un bloqueo
+     * (3-oct, Mau): se puede elegir y va al final de la lista.
+     */
+    enOtraComida?: boolean;
   }>;
   /**
    * Equivalentes de su grupo que no van con ESTA comida, con el motivo en
-   * palabras ("no va con tu papa", "ya va en otra comida de hoy"). No se
-   * ofrecen, pero se dicen: esconderlos hacia creer que no existen.
+   * palabras ("no va con tu papa", "de noche no va cereal"). No se ofrecen,
+   * pero se dicen: esconderlos hacia creer que no existen. Lo que ya va en
+   * otra comida de hoy NO entra aqui: se ofrece con `enOtraComida`.
    */
   noVan?: Array<{ foodId: string; name: string; grams: number; motivo: string }>;
   /**

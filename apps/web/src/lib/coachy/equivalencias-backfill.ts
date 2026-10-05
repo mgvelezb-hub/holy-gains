@@ -14,18 +14,18 @@ import type { MealSlotId, Profile as EngineProfile } from "engine";
  * eligió. Por eso esto rellena SOLO los huecos:
  *
  *  - Un alimento sin ninguna equivalencia recibe su lista completa.
- *  - Un alimento con pocas opciones recibe las que le faltan, AGREGADAS al
- *    final; las que ya estaban no se tocan ni se reordenan, porque entre
- *    ellas está la opción de "volver" que dejó un intercambio anterior.
+ *  - Un alimento recibe las opciones del catálogo que le faltan, AGREGADAS
+ *    al final; las que ya estaban no se quitan, porque entre ellas está la
+ *    opción de "volver" que dejó un intercambio anterior.
  *
  * Y dos reglas que valen también para lo ya guardado:
  *
  *  - El ingrediente de un platillo (la lenteja de la sopa) solo ofrece
  *    hermanos del platillo: sus opciones se rehacen desde la receta y se
  *    descartan las que no pertenecen (el arroz suelto que ofrecía antes).
- *  - Ninguna opción repite la proteína principal o el cereal de OTRA comida
- *    del día: cambiar el pollo de la comida por el atún de la cena es comer
- *    atún dos veces.
+ *  - Lo que repite la proteína principal o el cereal de OTRA comida del día
+ *    se ofrece igual, marcado `enOtraComida` y al final: era un aviso, no un
+ *    bloqueo (3-oct, Mau).
  *
  * Es una transformación pura sobre el JSON: no sabe de Prisma, así que se
  * prueba sin base de datos. Quien la llama decide si vale la pena guardar
@@ -98,32 +98,50 @@ export function rellenaEquivalencias(
         ...(esDePlatillo ? { preparacionId } : {}),
       });
 
-      // Las guardadas que rompen una regla se van: las de fuera del platillo
-      // y las que repiten la familia de otra comida (salvo la propia).
-      const propia = familiaDeValor(String(item.foodId ?? nombre));
-      const validas = new Set((frescas?.options ?? []).map((o) => o.name));
-      const opcionesActuales = guardadas.filter((opcion) => {
-        if (esDePlatillo) return validas.has(String(opcion.name ?? ""));
-        const familia = familiaDeValor(String(opcion.foodId ?? opcion.name ?? ""));
-        return familia === undefined || familia === propia || !familiasFuera.has(familia);
-      });
-      const depuradas = opcionesActuales.length !== guardadas.length;
+      // Las guardadas de fuera del platillo se van. Las que repiten la
+      // familia de otra comida se QUEDAN: era un aviso, no un bloqueo
+      // (3-oct, Mau). Solo se refresca su marca `enOtraComida`.
+      const frescaPorNombre = new Map((frescas?.options ?? []).map((o) => [o.name, o]));
+      const validas = new Set(frescaPorNombre.keys());
+      const opcionesActuales = guardadas
+        .filter((opcion) => !esDePlatillo || validas.has(String(opcion.name ?? "")))
+        .map((opcion) => {
+          const enOtra =
+            frescaPorNombre.get(String(opcion.name ?? ""))?.enOtraComida === true ||
+            familiaQueRepite(String(opcion.foodId ?? opcion.name ?? ""), propiaDe(item), familiasFuera);
+          const { enOtraComida: _antes, ...resto } = opcion;
+          return enOtra ? { ...resto, enOtraComida: true } : resto;
+        });
+      const depuradas =
+        opcionesActuales.length !== guardadas.length ||
+        opcionesActuales.some((o, i) => (o.enOtraComida === true) !== (guardadas[i]?.enOtraComida === true));
 
-      if (depuradas && frescas === null) {
-        porNombre.set(nombre, { ...(existente ?? {}), forName: nombre, options: opcionesActuales });
-        if (opcionesActuales.length === 0) porNombre.delete(nombre);
+      // Lo que antes salía en gris por "ya va en otra comida de hoy" ahora
+      // es opción: sale de `noVan` y entra por `frescas`.
+      const noVanGuardado = asRecordArray(existente?.noVan);
+      const noVan = noVanGuardado.filter((fila) => fila.motivo !== "ya va en otra comida de hoy");
+      const noVanCambio = noVan.length !== noVanGuardado.length;
+
+      if (frescas === null) {
+        if (!depuradas && !noVanCambio) continue;
+        if (opcionesActuales.length === 0 && noVan.length === 0) {
+          porNombre.delete(nombre);
+        } else {
+          porNombre.set(nombre, {
+            ...(existente ?? {}),
+            forName: nombre,
+            options: opcionesActuales,
+            ...(noVan.length > 0 ? { noVan } : { noVan: undefined }),
+          });
+        }
         cambiado = true;
         continue;
       }
 
-      // Ya tiene de dónde elegir: no se toca. Rellenar de más movería una
-      // lista que la persona ya conoce sin que ella haya pedido nada.
-      if (!depuradas && opcionesActuales.length >= 3) continue;
-      if (frescas === null) continue;
-
       // Las que ya estaban se conservan tal cual —incluida la opción de
-      // "volver" que deja un intercambio— y solo se agregan las que no
-      // estaban, hasta completar la lista.
+      // "volver" que deja un intercambio— y se agregan al final las que
+      // faltan del catálogo: la lista crece para dar variedad, nunca se
+      // reordena lo que la persona ya conoce.
       const yaEstan = new Set(opcionesActuales.map((o) => String(o.name ?? "")));
       const agregadas = frescas.options
         .filter((opcion) => opcion.name !== nombre && !yaEstan.has(opcion.name))
@@ -135,19 +153,27 @@ export function rellenaEquivalencias(
           grams: opcion.grams,
           ...(opcion.aproximada === true ? { aproximada: true } : {}),
           ...(opcion.enDespensa === true ? { enDespensa: true } : {}),
+          ...(opcion.enOtraComida === true ? { enOtraComida: true } : {}),
         }));
 
-      if (agregadas.length === 0 && !depuradas) continue;
+      const noVanFresco = frescas.noVan ?? [];
+      const noVanDistinto = JSON.stringify(noVanFresco) !== JSON.stringify(noVanGuardado);
+      if (agregadas.length === 0 && !depuradas && !noVanDistinto) continue;
 
-      const opciones = [...opcionesActuales, ...agregadas];
+      // Lo que ya va en otra comida, al final: primero lo que da variedad.
+      const opciones = [...opcionesActuales, ...agregadas].sort(
+        (x, y) => Number(x.enOtraComida === true) - Number(y.enOtraComida === true),
+      );
       const aproximada =
         opciones.some((o) => o.aproximada === true) || frescas.aproximada === true;
 
+      const { noVan: _noVanViejo, aproximada: _aproxVieja, ...base } = existente ?? {};
       porNombre.set(nombre, {
-        ...(existente ?? {}),
+        ...base,
         forName: nombre,
         options: opciones,
         ...(aproximada ? { aproximada: true } : {}),
+        ...(noVanFresco.length > 0 ? { noVan: noVanFresco } : {}),
       });
       cambiado = true;
     }
@@ -178,6 +204,17 @@ function preparacionIdDe(valor: unknown): string | null {
   if (typeof valor !== "object" || valor === null) return null;
   const id = (valor as JsonRecord).id;
   return typeof id === "string" ? id : null;
+}
+
+/** La familia del renglón que se cambia: la suya no cuenta como repetida. */
+function propiaDe(item: JsonRecord): string | undefined {
+  return familiaDeValor(String(item.foodId ?? item.name ?? ""));
+}
+
+/** true si la opción repite la familia de otra comida del día (y no es la propia). */
+function familiaQueRepite(valor: string, propia: string | undefined, fuera: ReadonlySet<string>): boolean {
+  const familia = familiaDeValor(valor);
+  return familia !== undefined && familia !== propia && fuera.has(familia);
 }
 
 /** La familia (proteína principal o cereal) de un id o nombre del catálogo. */

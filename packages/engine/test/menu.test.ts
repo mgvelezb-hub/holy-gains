@@ -822,11 +822,16 @@ describe('la lista de equivalencias da de donde elegir', () => {
     for (const menu of plan.menus) {
       for (const meal of menu.meals) {
         for (const equivalencia of meal.equivalences) {
-          const marcas = equivalencia.options.map((o) => o.aproximada === true);
-          // Ninguna exacta puede venir despues de una aproximada.
-          const primeraAprox = marcas.indexOf(true);
-          if (primeraAprox === -1) continue;
-          expect(marcas.slice(primeraAprox).every(Boolean)).toBe(true);
+          // Primero lo que da variedad, al final lo que ya va en otra comida;
+          // dentro de cada bloque, ninguna exacta despues de una aproximada.
+          for (const repetida of [false, true]) {
+            const marcas = equivalencia.options
+              .filter((o) => (o.enOtraComida === true) === repetida)
+              .map((o) => o.aproximada === true);
+            const primeraAprox = marcas.indexOf(true);
+            if (primeraAprox === -1) continue;
+            expect(marcas.slice(primeraAprox).every(Boolean)).toBe(true);
+          }
         }
       }
     }

@@ -28,7 +28,12 @@ import {
   type MenuMeal,
   type OpcionPlatillo,
 } from "@/lib/api";
-import { seccionesDeEquivalencia, textoDeOpcion, type OpcionDeEquivalencia } from "@/lib/equivalencias";
+import {
+  NOTA_EN_OTRA_COMIDA,
+  seccionesDeEquivalencia,
+  textoDeOpcion,
+  type OpcionDeEquivalencia,
+} from "@/lib/equivalencias";
 import { agruparComida, avisoDeCambioEnPlatillo } from "@/lib/preparaciones";
 import { fonts, radius, spacing, type as typeScale, type Palette } from "@/lib/theme";
 
@@ -244,9 +249,12 @@ function ComidaDelMenu({
         disabled={cambiando !== null}
         style={[styles.equivalenciaOpcion, aplicando && styles.equivalenciaOpcionOn]}
       >
-        <Text style={styles.equivalenciaOpcionTexto} numberOfLines={2}>
-          {textoDeOpcion(opcion)}
-        </Text>
+        <View style={styles.equivalenciaOpcionTextos}>
+          <Text style={styles.equivalenciaOpcionTexto} numberOfLines={2}>
+            {textoDeOpcion(opcion)}
+          </Text>
+          {opcion.enOtraComida ? <Text style={styles.equivalenciaNota}>{NOTA_EN_OTRA_COMIDA}</Text> : null}
+        </View>
         {aplicando ? (
           <ActivityIndicator size="small" color={colors.champan} />
         ) : opcion.aproximada ? (
@@ -549,8 +557,9 @@ const makeStyles = (colors: Palette) =>
       backgroundColor: colors.guinda,
       borderColor: colors.guindaLight,
     },
+    equivalenciaOpcionTextos: { flex: 1, gap: 1 },
+    equivalenciaNota: { fontFamily: fonts.sans, ...typeScale.label, color: colors.paloRosa },
     equivalenciaOpcionTexto: {
-      flex: 1,
       fontFamily: fonts.sansMedium,
       ...typeScale.bodySm,
       color: colors.marfil,

@@ -98,7 +98,7 @@ describe('cambiar el ingrediente de un platillo', () => {
     }
   });
 
-  it('las equivalencias no ofrecen la proteina ni el cereal de otra comida del dia', () => {
+  it('la proteina o el cereal de otra comida del dia se ofrece marcado, nunca sin aviso', () => {
     for (const menu of MENUS) {
       for (const meal of menu.meals) {
         const fuera = new Set(
@@ -111,8 +111,8 @@ describe('cambiar el ingrediente de un platillo', () => {
           const propia = familiaDe(findFood(eq.forFoodId)!);
           for (const o of eq.options) {
             const fam = familiaDe(findFood(o.foodId)!);
-            if (fam === undefined || fam === propia) continue;
-            expect(fuera.has(fam), `${eq.forName} -> ${o.name} (${fam}) en ${meal.slot}`).toBe(false);
+            if (fam === undefined || fam === propia || !fuera.has(fam)) continue;
+            expect(o.enOtraComida, `${eq.forName} -> ${o.name} (${fam}) en ${meal.slot}`).toBe(true);
           }
         }
       }

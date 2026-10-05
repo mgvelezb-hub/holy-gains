@@ -61,7 +61,7 @@ describe("rellenaEquivalencias", () => {
     expect(opciones.length).toBeGreaterThan(1);
   });
 
-  it("no toca una lista que ya tiene de dónde elegir", () => {
+  it("a una lista que ya tiene opciones le agrega las que faltan, al final y sin quitar ninguna", () => {
     const meals = comidaCon(
       [{ name: "Avena", grams: 60, free: false }],
       [
@@ -78,8 +78,15 @@ describe("rellenaEquivalencias", () => {
 
     const resultado = rellenaEquivalencias(meals, [], PERFIL);
 
-    expect(resultado.cambiado).toBe(false);
-    expect(resultado.mealsJson).toBe(meals);
+    // Antes se dejaba en paz con tres opciones y la lista se quedaba corta;
+    // ahora crece con el resto del catálogo (3-oct, Mau: más variedad).
+    expect(resultado.cambiado).toBe(true);
+    const nombres = (resultado.mealsJson as any[])[0].equivalences[0].options.map((o: any) => o.name);
+    expect(nombres.slice(0, 3)).toEqual(["Amaranto", "Arroz integral", "Quinoa"]);
+    expect(nombres.length).toBeGreaterThan(3);
+
+    // Y una segunda pasada ya no cambia nada.
+    expect(rellenaEquivalencias(resultado.mealsJson, resultado.equivalencesJson, PERFIL).cambiado).toBe(false);
   });
 
   it("un alimento que no está en el catálogo se deja en paz", () => {
@@ -144,7 +151,7 @@ describe("rellenaEquivalencias", () => {
     }
   });
 
-  it("no ofrece la proteína de otra comida del día", () => {
+  it("la proteína de otra comida del día se queda, marcada y al final", () => {
     const meals = [
       {
         slot: "COMIDA",
@@ -175,7 +182,10 @@ describe("rellenaEquivalencias", () => {
 
     expect(resultado.cambiado).toBe(true);
     const pollo = (resultado.mealsJson as any[])[0].equivalences[0];
-    expect(pollo.options.map((o: any) => o.foodId)).not.toContain("atun_agua");
+    const atun = pollo.options.find((o: any) => o.foodId === "atun_agua");
+    expect(atun?.enOtraComida).toBe(true);
+    const marcas = pollo.options.map((o: any) => o.enOtraComida === true);
+    expect(marcas.slice(marcas.indexOf(true)).every(Boolean)).toBe(true);
     expect(pollo.options.map((o: any) => o.foodId)).toContain("tilapia");
   });
 });

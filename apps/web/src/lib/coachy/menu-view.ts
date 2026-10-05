@@ -88,6 +88,8 @@ export interface MenuMealView {
       aproximada?: boolean;
       /** Ya está en casa (despensa o alimento propio): la hoja la pone primero. */
       enDespensa?: boolean;
+      /** Su familia ya va en otra comida de hoy: aviso, se puede elegir. */
+      enOtraComida?: boolean;
     }>;
     /** true si alguna de sus opciones es aproximada; la app lo advierte. */
     aproximada?: boolean;
@@ -186,6 +188,8 @@ export function toMenuView(
                 // traen: ausente se lee como exacta, que es lo que eran.
                 ...(item.aproximada === true ? { aproximada: true } : {}),
                 ...(item.enDespensa === true ? { enDespensa: true } : {}),
+                // Aviso, no bloqueo: su familia ya va en otra comida de hoy.
+                ...(item.enOtraComida === true ? { enOtraComida: true } : {}),
               };
             }),
             ...(row.aproximada === true ? { aproximada: true } : {}),

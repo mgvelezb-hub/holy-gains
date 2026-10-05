@@ -476,6 +476,8 @@ export type MenuMeal = {
       aproximada?: boolean;
       /** Ya está en casa (despensa o alimento propio). */
       enDespensa?: boolean;
+      /** Su familia ya va en otra comida de hoy: aviso, se puede elegir. */
+      enOtraComida?: boolean;
     }>;
     /**
      * `true` cuando ninguna opción del catálogo cupo dentro del ±10% de
