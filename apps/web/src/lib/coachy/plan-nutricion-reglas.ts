@@ -175,7 +175,7 @@ export function despensaDelPlan(
 }
 
 export interface AvisoDelPlan {
-  id: "freno" | "glucosa" | "vitamina_d" | "despensa";
+  id: "freno" | "glucosa" | "vitamina_d" | "despensa" | "ciclo";
   /** `freno` va arriba y en rojo; `aviso` cambia el plan; `info` solo se dice. */
   nivel: "freno" | "aviso" | "info";
   /** Para la tarjeta de una línea: título y resumen. */

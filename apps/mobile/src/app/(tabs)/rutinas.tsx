@@ -475,7 +475,21 @@ export default function GymScreen() {
                 {viewedSession!.schemeLabel} · {viewedSession!.exercises.length} ejercicios
                 {viewedSession!.cardioMinutes ? ` · ${viewedSession!.cardioMinutes} min de cardio al final` : ""}
               </Text>
-              {viewedSession!.cycleNote && <Text style={styles.note}>{viewedSession!.cycleNote}</Text>}
+              {viewedSession!.cycleNote && <Parrafo style={styles.note}>{viewedSession!.cycleNote}</Parrafo>}
+              {/* Días de periodo (estimados): la versión ligera es opcional y
+                  usa el mismo recorte de "Poco tiempo"; nunca se aplica sola. */}
+              {isViewingToday && viewedSession!.cicloLigera && (
+                <Pressable
+                  onPress={() => void recortarSesion(viewedSession!.cicloLigera!.minutos)}
+                  disabled={trimming}
+                  style={({ pressed }) => [styles.cicloLigera, (pressed || trimming) && styles.cicloLigeraOn]}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.cicloLigeraTexto}>
+                    {trimming ? "Ajustando..." : `Con molestias: versión ligera (~${viewedSession!.cicloLigera.minutos} min)`}
+                  </Text>
+                </Pressable>
+              )}
               {viewedSession!.readinessNote && <Parrafo style={styles.note}>🌙 {viewedSession!.readinessNote}</Parrafo>}
             </View>
 
@@ -1362,6 +1376,18 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
   header: { gap: spacing.xs },
   title: { fontFamily: fonts.sansSemiBold, ...typeScale.title, color: colors.marfil },
   meta: { fontFamily: fonts.sans, ...typeScale.bodySm, color: colors.paloRosaLight },
+  cicloLigera: {
+    alignSelf: "flex-start",
+    marginTop: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    backgroundColor: colors.cardBg,
+  },
+  cicloLigeraOn: { opacity: 0.6 },
+  cicloLigeraTexto: { fontFamily: fonts.sansMedium, ...typeScale.bodySm, color: colors.champan },
   note: {
     fontFamily: fonts.sans,
     ...typeScale.label,

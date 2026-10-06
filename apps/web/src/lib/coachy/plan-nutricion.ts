@@ -44,6 +44,8 @@ import { activityWindow } from "@/lib/health/db";
 import { prisma } from "@/lib/prisma";
 import { sugerenciasPara, tomasPara } from "@/lib/suplementos/db";
 import { conHoraSugerida, momentoDeHoy } from "@/lib/suplementos/hora-sugerida";
+import { ajusteDelCiclo, type AjusteDelCiclo } from "@/lib/ciclo/ajustes";
+import { cycleSettingsFromProfile, estimateCyclePhase } from "@/lib/cycle";
 
 /**
  * El plan de nutrición, una sola verdad (K1).
@@ -130,6 +132,8 @@ export interface PlanDeNutricion {
   };
   recordatorios: RecordatorioDelPlan[];
   avisos: AvisoDelPlan[];
+  /** El ciclo de hoy (estimado, opt-in); `null` sin seguimiento. */
+  ciclo: AjusteDelCiclo | null;
   senales: SenalesClinicas;
   materialized: boolean;
   /**
@@ -273,7 +277,10 @@ export async function planDeNutricion(
       : null;
 
   const senales = motor?.senales ?? { glucosaAyuno: null, vitaminaD: null };
-  const avisos = avisosDelPlan({
+  // El ciclo (estimado, opt-in): en la lútea hay margen de calorías y más
+  // agua; en el periodo, hierro y agua. Aviso, no cambio del menú.
+  const ciclo = ajusteDelCiclo(estimateCyclePhase(cycleSettingsFromProfile(profile), hoy));
+  const avisosBase = avisosDelPlan({
     freno: sugerencias.freno,
     tomasPausadas: pausadas,
     senales,
@@ -282,6 +289,19 @@ export async function planDeNutricion(
     sugiereD3: sugerencias.sugerencias.some((s) => s.supplement === "VITAMINA_D3"),
     despensa,
   });
+  const avisos = ciclo?.nutricion
+    ? [
+        ...avisosBase,
+        {
+          id: "ciclo" as const,
+          nivel: "info" as const,
+          titulo: ciclo.etiqueta,
+          corto: ciclo.nutricion.corto,
+          texto: `${ciclo.nutricion.texto} ${ciclo.nota}`,
+          accion: { etiqueta: "Tu ciclo", ruta: "/ciclo" },
+        },
+      ]
+    : avisosBase;
 
   return {
     decision: decision
@@ -324,6 +344,7 @@ export async function planDeNutricion(
     },
     recordatorios: menuHoy ? recordatoriosDelPlan(menuHoy.menuNumber, menuHoy.meals, tomas, horariosPorDia) : [],
     avisos,
+    ciclo,
     senales,
     materialized: actual?.materialized ?? false,
     aviso: avisoDeMenuActualizado(plans),

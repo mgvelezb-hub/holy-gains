@@ -7,6 +7,7 @@ import { correrAlGuardar } from "@/lib/api/checkin-flujo";
 import { persistCheckIn } from "@/lib/checkin-write";
 import { fromISODate, decimalToNumber, isoFromDateColumn } from "@/lib/format";
 import { puntoCeroDe } from "@/lib/checkins";
+import { cycleSettingsFromProfile, estimateCyclePhase } from "@/lib/cycle";
 import { prisma } from "@/lib/prisma";
 import { checkInSchema, coerceCheckInPayload } from "@/lib/validation/checkin";
 
@@ -128,7 +129,22 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
   }
 
-  const checkIn = await persistCheckIn(user.id, parsed.data);
+  // La app no pregunta la fase: si ella lleva el seguimiento, se estima por
+  // calendario para la fecha del check-in (o es periodo si dijo que empezó).
+  // Sin esto la regla R1 —cinta no concluyente en lútea/periodo— nunca veía
+  // la fase de un check-in hecho desde la app.
+  const conCiclo =
+    parsed.data.cyclePhase == null && profile.cycleTrackingEnabled
+      ? {
+          ...parsed.data,
+          cyclePhase:
+            parsed.data.periodStarted === true
+              ? ("MENSTRUACION" as const)
+              : (estimateCyclePhase(cycleSettingsFromProfile(profile), parsed.data.date)?.phase ?? null),
+        }
+      : parsed.data;
+
+  const checkIn = await persistCheckIn(user.id, conCiclo);
 
   // "Esta semana empezó mi periodo" reancla `cycle_last_period_start`, igual
   // que la web (`src/app/app/checkin/actions.ts#syncCycle`). No se reusa

@@ -674,6 +674,11 @@ export type SessionView = {
   /** Minutos a los que se recortó la sesión, o `null` si está completa. */
   trimmedMinutes: number | null;
   cycleNote: string | null;
+  /**
+   * Días de periodo (estimados): los minutos de la versión ligera que se
+   * ofrece si hay molestias. Ausente en servidores viejos.
+   */
+  cicloLigera?: { minutos: number } | null;
   readinessNote: string | null;
   warmup: SessionWarmup | null;
   exercises: SessionExerciseView[];
@@ -2602,3 +2607,49 @@ export type DetalleCardioConProtocolo = DetalleCardio & {
 
 /** `PreferenciasCardio` con la unidad de velocidad de N1. */
 export type PreferenciasCardioN1 = PreferenciasCardio & { unidadVelocidad?: UnidadVelocidad };
+
+// ---------------------------------------------------------------------------
+// Ciclo menstrual (opt-in, estimación de calendario)
+// ---------------------------------------------------------------------------
+
+export type FaseCiclo = "MENSTRUACION" | "FOLICULAR" | "OVULACION" | "LUTEA";
+
+/** Lo que cambia hoy por la fase estimada. Nunca diagnóstico. */
+export type AjusteDelCiclo = {
+  fase: FaseCiclo;
+  etiqueta: string;
+  dia: number;
+  desactualizado: boolean;
+  /** "Día 3 · Menstruación (estimado)". */
+  linea: string;
+  entrenamiento: { texto: string; ofreceLigera: boolean };
+  nutricion: { kcalExtra: number; corto: string; texto: string } | null;
+  nota: string;
+};
+
+export type CicloResponse = {
+  /** Solo para quien se registró como mujer. */
+  disponible: boolean;
+  activo: boolean;
+  /** `YYYY-MM-DD` del primer día del último periodo. */
+  ultimoPeriodo: string | null;
+  duracion: number;
+  rango: { min: number; max: number };
+  ajuste: AjusteDelCiclo | null;
+  notaActivar: string;
+  nota: string;
+};
+
+/** `GET /api/v1/ciclo`. */
+export function getCiclo(): Promise<CicloResponse> {
+  return apiFetch<CicloResponse>("/api/v1/ciclo");
+}
+
+/** `PUT /api/v1/ciclo` — prender/apagar, "empezó mi periodo" (fecha) y duración. */
+export function putCiclo(cambio: {
+  activo?: boolean;
+  ultimoPeriodo?: string | null;
+  duracion?: number;
+}): Promise<CicloResponse> {
+  return apiFetch<CicloResponse>("/api/v1/ciclo", { method: "PUT", body: cambio });
+}

@@ -1,6 +1,7 @@
 import "server-only";
 
-import { cycleNoteForProfile } from "@/lib/cycle";
+import { ajusteDelCiclo, minutosSesionLigera } from "@/lib/ciclo/ajustes";
+import { cycleSettingsFromProfile, estimateCyclePhase } from "@/lib/cycle";
 import type { Profile } from "@prisma/client";
 
 import { isoFromDateColumn, toISODate } from "@/lib/format";
@@ -72,6 +73,12 @@ export type SessionView = {
   /** Minutos a los que se recortó la sesión, o `null` si está completa. */
   trimmedMinutes: number | null;
   cycleNote: string | null;
+  /**
+   * Días de periodo (estimados): los minutos de la versión ligera que la
+   * sesión ofrece si hay molestias. Opcional, nunca automática; `null` en
+   * cualquier otra fase, sin seguimiento, o si ya se recortó o terminó.
+   */
+  cicloLigera: { minutos: number } | null;
   /**
    * Nota de readiness (Fase 8): si el reloj registró menos de 6 h de sueño
    * anoche, se dice. **Las cargas no se tocan solas**: es una sugerencia, y la
@@ -145,8 +152,11 @@ export async function weekView(
     sleepMinutesFor(userId, today).catch(() => null),
   ]);
 
+  const cicloAjustes = cycleSettingsFromProfile(profile);
   const sessions = plans.map(({ workout, plan }): SessionView => {
     const date = isoFromDateColumn(workout.date);
+    // Lo que el ciclo (estimado) sugiere para ESE día: nota y versión ligera.
+    const ciclo = ajusteDelCiclo(estimateCyclePhase(cicloAjustes, date));
 
     return {
       workoutId: workout.id,
@@ -158,7 +168,11 @@ export async function weekView(
       estimatedMin: plan.estimatedMin,
       completedAt: workout.completedAt ? workout.completedAt.toISOString() : null,
       trimmedMinutes: workout.trimmedMinutes,
-      cycleNote: cycleNoteForProfile(profile, date),
+      cycleNote: ciclo?.entrenamiento.texto ?? null,
+      cicloLigera:
+        ciclo?.entrenamiento.ofreceLigera && !workout.completedAt && workout.trimmedMinutes === null
+          ? { minutos: minutosSesionLigera(plan.estimatedMin ?? profile.sessionMinutes) }
+          : null,
       // El sueño de anoche solo habla de la sesión de hoy.
       readinessNote: date === today ? readinessNote(sleepMin) : null,
       warmup: plan.warmup,

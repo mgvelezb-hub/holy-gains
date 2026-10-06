@@ -2,6 +2,7 @@ import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import {
   CalendarClock,
+  CalendarHeart,
   ChevronLeft,
   ChevronRight,
   Dumbbell,
@@ -14,11 +15,12 @@ import {
   Watch,
 } from "lucide-react-native";
 import type { ComponentType } from "react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useTheme } from "@/context/theme";
+import { getCiclo } from "@/lib/api";
 import { fonts, radius, spacing, type as typeScale, withAlpha, type Palette } from "@/lib/theme";
 import { SECCIONES, type Seccion } from "@/app/ajustes/[seccion]";
 
@@ -33,7 +35,11 @@ import { SECCIONES, type Seccion } from "@/app/ajustes/[seccion]";
  */
 
 type Entrada = {
-  seccion: Seccion;
+  /** La sección de `/ajustes/[seccion]`, o una pantalla propia (`ruta`). */
+  seccion: Seccion | "ciclo";
+  ruta?: string;
+  /** Solo para perfiles de mujer (el seguimiento del ciclo). */
+  soloMujer?: boolean;
   icon: ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
   detalle: string;
   soloIOS?: boolean;
@@ -48,6 +54,13 @@ const ENTRADAS: Entrada[] = [
   },
   { seccion: "nutricion", icon: Salad, detalle: "Presupuesto, tiempo de cocina y alimentos" },
   { seccion: "perfil", icon: User, detalle: "Tus datos y tu fase actual" },
+  {
+    seccion: "ciclo",
+    ruta: "/ciclo",
+    icon: CalendarHeart,
+    detalle: "Tu periodo y la duración de tu ciclo",
+    soloMujer: true,
+  },
   { seccion: "apariencia", icon: PaletteIcon, detalle: "Claro, oscuro o champán" },
   { seccion: "fotos", icon: Images, detalle: "Tu clave, Face ID y tu bóveda" },
   { seccion: "reloj", icon: Watch, detalle: "Apple Salud y la app del reloj", soloIOS: true },
@@ -68,7 +81,17 @@ export default function AjustesScreen() {
   const { colors, preference } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
-  const entradas = ENTRADAS.filter((entrada) => !entrada.soloIOS || Platform.OS === "ios");
+  // El ciclo solo se ofrece a quien se registró como mujer: lo dice el servidor.
+  const [esMujer, setEsMujer] = useState(false);
+  useEffect(() => {
+    getCiclo()
+      .then((ciclo) => setEsMujer(ciclo.disponible))
+      .catch(() => setEsMujer(false));
+  }, []);
+
+  const entradas = ENTRADAS.filter(
+    (entrada) => (!entrada.soloIOS || Platform.OS === "ios") && (!entrada.soloMujer || esMujer),
+  );
   const version = Constants.expoConfig?.version ?? "—";
 
   /**
@@ -100,7 +123,7 @@ export default function AjustesScreen() {
             return (
               <Pressable
                 key={entrada.seccion}
-                onPress={() => router.push(`/ajustes/${entrada.seccion}`)}
+                onPress={() => router.push((entrada.ruta ?? `/ajustes/${entrada.seccion}`) as never)}
                 style={({ pressed }) => [
                   styles.fila,
                   index === 0 && styles.filaPrimera,
@@ -113,7 +136,9 @@ export default function AjustesScreen() {
                 </View>
 
                 <View style={styles.textos}>
-                  <Text style={styles.nombre}>{SECCIONES[entrada.seccion]}</Text>
+                  <Text style={styles.nombre}>
+                    {entrada.seccion === "ciclo" ? "Tu ciclo" : SECCIONES[entrada.seccion]}
+                  </Text>
                   <Text style={styles.detalle}>{detalleDe(entrada)}</Text>
                 </View>
 

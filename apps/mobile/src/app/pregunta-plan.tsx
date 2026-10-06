@@ -64,6 +64,9 @@ export default function PreguntaPlanScreen() {
           placeholder="¿Puedo cambiar el pollo por atún?"
           placeholderTextColor={colors.paloRosaLight}
           multiline
+          // Se abre para escribir: el teclado sale al entrar, sin tener que
+          // atinarle al cuadro.
+          autoFocus
           style={styles.consultaInput}
         />
 

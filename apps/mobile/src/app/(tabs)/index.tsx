@@ -1,6 +1,7 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import {
   CalendarCheck,
+  CalendarHeart,
   Dumbbell,
   Flame,
   Footprints,
@@ -25,6 +26,7 @@ import {
   getMe,
   getNotifications,
   getNutrition,
+  getCiclo,
   getSuplementos,
   getTrainingToday,
   getTrainingWeek,
@@ -40,6 +42,7 @@ import {
   type TrainingTodayResponse,
   type NutritionResponse,
   type TodayCard,
+  type CicloResponse,
 } from "@/lib/api";
 import { EngraneAjustes } from "@/components/EngraneAjustes";
 import { esCardioConPlan } from "@/lib/cardio";
@@ -146,6 +149,9 @@ export default function HoyScreen() {
   // Tocar esta pestaña estando en ella regresa el scroll hasta arriba.
   const scrollRef = useScrollTop();
   const [data, setData] = useState<HomeData | null>(null);
+  // El ciclo (opt-in, solo perfiles de mujer): su línea en Hoy y el acceso
+  // a registrar el periodo. Aparte de `load` porque es opcional y tolerante.
+  const [ciclo, setCiclo] = useState<CicloResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
@@ -272,6 +278,14 @@ export default function HoyScreen() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useFocusEffect(
+    useCallback(() => {
+      getCiclo()
+        .then(setCiclo)
+        .catch(() => setCiclo(null));
+    }, []),
+  );
 
   // Al volver de la hoja de Suplementos, solo su línea se refresca: recargar
   // todo Hoy por un check sería parpadeo sin necesidad.
@@ -401,6 +415,19 @@ export default function HoyScreen() {
           title="Suplementos"
           summary={data.suplementos.linea}
           onPress={() => router.push("/suplementos-hoy")}
+        />
+      )}
+
+      {ciclo?.disponible && (
+        <ScoreCard
+          icon={CalendarHeart}
+          tint={colors.champan}
+          title="Tu ciclo"
+          summary={
+            ciclo.ajuste?.linea ??
+            (ciclo.activo ? "Registra cuándo empezó tu último periodo" : "Registra tu periodo · opcional")
+          }
+          onPress={() => router.push("/ciclo" as never)}
         />
       )}
 

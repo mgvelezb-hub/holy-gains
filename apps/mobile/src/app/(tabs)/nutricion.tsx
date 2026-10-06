@@ -7,6 +7,7 @@ import {
   FlaskConical,
   Info,
   MessageCircleQuestion,
+  Moon,
   Package,
   Pill,
   ShoppingBasket,
@@ -63,7 +64,13 @@ import { avisoDeMenuPorMostrar, marcaAvisoDeMenuVisto } from "@/lib/aviso-menu";
  * recordatorios: llegan ya escritos y con la hora de cada día.
  */
 
-const ICONO_AVISO = { freno: AlertTriangle, glucosa: Activity, vitamina_d: Sun, despensa: Package } as const;
+const ICONO_AVISO = {
+  freno: AlertTriangle,
+  glucosa: Activity,
+  vitamina_d: Sun,
+  despensa: Package,
+  ciclo: Moon,
+} as const;
 const TONO_AVISO: Record<AvisoPlan["nivel"], ScoreTone> = { freno: "alto", aviso: "warn", info: "neutral" };
 const ETIQUETA_AVISO: Record<AvisoPlan["nivel"], string> = { freno: "Freno", aviso: "Ajusta tu plan", info: "" };
 

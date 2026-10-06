@@ -19,7 +19,7 @@ import {
  */
 
 export type AvisoPlan = {
-  id: "freno" | "glucosa" | "vitamina_d" | "despensa";
+  id: "freno" | "glucosa" | "vitamina_d" | "despensa" | "ciclo";
   /** `freno` va arriba; `aviso` cambia el plan; `info` solo se dice. */
   nivel: "freno" | "aviso" | "info";
   /** Tarjeta de una línea: título y resumen; `texto` va en el InfoTip. */
