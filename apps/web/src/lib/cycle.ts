@@ -164,10 +164,14 @@ export interface ProfileCycleFields {
   cycleAvgLength: number;
 }
 
+/**
+ * Una columna `date` de Postgres llega como medianoche UTC: leerla con la hora
+ * local la corría un día hacia atrás en México (el periodo del 5 salía el 4).
+ */
 function toISODateUTC(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(date.getUTCDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
 }
 
